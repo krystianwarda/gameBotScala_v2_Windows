@@ -1,0 +1,18 @@
+﻿  pch.cpp
+  dllmain.cpp
+C:\Users\kw\source\repos\002_new_atributes\002_new_atributes\dllmain.cpp(44,14): warning C4313: 'printf_s': '%x' in format string conflicts with argument 2 of type 'LPVOID'
+C:\Users\kw\source\repos\002_new_atributes\002_new_atributes\dllmain.cpp(52,46): warning C4312: 'type cast': conversion from 'DWORD' to 'LPVOID' of greater size
+C:\Users\kw\source\repos\002_new_atributes\002_new_atributes\dllmain.cpp(53,52): warning C4312: 'type cast': conversion from 'DWORD' to 'LPVOID' of greater size
+C:\Users\kw\source\repos\002_new_atributes\002_new_atributes\dllmain.cpp(61,14): warning C4313: 'printf_s': '%x' in format string conflicts with argument 1 of type 'LPVOID'
+C:\Users\kw\source\repos\002_new_atributes\002_new_atributes\dllmain.cpp(61,14): warning C4313: 'printf_s': '%x' in format string conflicts with argument 2 of type 'LPVOID'
+C:\Users\kw\source\repos\002_new_atributes\002_new_atributes\dllmain.cpp(63,54): warning C4312: 'type cast': conversion from 'DWORD' to 'pfnTalk' of greater size
+C:\Users\kw\source\repos\002_new_atributes\002_new_atributes\dllmain.cpp(64,69): warning C4312: 'type cast': conversion from 'DWORD' to 'pfnGetHealth' of greater size
+C:\Users\kw\source\repos\002_new_atributes\002_new_atributes\dllmain.cpp(65,78): warning C4312: 'type cast': conversion from 'DWORD' to 'pfnGetMaxHealth' of greater size
+C:\Users\kw\source\repos\002_new_atributes\002_new_atributes\dllmain.cpp(66,63): warning C4312: 'type cast': conversion from 'DWORD' to 'pfnGetMana' of greater size
+C:\Users\kw\source\repos\002_new_atributes\002_new_atributes\dllmain.cpp(67,72): warning C4312: 'type cast': conversion from 'DWORD' to 'pfnGetMaxMana' of greater size
+C:\Users\kw\source\repos\002_new_atributes\002_new_atributes\dllmain.cpp(68,60): warning C4312: 'type cast': conversion from 'DWORD' to 'pfnGetPos' of greater size
+C:\Users\kw\source\repos\002_new_atributes\002_new_atributes\dllmain.cpp(70,14): warning C4313: 'printf_s': '%x' in format string conflicts with argument 1 of type 'pfnTalk'
+C:\Users\kw\source\repos\002_new_atributes\002_new_atributes\dllmain.cpp(142,55): warning C4311: 'type cast': pointer truncation from 'HMODULE' to 'DWORD'
+C:\Users\kw\source\repos\002_new_atributes\002_new_atributes\dllmain.cpp(142,55): warning C4302: 'type cast': truncation from 'HMODULE' to 'DWORD'
+C:\Users\kw\source\repos\002_new_atributes\002_new_atributes\dllmain.cpp(148,55): warning C4312: 'type cast': conversion from 'unsigned long' to 'LPDWORD' of greater size
+  002_new_atributes.vcxproj -> C:\Users\kw\source\repos\002_new_atributes\x64\Debug\002_new_atributes.dll
