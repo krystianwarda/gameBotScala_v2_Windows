@@ -42,6 +42,9 @@ int** charSpeedBasePointer;
 int* charSpeedPointer;
 const int offset = 0xB0;
 
+//typedef std::string(__thiscall* pfnGetLight)(LPVOID g_LocalPlayerPtr);
+//typedef int(__thiscall* pfnGetAmbientLight)(LPVOID g_LocalPlayerPtr);
+
 
 #pragma warning (disable:4477)
 
@@ -94,11 +97,17 @@ DWORD __stdcall BGThread(HMODULE hModule)
     charXPosPtr = (int*)(g_hGameModule + 0x932C9C);
     charYPosPtr = (int*)(g_hGameModule + 0x932CA0);
     charZPosPtr = (int*)(g_hGameModule + 0x932CA4);
+    //speed
     DWORD baseAddr = *(DWORD*)(g_hGameModule + 0x932B70);
     DWORD offset1 = *(DWORD*)(baseAddr + 0x0);
     DWORD offset2 = *(DWORD*)(offset1 + 0x14);
     DWORD dynamicAddr = offset2 + 0xB0; // This should now contain 13E2D8C8
+    // move char direction
 
+    DWORD baseAddrCharMoveDirection = *(DWORD*)(g_hGameModule + 0x932B70); // Base address: "RealeraDX-1693821795.exe"+00932B70 -> 051CA9F0
+    DWORD offset1CharMoveDirection = *(DWORD*)(baseAddrCharMoveDirection + 0x0);           // Follows pointer at 051CA9F0 to reach 15F53B48
+    DWORD offset2CharMoveDirection = *(DWORD*)(offset1CharMoveDirection + 0x14);           // Follows pointer at 15F53B48 + 0x14 to reach 14502030
+    DWORD dynamicAddrCharMoveDirection = offset2CharMoveDirection + 0x4C;
 
 
     printf_s("Testing the chat feature in 3 seconds, function at 0x%08x\n", talk);
@@ -121,7 +130,7 @@ DWORD __stdcall BGThread(HMODULE hModule)
         int charYPos = *charYPosPtr;
         int charZPos = *charZPosPtr;
         int valueAtDynamicAddress = *(int*)(dynamicAddr);
-
+        BYTE charMoveDirection = *(BYTE*)(dynamicAddrCharMoveDirection);  // Fetch direction value (assuming it's a byte)
 
         system("cls"); // Clear the console before every loop
 
@@ -145,7 +154,7 @@ DWORD __stdcall BGThread(HMODULE hModule)
         gameData["Char_Y_Position"] = charYPos;
         gameData["Char_Z_Position"] = charZPos;
         gameData["Char_Speed"] = valueAtDynamicAddress;
-
+        gameData["Character_Move_Direction"] = charMoveDirection;
 
         // Serialize the JSON and save to file
         std::ofstream outFile("gameData.json");
