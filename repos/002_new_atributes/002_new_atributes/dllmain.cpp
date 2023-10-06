@@ -41,6 +41,8 @@ int* charZPosPtr;
 int** charSpeedBasePointer;
 int* charSpeedPointer;
 const int offset = 0xB0;
+std::string* characterNameAddress;
+BYTE* lightModeAddress;
 
 //typedef std::string(__thiscall* pfnGetLight)(LPVOID g_LocalPlayerPtr);
 //typedef int(__thiscall* pfnGetAmbientLight)(LPVOID g_LocalPlayerPtr);
@@ -102,13 +104,25 @@ DWORD __stdcall BGThread(HMODULE hModule)
     DWORD offset1 = *(DWORD*)(baseAddr + 0x0);
     DWORD offset2 = *(DWORD*)(offset1 + 0x14);
     DWORD dynamicAddr = offset2 + 0xB0; // This should now contain 13E2D8C8
-    // move char direction
 
+    // move char direction
     DWORD baseAddrCharMoveDirection = *(DWORD*)(g_hGameModule + 0x932B70); // Base address: "RealeraDX-1693821795.exe"+00932B70 -> 051CA9F0
     DWORD offset1CharMoveDirection = *(DWORD*)(baseAddrCharMoveDirection + 0x0);           // Follows pointer at 051CA9F0 to reach 15F53B48
     DWORD offset2CharMoveDirection = *(DWORD*)(offset1CharMoveDirection + 0x14);           // Follows pointer at 15F53B48 + 0x14 to reach 14502030
     DWORD dynamicAddrCharMoveDirection = offset2CharMoveDirection + 0x4C;
 
+    // character name and light
+    DWORD baseAddressCharacterName = *(DWORD*)(g_hGameModule + 0x933CA0);   // Step 1
+    DWORD offset1CharacterName = *(DWORD*)(baseAddressCharacterName + 0xB8);   // Step 2
+    DWORD offset2CharacterName = *(DWORD*)(offset1CharacterName + 0x84);   // Step 3
+    DWORD offset3CharacterName = *(DWORD*)(offset2CharacterName + 0x0);   // Step 4
+    DWORD offset4CharacterName = *(DWORD*)(offset3CharacterName + 0x0);   // Step 5
+    DWORD offset5CharacterName = *(DWORD*)(offset4CharacterName + 0x36C);   // Step 6
+    DWORD offset6CharacterName = *(DWORD*)(offset5CharacterName + 0x1CC);   // Step 7
+    DWORD dynamicAddrCharacterName = offset6CharacterName + 0x114;   // Step 8
+
+    // Calculate the dynamic address for lightMode based on characterName's dynamic address
+    DWORD dynamicLightMode = dynamicAddrCharacterName - 0x67;   // Step 9
 
     printf_s("Testing the chat feature in 3 seconds, function at 0x%08x\n", talk);
 
@@ -131,6 +145,8 @@ DWORD __stdcall BGThread(HMODULE hModule)
         int charZPos = *charZPosPtr;
         int valueAtDynamicAddress = *(int*)(dynamicAddr);
         BYTE charMoveDirection = *(BYTE*)(dynamicAddrCharMoveDirection);  // Fetch direction value (assuming it's a byte)
+        std::string characterName = *(std::string*)(dynamicAddrCharacterName);
+        BYTE LightMode = *(BYTE*)(dynamicLightMode);
 
         system("cls"); // Clear the console before every loop
 
@@ -155,6 +171,8 @@ DWORD __stdcall BGThread(HMODULE hModule)
         gameData["Char_Z_Position"] = charZPos;
         gameData["Char_Speed"] = valueAtDynamicAddress;
         gameData["Character_Move_Direction"] = charMoveDirection;
+        gameData["Character_Name"] = characterName;
+        gameData["Light_mode"] = LightMode;
 
         // Serialize the JSON and save to file
         std::ofstream outFile("gameData.json");
