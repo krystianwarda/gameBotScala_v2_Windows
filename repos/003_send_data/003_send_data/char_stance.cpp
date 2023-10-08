@@ -41,9 +41,9 @@ DWORD WINAPI HackThread(HMODULE hModule)
         return 0;
     }
 
-    // Char Follow Monster Status Address Calculation
-    BYTE* charFollowMonsterStatusAddress;
-    charFollowMonsterStatusAddress = (BYTE*)(moduleBase + 0x932A18);
+    // Char Stance Address Calculation
+    BYTE* charStanceAddress;
+    charStanceAddress = (BYTE*)(moduleBase + 0x932A14);
 
     while (true)
     {
@@ -55,7 +55,7 @@ DWORD WINAPI HackThread(HMODULE hModule)
         if (GetAsyncKeyState(VK_NUMPAD2) & 1)
         {
             std::cout << "Button pressed" << std::endl;
-            *charFollowMonsterStatusAddress = 1; // Change to the desired value, e.g. 1 for follow status.
+            *charStanceAddress = 3; // Change to the desired value, e.g. 1 for a specific stance.
         }
         Sleep(10);
     }

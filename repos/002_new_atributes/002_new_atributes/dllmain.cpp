@@ -43,7 +43,12 @@ int* charSpeedPointer;
 const int offset = 0xB0;
 std::string* characterNameAddress;
 BYTE* lightModeAddress;
+BYTE* charStanceAddress;
+BYTE* charFollowMonsterStatusAddress;
 
+
+
+//typedef int(__thiscall* pfnGetCreatureBattleId)(LPVOID mapAddress, int targetId);
 //typedef std::string(__thiscall* pfnGetLight)(LPVOID g_LocalPlayerPtr);
 //typedef int(__thiscall* pfnGetAmbientLight)(LPVOID g_LocalPlayerPtr);
 
@@ -124,6 +129,12 @@ DWORD __stdcall BGThread(HMODULE hModule)
     // Calculate the dynamic address for lightMode based on characterName's dynamic address
     DWORD dynamicLightMode = dynamicAddrCharacterName - 0x67;   // Step 9
 
+    //pfnGetCreatureBattleId getCreatureBattleId = (pfnGetCreatureBattleId)(g_hGameModule + 0x14DE10);
+    charStanceAddress = (BYTE*)(g_hGameModule + 0x932A14);
+    charFollowMonsterStatusAddress = (BYTE*)(g_hGameModule + 0x932A18);
+    BYTE charFollowMonsterStatus = *charFollowMonsterStatusAddress;
+    
+
     printf_s("Testing the chat feature in 3 seconds, function at 0x%08x\n", talk);
 
     Sleep(3000);
@@ -147,6 +158,9 @@ DWORD __stdcall BGThread(HMODULE hModule)
         BYTE charMoveDirection = *(BYTE*)(dynamicAddrCharMoveDirection);  // Fetch direction value (assuming it's a byte)
         std::string characterName = *(std::string*)(dynamicAddrCharacterName);
         BYTE LightMode = *(BYTE*)(dynamicLightMode);
+        LPVOID g_map = (LPVOID)(g_hGameModule + 0x932AF0);
+        //int creatureBattleId = getCreatureBattleId(g_map, currentTargetID);
+        BYTE charStance = *charStanceAddress;
 
         system("cls"); // Clear the console before every loop
 
@@ -173,7 +187,10 @@ DWORD __stdcall BGThread(HMODULE hModule)
         gameData["Character_Move_Direction"] = charMoveDirection;
         gameData["Character_Name"] = characterName;
         gameData["Light_mode"] = LightMode;
+        gameData["Char_Stance"] = charStance;
+        gameData["Char_FollowMonsterStatus"] = charFollowMonsterStatus;
 
+        //gameData["creatureBattleId"] = creatureBattleId;
         // Serialize the JSON and save to file
         std::ofstream outFile("gameData.json");
         outFile << gameData.dump(4);  // dump(4) adds 4-space indentation
