@@ -129,6 +129,14 @@ DWORD __stdcall BGThread(HMODULE hModule)
     // Calculate the dynamic address for lightMode based on characterName's dynamic address
     DWORD dynamicLightMode = dynamicAddrCharacterName - 0x67;   // Step 9
 
+    // Outfit related dynamic addresses
+    DWORD dynamicCharOutfitModel = dynamicAddrCharacterName - 0xBC;
+    DWORD dynamicHeadColor = dynamicAddrCharacterName - 0xB4;
+    DWORD dynamicChestColor = dynamicAddrCharacterName - 0xB0;
+    DWORD dynamicLegsColor = dynamicAddrCharacterName - 0xAC;
+    DWORD dynamicBootsColor = dynamicAddrCharacterName - 0xA8;
+
+
     //pfnGetCreatureBattleId getCreatureBattleId = (pfnGetCreatureBattleId)(g_hGameModule + 0x14DE10);
     charStanceAddress = (BYTE*)(g_hGameModule + 0x932A14);
     charFollowMonsterStatusAddress = (BYTE*)(g_hGameModule + 0x932A18);
@@ -161,6 +169,12 @@ DWORD __stdcall BGThread(HMODULE hModule)
         LPVOID g_map = (LPVOID)(g_hGameModule + 0x932AF0);
         //int creatureBattleId = getCreatureBattleId(g_map, currentTargetID);
         BYTE charStance = *charStanceAddress;
+        int charOutfitModel = *(int*)(dynamicCharOutfitModel);
+        int headColor = *(int*)(dynamicHeadColor);
+        int chestColor = *(int*)(dynamicChestColor);
+        int legsColor = *(int*)(dynamicLegsColor);
+        int bootsColor = *(int*)(dynamicBootsColor);
+
 
         system("cls"); // Clear the console before every loop
 
@@ -189,6 +203,14 @@ DWORD __stdcall BGThread(HMODULE hModule)
         gameData["Light_mode"] = LightMode;
         gameData["Char_Stance"] = charStance;
         gameData["Char_FollowMonsterStatus"] = charFollowMonsterStatus;
+        gameData["Outfit"] = {
+            {"CharOutfitModel", charOutfitModel},
+            {"HeadColor", headColor},
+            {"ChestColor", chestColor},
+            {"LegsColor", legsColor},
+            {"BootsColor", bootsColor}
+        };
+
 
         //gameData["creatureBattleId"] = creatureBattleId;
         // Serialize the JSON and save to file
