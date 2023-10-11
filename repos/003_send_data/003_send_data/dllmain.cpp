@@ -4,12 +4,14 @@
 #include <TlHelp32.h>
 #include <string>
 
+// Based on the function signature provided
+typedef void(__thiscall* _SetInventoryItem)(void* localPlayer, int inventory, void* itemPtr);
+
+_SetInventoryItem SetInventoryItem;
+
 DWORD WINAPI HackThread(HMODULE hModule)
 {
     AllocConsole();
-    FILE* f;
-    freopen_s(&f, "CONOUT$", "w", stdout);
-
     std::cout << "Hello there!\n";
 
     uintptr_t moduleBase = 0;
@@ -22,10 +24,10 @@ DWORD WINAPI HackThread(HMODULE hModule)
         {
             do
             {
-                if (wcsstr(pe32.szExeFile, L"eale"))
+                if (wcsstr(pe32.szExeFile, L"eale")) // Check if the process name contains "eale"
                 {
                     moduleBase = (uintptr_t)GetModuleHandleW(pe32.szExeFile);
-                    break;
+                    break; // Exit the loop once we find the desired process
                 }
             } while (Process32Next(hSnapshot, &pe32));
         }
@@ -35,15 +37,17 @@ DWORD WINAPI HackThread(HMODULE hModule)
     if (moduleBase == 0)
     {
         std::cout << "Target process not found!\n";
-        fclose(f);
         FreeConsole();
         FreeLibraryAndExitThread(hModule, 0);
         return 0;
     }
 
-    // Char Follow Monster Status Address Calculation
-    BYTE* charFollowMonsterStatusAddress;
-    charFollowMonsterStatusAddress = (BYTE*)(moduleBase + 0x932A18);
+    // Assuming m_localPlayer is a pointer to LocalPlayer
+    uintptr_t localPlayerPtrAddress = (uintptr_t)(moduleBase + 0x932990); // Based on the address provided by g_game.getLocalPlayer
+    void* localPlayerPtr = *(void**)(localPlayerPtrAddress);
+
+    // Address for setInventoryItem function
+    SetInventoryItem = (_SetInventoryItem)(moduleBase + 0x927A0);  // Using the address provided for setInventoryItem
 
     while (true)
     {
@@ -55,12 +59,19 @@ DWORD WINAPI HackThread(HMODULE hModule)
         if (GetAsyncKeyState(VK_NUMPAD2) & 1)
         {
             std::cout << "Button pressed" << std::endl;
-            *charFollowMonsterStatusAddress = 1; // Change to the desired value, e.g. 1 for follow status.
+
+            // Set the inventory slot to InventorySlotNecklace (2) for the necklace
+            int inventory = 2;
+
+            // Set the item ID to 3081 (assuming this is a pointer)
+            void* itemPtr = (void*)3081;
+
+            // Call setInventoryItem with the appropriate arguments
+            SetInventoryItem(localPlayerPtr, inventory, itemPtr);
         }
         Sleep(10);
     }
 
-    fclose(f);
     FreeConsole();
     FreeLibraryAndExitThread(hModule, 0);
     return 0;
