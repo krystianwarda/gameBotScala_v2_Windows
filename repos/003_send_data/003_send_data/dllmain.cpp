@@ -4,14 +4,24 @@
 #include <TlHelp32.h>
 #include <string>
 
-// Based on the function signature provided
-typedef void(__thiscall* _SetInventoryItem)(void* localPlayer, int inventory, void* itemPtr);
+class Item {
+public:
+    int itemId;
+    Item(int id) : itemId(id) {}
+};
 
-_SetInventoryItem SetInventoryItem;
+typedef void* (__thiscall* _GetLocalPlayerFunc)(void* gamePtr);
+typedef void(__thiscall* _SetInventoryItemFunc)(void* localPlayerPtr, int slot, const Item& item);
+
+_GetLocalPlayerFunc GetLocalPlayerFunc;
+_SetInventoryItemFunc SetInventoryItemFunc;
 
 DWORD WINAPI HackThread(HMODULE hModule)
 {
     AllocConsole();
+    FILE* f;
+    freopen_s(&f, "CONOUT$", "w", stdout);
+
     std::cout << "Hello there!\n";
 
     uintptr_t moduleBase = 0;
@@ -24,10 +34,10 @@ DWORD WINAPI HackThread(HMODULE hModule)
         {
             do
             {
-                if (wcsstr(pe32.szExeFile, L"eale")) // Check if the process name contains "eale"
+                if (wcsstr(pe32.szExeFile, L"eale"))
                 {
                     moduleBase = (uintptr_t)GetModuleHandleW(pe32.szExeFile);
-                    break; // Exit the loop once we find the desired process
+                    break;
                 }
             } while (Process32Next(hSnapshot, &pe32));
         }
@@ -37,17 +47,14 @@ DWORD WINAPI HackThread(HMODULE hModule)
     if (moduleBase == 0)
     {
         std::cout << "Target process not found!\n";
+        fclose(f);
         FreeConsole();
         FreeLibraryAndExitThread(hModule, 0);
         return 0;
     }
 
-    // Assuming m_localPlayer is a pointer to LocalPlayer
-    uintptr_t localPlayerPtrAddress = (uintptr_t)(moduleBase + 0x932990); // Based on the address provided by g_game.getLocalPlayer
-    void* localPlayerPtr = *(void**)(localPlayerPtrAddress);
-
-    // Address for setInventoryItem function
-    SetInventoryItem = (_SetInventoryItem)(moduleBase + 0x927A0);  // Using the address provided for setInventoryItem
+    SetInventoryItemFunc = (_SetInventoryItemFunc)(moduleBase + 0x927A0);
+    GetLocalPlayerFunc = (_GetLocalPlayerFunc)(moduleBase + 0x5AE30); // Use the correct offset for getLocalPlayer
 
     while (true)
     {
@@ -59,19 +66,18 @@ DWORD WINAPI HackThread(HMODULE hModule)
         if (GetAsyncKeyState(VK_NUMPAD2) & 1)
         {
             std::cout << "Button pressed" << std::endl;
+            Item myItem(2920);
 
-            // Set the inventory slot to InventorySlotNecklace (2) for the necklace
-            int inventory = 2;
-
-            // Set the item ID to 3081 (assuming this is a pointer)
-            void* itemPtr = (void*)3081;
-
-            // Call setInventoryItem with the appropriate arguments
-            SetInventoryItem(localPlayerPtr, inventory, itemPtr);
+            void* localPlayer = GetLocalPlayerFunc((void*)(moduleBase + 0x932990));
+            if (localPlayer)
+            {
+                SetInventoryItemFunc(localPlayer, 5, myItem);
+            }
         }
         Sleep(10);
     }
 
+    fclose(f);
     FreeConsole();
     FreeLibraryAndExitThread(hModule, 0);
     return 0;
