@@ -46,6 +46,9 @@ BYTE* lightModeAddress;
 BYTE* charStanceAddress;
 BYTE* charFollowMonsterStatusAddress;
 
+typedef LPVOID(__thiscall* pfnGetCreature)(LPVOID g_GamePtr, int creatureId);
+
+
 
 
 //typedef int(__thiscall* pfnGetCreatureBattleId)(LPVOID mapAddress, int targetId);
@@ -137,11 +140,12 @@ DWORD __stdcall BGThread(HMODULE hModule)
     DWORD dynamicBootsColor = dynamicAddrCharacterName - 0xA8;
 
 
-    //pfnGetCreatureBattleId getCreatureBattleId = (pfnGetCreatureBattleId)(g_hGameModule + 0x14DE10);
     charStanceAddress = (BYTE*)(g_hGameModule + 0x932A14);
     charFollowMonsterStatusAddress = (BYTE*)(g_hGameModule + 0x932A18);
     BYTE charFollowMonsterStatus = *charFollowMonsterStatusAddress;
-    
+
+
+
 
     printf_s("Testing the chat feature in 3 seconds, function at 0x%08x\n", talk);
 
@@ -174,6 +178,7 @@ DWORD __stdcall BGThread(HMODULE hModule)
         int chestColor = *(int*)(dynamicChestColor);
         int legsColor = *(int*)(dynamicLegsColor);
         int bootsColor = *(int*)(dynamicBootsColor);
+        
 
 
         system("cls"); // Clear the console before every loop

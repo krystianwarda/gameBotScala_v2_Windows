@@ -4,17 +4,36 @@
 #include <TlHelp32.h>
 #include <string>
 
+
+bool IsValidMemoryAddress(void* address) {
+    MEMORY_BASIC_INFORMATION mbi;
+    if (VirtualQuery(address, &mbi, sizeof(mbi))) {
+        DWORD mask = PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
+        bool isReadable = (mbi.Protect & mask) != 0;
+        return isReadable && mbi.State == MEM_COMMIT;
+    }
+    return false;
+}
+
+// Define the Item class as described earlier
 class Item {
 public:
+    int m_position_x;
+    int m_position_y;
+    short m_position_z;
+    unsigned short m_datId;
     int itemId;
+
     Item(int id) : itemId(id) {}
 };
 
 typedef void* (__thiscall* _GetLocalPlayerFunc)(void* gamePtr);
 typedef void(__thiscall* _SetInventoryItemFunc)(void* localPlayerPtr, int slot, const Item& item);
+typedef void* (__thiscall* _GetCreatureByIdFunc)(void* mapPtr, int creatureId);  // typedef for getCreatureById
 
 _GetLocalPlayerFunc GetLocalPlayerFunc;
 _SetInventoryItemFunc SetInventoryItemFunc;
+_GetCreatureByIdFunc GetCreatureByIdFunc;  // Function pointer instance
 
 DWORD WINAPI HackThread(HMODULE hModule)
 {
@@ -54,7 +73,8 @@ DWORD WINAPI HackThread(HMODULE hModule)
     }
 
     SetInventoryItemFunc = (_SetInventoryItemFunc)(moduleBase + 0x927A0);
-    GetLocalPlayerFunc = (_GetLocalPlayerFunc)(moduleBase + 0x5AE30); // Use the correct offset for getLocalPlayer
+    GetLocalPlayerFunc = (_GetLocalPlayerFunc)(moduleBase + 0x5AE30);
+    GetCreatureByIdFunc = (_GetCreatureByIdFunc)(moduleBase + 0x14DE10); // Point to the correct offset for getCreatureById
 
     while (true)
     {
@@ -62,18 +82,37 @@ DWORD WINAPI HackThread(HMODULE hModule)
         {
             break;
         }
-
         if (GetAsyncKeyState(VK_NUMPAD2) & 1)
         {
-            std::cout << "Button pressed" << std::endl;
-            Item myItem(2920);
+            std::cout << "NUMPAD2 pressed" << std::endl;
 
-            void* localPlayer = GetLocalPlayerFunc((void*)(moduleBase + 0x932990));
-            if (localPlayer)
+            void* mapPtr = (void*)(moduleBase + 0x932AF0); // Assuming this is the address of the map object
+            int creatureId = 234442120; // Given creature ID
+
+            if (mapPtr) // Always check if the map pointer is valid
             {
-                SetInventoryItemFunc(localPlayer, 5, myItem);
+                void* creaturePtr = GetCreatureByIdFunc(mapPtr, creatureId);
+                if (creaturePtr && IsValidMemoryAddress(creaturePtr) && IsValidMemoryAddress((void*)((uintptr_t)creaturePtr + 0x08)) && IsValidMemoryAddress((void*)((uintptr_t)creaturePtr + 0x10)) && IsValidMemoryAddress((void*)((uintptr_t)creaturePtr + 0x14))) {
+          
+                    int x = *((int*)((uintptr_t)creaturePtr + 0x08)); // Hypothetical offset for x
+                    int y = *((int*)((uintptr_t)creaturePtr + 0x10)); // Given offset for y
+                    int z = *((int*)((uintptr_t)creaturePtr + 0x14)); // Given offset for z
+
+                    std::cout << "Creature Coordinates: (" << x << ", " << y << ", " << z << ")" << std::endl;
+                    Sleep(500); // Sleep for half a second
+                }
+                else
+                {
+                    std::cout << "Creature not found!" << std::endl;
+                }
+            }
+            else
+            {
+                std::cout << "Map pointer is invalid!" << std::endl;
             }
         }
+
+
         Sleep(10);
     }
 
