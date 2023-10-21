@@ -26,34 +26,13 @@ typedef double(__thiscall* pfnGetMaxHealth)(LPVOID g_LocalPlayerPtr);
 typedef double(__thiscall* pfnGetMana)(LPVOID g_LocalPlayerPtr);
 typedef double(__thiscall* pfnGetMaxMana)(LPVOID g_LocalPlayerPtr);
 typedef double(__thiscall* pfnGetLevel)(LPVOID g_LocalPlayerPtr);
-typedef bool(__thiscall* pfnIsMonster)(LPVOID g_CreaturePtr);
-typedef bool(__thiscall* pfnIsCreature)(LPVOID g_CreaturePtr);
 typedef double(__thiscall* pfnGetTotalCapacity)(LPVOID g_LocalPlayerPtr);
-typedef LPVOID(__thiscall* pfnGetInventoryItem)(LPVOID g_LocalPlayerPtr);
-typedef double(__thiscall* pfnGetVocation)(LPVOID g_LocalPlayerPtr);
-typedef std::string(__thiscall* pfnGetBlessings)(LPVOID g_LocalPlayerPtr);
-typedef bool(__thiscall* pfnIsPremium)(LPVOID g_LocalPlayerPtr);
-typedef int(__thiscall* pfnGetTargetID)(LPVOID g_LocalPlayerPtr);
-pfnGetTargetID getTargetID;
+
+char* charNamePtr;
+unsigned char* LightModePtr;
 int* charXPosPtr;
 int* charYPosPtr;
 int* charZPosPtr;
-int** charSpeedBasePointer;
-int* charSpeedPointer;
-const int offset = 0xB0;
-std::string* characterNameAddress;
-BYTE* lightModeAddress;
-BYTE* charStanceAddress;
-BYTE* charFollowMonsterStatusAddress;
-
-typedef LPVOID(__thiscall* pfnGetCreature)(LPVOID g_GamePtr, int creatureId);
-
-
-
-
-//typedef int(__thiscall* pfnGetCreatureBattleId)(LPVOID mapAddress, int targetId);
-//typedef std::string(__thiscall* pfnGetLight)(LPVOID g_LocalPlayerPtr);
-//typedef int(__thiscall* pfnGetAmbientLight)(LPVOID g_LocalPlayerPtr);
 
 
 #pragma warning (disable:4477)
@@ -93,131 +72,85 @@ DWORD __stdcall BGThread(HMODULE hModule)
     printf_s("Logged in!\nPointers:\n\tLocal Player: 0x%08x\n\tProtocol: 0x%08x\n", g_Player, g_Protocol);
 
     pfnTalk talk = (pfnTalk)(g_hGameModule + 0x79A70);
+
+    pfnGetMaxMana getMaxMana = (pfnGetMaxMana)(g_hGameModule + 0x5AD50);
+    pfnGetLevel getLevel = (pfnGetLevel)(g_hGameModule + 0x96F50);
+
+    charNamePtr = (char*)(g_hGameModule + 0x932B50);
+
     pfnGetHealth getHealth = (pfnGetHealth)(g_hGameModule + 0x96F00);
     pfnGetMaxHealth getMaxHealth = (pfnGetMaxHealth)(g_hGameModule + 0x96F10);
     pfnGetMana getMana = (pfnGetMana)(g_hGameModule + 0x5AD40);
-    pfnGetMaxMana getMaxMana = (pfnGetMaxMana)(g_hGameModule + 0x5AD50);
-    pfnGetLevel getLevel = (pfnGetLevel)(g_hGameModule + 0x96F50);
-    pfnIsMonster isMonster = (pfnIsMonster)(g_hGameModule + 0x14A670);
-    pfnIsCreature isCreature = (pfnIsCreature)(g_hGameModule + 0x14A5F0);
     pfnGetTotalCapacity getTotalCapacity = (pfnGetTotalCapacity)(g_hGameModule + 0x96F30);
-    pfnGetInventoryItem getInventoryItem = (pfnGetInventoryItem)(g_hGameModule + 0x96FE0);
-    pfnGetVocation getVocation = (pfnGetVocation)(g_hGameModule + 0x96EF0);
-    pfnIsPremium isPremium = (pfnIsPremium)(g_hGameModule + 0x97060);
-    charXPosPtr = (int*)(g_hGameModule + 0x932C9C);
-    charYPosPtr = (int*)(g_hGameModule + 0x932CA0);
-    charZPosPtr = (int*)(g_hGameModule + 0x932CA4);
+
+    charXPosPtr = (int*)(g_hGameModule + 0x932D9C);
+    charYPosPtr = (int*)(g_hGameModule + 0x932DA0);
+    charZPosPtr = (int*)(g_hGameModule + 0x932DA4);
+
     //speed
-    DWORD baseAddr = *(DWORD*)(g_hGameModule + 0x932B70);
-    DWORD offset1 = *(DWORD*)(baseAddr + 0x0);
-    DWORD offset2 = *(DWORD*)(offset1 + 0x14);
-    DWORD dynamicAddr = offset2 + 0xB0; // This should now contain 13E2D8C8
+    //DWORD baseAddr = *(DWORD*)(g_hGameModule + 0x932B70);
+    //DWORD offset1 = *(DWORD*)(baseAddr + 0x0);
+    //DWORD offset2 = *(DWORD*)(offset1 + 0x1CC);
+    //DWORD dynamicAddr = offset2 + 0xB0; // This should now contain 13E2D8C8
+
 
     // move char direction
-    DWORD baseAddrCharMoveDirection = *(DWORD*)(g_hGameModule + 0x932B70); // Base address: "RealeraDX-1693821795.exe"+00932B70 -> 051CA9F0
+    DWORD baseAddrCharMoveDirection = *(DWORD*)(g_hGameModule + 0x932C70); // Base address: "RealeraDX-1693821795.exe"+00932B70 -> 051CA9F0
     DWORD offset1CharMoveDirection = *(DWORD*)(baseAddrCharMoveDirection + 0x0);           // Follows pointer at 051CA9F0 to reach 15F53B48
     DWORD offset2CharMoveDirection = *(DWORD*)(offset1CharMoveDirection + 0x14);           // Follows pointer at 15F53B48 + 0x14 to reach 14502030
     DWORD dynamicAddrCharMoveDirection = offset2CharMoveDirection + 0x4C;
 
+
     // character name and light
-    DWORD baseAddressCharacterName = *(DWORD*)(g_hGameModule + 0x933CA0);   // Step 1
-    DWORD offset1CharacterName = *(DWORD*)(baseAddressCharacterName + 0xB8);   // Step 2
-    DWORD offset2CharacterName = *(DWORD*)(offset1CharacterName + 0x84);   // Step 3
-    DWORD offset3CharacterName = *(DWORD*)(offset2CharacterName + 0x0);   // Step 4
-    DWORD offset4CharacterName = *(DWORD*)(offset3CharacterName + 0x0);   // Step 5
-    DWORD offset5CharacterName = *(DWORD*)(offset4CharacterName + 0x36C);   // Step 6
-    DWORD offset6CharacterName = *(DWORD*)(offset5CharacterName + 0x1CC);   // Step 7
-    DWORD dynamicAddrCharacterName = offset6CharacterName + 0x114;   // Step 8
+    DWORD baseAddress = *(DWORD*)(g_hGameModule + 0x933DA8);   // Step 1
+    DWORD offset1 = *(DWORD*)(baseAddress + 0xB8);   // Step 2
+    DWORD offset2 = *(DWORD*)(offset1 + 0x84);   // Step 3
+    DWORD offset3 = *(DWORD*)(offset2 + 0x0);   // Step 4
+    DWORD offset4 = *(DWORD*)(offset3 + 0x0);   // Step 5
+    DWORD offset5 = *(DWORD*)(offset4 + 0x36C);   // Step 6
+    DWORD offset6 = *(DWORD*)(offset5 + 0x1CC);   // Step 7
+    LightModePtr = (unsigned char*)(offset6 + 0xAD);
+
+
 
     // Calculate the dynamic address for lightMode based on characterName's dynamic address
-    DWORD dynamicLightMode = dynamicAddrCharacterName - 0x67;   // Step 9
-
-    // Outfit related dynamic addresses
-    DWORD dynamicCharOutfitModel = dynamicAddrCharacterName - 0xBC;
-    DWORD dynamicHeadColor = dynamicAddrCharacterName - 0xB4;
-    DWORD dynamicChestColor = dynamicAddrCharacterName - 0xB0;
-    DWORD dynamicLegsColor = dynamicAddrCharacterName - 0xAC;
-    DWORD dynamicBootsColor = dynamicAddrCharacterName - 0xA8;
 
 
-    charStanceAddress = (BYTE*)(g_hGameModule + 0x932A14);
-    charFollowMonsterStatusAddress = (BYTE*)(g_hGameModule + 0x932A18);
-    BYTE charFollowMonsterStatus = *charFollowMonsterStatusAddress;
-
-
-
-
-    printf_s("Testing the chat feature in 3 seconds, function at 0x%08x\n", talk);
 
     Sleep(3000);
 
-    std::string msg = "hi";
-    talk(g_Game, msg);
-    printf_s("Sent \"hi\"! Mod demonstration is finished, now the mod will show the health status forever in 1s intervals...\n(Sometimes max health is stuck at 0)\n");
-
     while (1) {
 
-
-        int* targetIDPtr = (int*)(g_hGameModule + 0x932994);  // Update this address according to your previous mention.
-        int currentTargetID = *targetIDPtr;
-
-        int* currentBattleTargetIDPtr = (int*)(g_hGameModule + 0x0E067F10);  // Update this address according to your previous mention.
-        int currentBattleTargetID = *currentBattleTargetIDPtr;
         int charXPos = *charXPosPtr;
         int charYPos = *charYPosPtr;
         int charZPos = *charZPosPtr;
-        int valueAtDynamicAddress = *(int*)(dynamicAddr);
-        BYTE charMoveDirection = *(BYTE*)(dynamicAddrCharMoveDirection);  // Fetch direction value (assuming it's a byte)
-        std::string characterName = *(std::string*)(dynamicAddrCharacterName);
-        BYTE LightMode = *(BYTE*)(dynamicLightMode);
-        LPVOID g_map = (LPVOID)(g_hGameModule + 0x932AF0);
-        //int creatureBattleId = getCreatureBattleId(g_map, currentTargetID);
-        BYTE charStance = *charStanceAddress;
-        int charOutfitModel = *(int*)(dynamicCharOutfitModel);
-        int headColor = *(int*)(dynamicHeadColor);
-        int chestColor = *(int*)(dynamicChestColor);
-        int legsColor = *(int*)(dynamicLegsColor);
-        int bootsColor = *(int*)(dynamicBootsColor);
-        
-
+        std::string charName = charNamePtr;
+        //int valueAtDynamicAddress = *(int*)(dynamicAddr);
+        BYTE charMoveDirection = *(BYTE*)(dynamicAddrCharMoveDirection);
+        int LightMode = static_cast<int>(*LightModePtr);
 
         system("cls"); // Clear the console before every loop
 
-        // Create a json object
-        nlohmann::json gameData;
 
+        // Create a json object
+
+        nlohmann::json gameData;
+        gameData["Game_Base"] = g_hGameModule;
+        gameData["Game_Pointer"] = (int)g_Game;
+
+        gameData["Character_Name"] = charName;
+        
         gameData["Health"] = { {"current", (int)getHealth(g_Player)}, {"max", (int)getMaxHealth(g_Player)} };
         gameData["Mana"] = { {"current", (int)getMana(g_Player)}, {"max", (int)getMaxMana(g_Player)} };
         gameData["Level"] = (int)getLevel(g_Player);
-
-        // Followed by other attributes
-        gameData["Is_Monster?"] = isMonster(g_Player) ? "Yes" : "No";
-        gameData["Is_Creature?"] = isCreature(g_Player) ? "Yes" : "No";
         gameData["Total_Capacity"] = (int)getTotalCapacity(g_Player);
-        gameData["Is_Premium"] = isPremium(g_Player) ? "Yes" : "No";
-        gameData["Current_Target_ID"] = currentTargetID;
-        gameData["Battle_Target_ID"] = currentBattleTargetID;
-        gameData["Game_Base"] = g_hGameModule;
-        gameData["Game_Pointer"] = (int)g_Game;
+       // gameData["Char_Speed"] = valueAtDynamicAddress;
+
         gameData["Char_X_Position"] = charXPos;
         gameData["Char_Y_Position"] = charYPos;
         gameData["Char_Z_Position"] = charZPos;
-        gameData["Char_Speed"] = valueAtDynamicAddress;
         gameData["Character_Move_Direction"] = charMoveDirection;
-        gameData["Character_Name"] = characterName;
         gameData["Light_mode"] = LightMode;
-        gameData["Char_Stance"] = charStance;
-        gameData["Char_FollowMonsterStatus"] = charFollowMonsterStatus;
-        gameData["Outfit"] = {
-            {"CharOutfitModel", charOutfitModel},
-            {"HeadColor", headColor},
-            {"ChestColor", chestColor},
-            {"LegsColor", legsColor},
-            {"BootsColor", bootsColor}
-        };
-
-
-        //gameData["creatureBattleId"] = creatureBattleId;
         // Serialize the JSON and save to file
         std::ofstream outFile("gameData.json");
         outFile << gameData.dump(4);  // dump(4) adds 4-space indentation
@@ -226,15 +159,6 @@ DWORD __stdcall BGThread(HMODULE hModule)
         // Display the JSON in the console
         std::cout << gameData.dump(4) << std::endl;
    
-
-
-        // Check for the key press and send a message if pressed
-        if (GetAsyncKeyState(VK_NUMPAD2) & 1) {
-            std::string messageToSend = "Hello";
-            talk(g_Game, messageToSend);
-            printf_s("\nSent \"%s\" via hotkey!\n", messageToSend.c_str());
-        }
-  
 
         if (GetAsyncKeyState(VK_END)) {
             printf_s("Script has been turned off.\n"); // Print termination message
@@ -248,6 +172,7 @@ DWORD __stdcall BGThread(HMODULE hModule)
 
     return 0;
 }
+
 
 #pragma warning (default:4477)
 
@@ -276,13 +201,13 @@ int __stdcall DllMain(HMODULE hModule, DWORD fdwReason, LPVOID reserved)
             }
         }
 
-        g_Game = (LPDWORD)(g_hGameModule + 0x932990UL);
+        g_Game = (LPDWORD)(g_hGameModule + 0x932AA0);
 
         CloseHandle(CreateThread(0, 0, (LPTHREAD_START_ROUTINE)BGThread, hModule, 0, 0));
     }
     if (fdwReason == DLL_PROCESS_DETACH)
     {
-        // Cleanup, if any
+        // Cleanup, if anyze 3
     }
 
     return 1;
