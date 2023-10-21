@@ -30,6 +30,11 @@ typedef double(__thiscall* pfnGetTotalCapacity)(LPVOID g_LocalPlayerPtr);
 
 char* charNamePtr;
 unsigned char* LightModePtr;
+unsigned char* charOutfitSetPtr;
+unsigned char* charOutfitHeadColorPtr;
+unsigned char* charOutfitChestColorPtr;
+unsigned char* charOutfitLegsColorPtr;
+unsigned char* charOutfitBootsColorPtr;
 int* charXPosPtr;
 int* charYPosPtr;
 int* charZPosPtr;
@@ -111,6 +116,16 @@ DWORD __stdcall BGThread(HMODULE hModule)
     DWORD offset6 = *(DWORD*)(offset5 + 0x1CC);   // Step 7
     LightModePtr = (unsigned char*)(offset6 + 0xAD);
 
+    // Outfit related dynamic addresses
+    charOutfitSetPtr = (unsigned char*)(offset6 + 0x58);
+    charOutfitHeadColorPtr = (unsigned char*)(offset6 + 0x60);
+    charOutfitChestColorPtr = (unsigned char*)(offset6 + 0x64);
+    charOutfitLegsColorPtr = (unsigned char*)(offset6 + 0x68);
+    charOutfitBootsColorPtr = (unsigned char*)(offset6 + 0x6C);
+    //DWORD dynamicHeadColor = dynamicAddrCharacterName - 0xB4;
+    //DWORD dynamicChestColor = dynamicAddrCharacterName - 0xB0;
+    //DWORD dynamicLegsColor = dynamicAddrCharacterName - 0xAC;
+    //DWORD dynamicBootsColor = dynamicAddrCharacterName - 0xA8;
 
 
     // Calculate the dynamic address for lightMode based on characterName's dynamic address
@@ -128,6 +143,11 @@ DWORD __stdcall BGThread(HMODULE hModule)
         //int valueAtDynamicAddress = *(int*)(dynamicAddr);
         BYTE charMoveDirection = *(BYTE*)(dynamicAddrCharMoveDirection);
         int LightMode = static_cast<int>(*LightModePtr);
+        int charOutfitSet = static_cast<int>(*charOutfitSetPtr);
+        int charOutfitHeadColor = static_cast<int>(*charOutfitHeadColorPtr);
+        int charOutfitChestColor = static_cast<int>(*charOutfitChestColorPtr);
+        int charOutfitLegsColor = static_cast<int>(*charOutfitLegsColorPtr);
+        int charOutfitBootsColor = static_cast<int>(*charOutfitBootsColorPtr);
 
         system("cls"); // Clear the console before every loop
 
@@ -151,6 +171,13 @@ DWORD __stdcall BGThread(HMODULE hModule)
         gameData["Char_Z_Position"] = charZPos;
         gameData["Character_Move_Direction"] = charMoveDirection;
         gameData["Light_mode"] = LightMode;
+        gameData["charOutfit"] = { 
+            {"charOutfitSet", charOutfitSet},
+            {"charOutfitHeadColor", charOutfitHeadColor},
+            {"charOutfitChestColor", charOutfitChestColor},
+            {"charOutfitLegsColor", charOutfitLegsColor},
+            {"charOutfitBootsColor", charOutfitBootsColor} 
+        };
         // Serialize the JSON and save to file
         std::ofstream outFile("gameData.json");
         outFile << gameData.dump(4);  // dump(4) adds 4-space indentation
