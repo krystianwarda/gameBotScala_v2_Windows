@@ -38,7 +38,8 @@ unsigned char* charOutfitBootsColorPtr;
 int* charXPosPtr;
 int* charYPosPtr;
 int* charZPosPtr;
-
+BYTE* charStanceAddress;
+BYTE* charFollowMonsterStatusAddress;
 
 #pragma warning (disable:4477)
 
@@ -122,11 +123,9 @@ DWORD __stdcall BGThread(HMODULE hModule)
     charOutfitChestColorPtr = (unsigned char*)(offset6 + 0x64);
     charOutfitLegsColorPtr = (unsigned char*)(offset6 + 0x68);
     charOutfitBootsColorPtr = (unsigned char*)(offset6 + 0x6C);
-    //DWORD dynamicHeadColor = dynamicAddrCharacterName - 0xB4;
-    //DWORD dynamicChestColor = dynamicAddrCharacterName - 0xB0;
-    //DWORD dynamicLegsColor = dynamicAddrCharacterName - 0xAC;
-    //DWORD dynamicBootsColor = dynamicAddrCharacterName - 0xA8;
-
+    charStanceAddress = (BYTE*)(g_hGameModule + 0x932B24);
+    charFollowMonsterStatusAddress = (BYTE*)(g_hGameModule + 0x932B28);
+    int* currentBattleTargetIDPtr = (int*)(g_hGameModule + 0x932AA4);
 
     // Calculate the dynamic address for lightMode based on characterName's dynamic address
 
@@ -148,6 +147,9 @@ DWORD __stdcall BGThread(HMODULE hModule)
         int charOutfitChestColor = static_cast<int>(*charOutfitChestColorPtr);
         int charOutfitLegsColor = static_cast<int>(*charOutfitLegsColorPtr);
         int charOutfitBootsColor = static_cast<int>(*charOutfitBootsColorPtr);
+        BYTE charStance = *charStanceAddress;
+        BYTE charFollowMonsterStatus = *charFollowMonsterStatusAddress;
+        int currentBattleTargetID = *currentBattleTargetIDPtr;
 
         system("cls"); // Clear the console before every loop
 
@@ -178,6 +180,11 @@ DWORD __stdcall BGThread(HMODULE hModule)
             {"charOutfitLegsColor", charOutfitLegsColor},
             {"charOutfitBootsColor", charOutfitBootsColor} 
         };
+        gameData["Char_Stance"] = charStance;
+        gameData["Char_FollowMonsterStatus"] = charFollowMonsterStatus;
+        gameData["Char_Target_Id"] = currentBattleTargetID;
+
+
         // Serialize the JSON and save to file
         std::ofstream outFile("gameData.json");
         outFile << gameData.dump(4);  // dump(4) adds 4-space indentation
