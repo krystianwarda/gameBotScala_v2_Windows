@@ -86,7 +86,7 @@ bool InjectDLL(const wchar_t* dllPath, const wchar_t* processSubstring)
 
 int main()
 {
-    const wchar_t* dllPath = L"C:\\MyLibraries\\old_is_new_dll32.dll";
+    const wchar_t* dllPath = L"C:\\MyLibraries\\game_mod_test.dll";
     const wchar_t* processSubstring = L"eale";
 
     if (InjectDLL(dllPath, processSubstring))

@@ -26,8 +26,16 @@ typedef double(__thiscall* pfnGetMaxHealth)(LPVOID g_LocalPlayerPtr);
 typedef double(__thiscall* pfnGetMana)(LPVOID g_LocalPlayerPtr);
 typedef double(__thiscall* pfnGetMaxMana)(LPVOID g_LocalPlayerPtr);
 typedef double(__thiscall* pfnGetLevel)(LPVOID g_LocalPlayerPtr);
+typedef std::vector<CreatureTypePtr>(__thiscall* pfnGetCreatures)(LPVOID g_SpawnPtr);
 
-typedef int(__thiscall* pfnGetCreatures)(LPVOID g_GamePtr);
+
+class CreatureType {
+public:
+    std::string name;
+    int health;
+    int level;
+    std::vector<std::string> abilities;
+};
 
 
 #pragma warning (disable:4477)
@@ -73,7 +81,8 @@ DWORD __stdcall BGThread(HMODULE hModule)
     pfnGetHealth getHealth = (pfnGetHealth)(g_hGameModule + 0x96F00);
     pfnGetMaxHealth getMaxHealth = (pfnGetMaxHealth)(g_hGameModule + 0x96F10);
     pfnGetMana getMana = (pfnGetMana)(g_hGameModule + 0x5AD40);
-    pfnGetCreatures getCreatures = (pfnGetCreatures)(g_hGameModule + 0x1A12E0);
+    pfnGetCreatures getCreatures = (pfnGetCreatures)(g_hGameModule + 0x66C30);
+
 
 
 
@@ -82,8 +91,6 @@ DWORD __stdcall BGThread(HMODULE hModule)
 
     while (1) {
 
-
-        int firstCreatureID = getCreatures(g_Game);
         system("cls"); // Clear the console before every loop
 
 
@@ -96,7 +103,16 @@ DWORD __stdcall BGThread(HMODULE hModule)
         gameData["Health"] = { {"current", (int)getHealth(g_Player)}, {"max", (int)getMaxHealth(g_Player)} };
         gameData["Mana"] = { {"current", (int)getMana(g_Player)}, {"max", (int)getMaxMana(g_Player)} };
         gameData["Level"] = (int)getLevel(g_Player);
-        gameData["FirstCreatureID"] = firstCreatureID;
+
+        auto creatures = getCreatures(g_Game);
+        gameData["Creatures"] = nlohmann::json::array();
+
+        std::vector<int*> creatures = getCreatures(g_Spawn);
+        nlohmann::json creaturesJson;
+        for (int* creature : creatures) {
+            creaturesJson.push_back(*creature); // Assuming CreatureTypePtr points to an integer
+        }
+        gameData["Creatures"] = creaturesJson;
 
  
         // Serialize the JSON and save to file
