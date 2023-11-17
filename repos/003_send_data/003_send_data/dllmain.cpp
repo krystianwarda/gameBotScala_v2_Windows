@@ -44,7 +44,7 @@ DWORD WINAPI HackThread(HMODULE hModule)
         return 0;
     }
 
-    SayFunc = (_SayFunc)(moduleBase + 0xF7590);
+    SayFunc = (_SayFunc)(moduleBase + 0x9D3B4);
 
     while (true)
     {
@@ -56,7 +56,7 @@ DWORD WINAPI HackThread(HMODULE hModule)
         if (GetAsyncKeyState(VK_NUMPAD2) & 1)
         {
             std::cout << "Button pressed" << std::endl;
-            SayFunc((void*)(moduleBase + 0x933080), "Hello");
+            SayFunc((void*)(moduleBase + 0x939590), "Hello");
         }
         Sleep(10);
     }
