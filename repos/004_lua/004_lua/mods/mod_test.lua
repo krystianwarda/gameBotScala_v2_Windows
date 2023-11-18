@@ -11,6 +11,8 @@ connect(g_game, {
 printConsole('Registered events')
 
 -- register some keyboard shortcuts
+g_keyboard.bindKeyDown('Ctrl+D', setAmulet)
+g_keyboard.bindKeyDown('Ctrl+C', getItem)
 g_keyboard.bindKeyDown('Ctrl+J', displayList)
 g_keyboard.bindKeyDown('Ctrl+Y',
     function()
@@ -39,6 +41,149 @@ function evt_followingCreatureChanged()
     printConsole('Following: ' .. following:getName())
 end
 
+function findEmptyContainerId()
+    -- Directly calling the method from the g_game object
+    local id = g_game.findEmptyContainerId()
+
+    if id then
+        printConsole("Empty container ID found: " .. id)
+        return id
+    else
+        printConsole("No empty container ID found")
+        return nil
+    end
+end
+
+
+function getBackpackItems()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    -- Retrieve the backpack item from inventory slot 3
+    local backpack = player:getInventoryItem(3)
+
+    if not backpack then
+        printConsole('No backpack found in slot 3')
+        return
+    end
+
+    -- Assuming getContainerItems() and getContainerItem() are methods to access container's items
+    local backpackItems = backpack:getContainerItems()
+    if not backpackItems then
+        printConsole('No items found in the backpack')
+        return
+    end
+
+    -- Displaying items from the backpack
+    for i, item in ipairs(backpackItems) do
+        local containerItem = backpack:getContainerItem(i)
+        if containerItem then
+            printConsole("Item in backpack slot " .. i .. ": " .. containerItem:getId())
+            -- You can serialize or process each item as needed
+        end
+    end
+end
+
+
+function setAmulet()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local amuletId = 3350 -- ID of the amulet
+    local foundItem = g_game.findPlayerItem(amuletId, -1)  -- -1 as the subtype if subtype is not specific
+
+    if foundItem then
+        -- Move the found amulet to the desired inventory slot (assuming slot 6 for the amulet)
+        local slotPosition = {x = 65535, y = 6, z = 0}  -- The inventory slot position for slot 6
+        g_game.move(foundItem, slotPosition, foundItem:getCount())
+        printConsole("Amulet moved to slot 6")
+    else
+        printConsole("Could not obtain item with ID " .. amuletId)
+    end
+end
+
+
+
+function setAmulet2()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    -- Retrieve the item object with ID 3350
+    local item = g_game.findPlayerItem(3350, -1)  -- -1 as the subtype if subtype is not specific
+
+    if item then
+        -- Setting the retrieved item in inventory slot 6
+        player:setInventoryItem(6, item)
+        printConsole("Amulet set in slot 6")
+    else
+        printConsole("Could not obtain item with ID 3350")
+    end
+end
+
+
+
+-- 3081 ss
+function getItem()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    -- Fetching the item from inventory slot 2
+    local item = player:getInventoryItem(6)
+    if item then
+        -- Displaying information about the item in slot 2
+        -- You can replace 'getId' and 'getSubType' with other methods as needed
+        printConsole("Item in slot 6: ID = " .. item:getId() .. ", SubType = " .. item:getSubType())
+    else
+        printConsole("No item found in slot 6")
+    end
+
+    -- Include additional code here if needed
+
+    -- Error handling (if applicable)
+    -- [Your existing error handling code]
+end
+
+
+
+
+
+
 function displayList()
     if not g_game.isOnline() then
         printConsole('Is not in game')
@@ -53,8 +198,7 @@ function displayList()
     end
     
     local dimension = modules.game_interface.getMapPanel():getVisibleDimension()
-    local 
-    = g_map.getSpectatorsInRangeEx(player:getPosition(), false, math.floor(dimension.width / 2), math.floor(dimension.width / 2) + 1, math.floor(dimension.height / 2), math.floor(dimension.height / 2) + 1)
+    local spectators = g_map.getSpectatorsInRangeEx(player:getPosition(), false, math.floor(dimension.width / 2), math.floor(dimension.width / 2) + 1, math.floor(dimension.height / 2), math.floor(dimension.height / 2) + 1)
 
     -- run the following code in protected mode (same as try/catch)
     local success, errmsg = pcall(function()

@@ -9,6 +9,7 @@ function init()
     })
 end
 
+
 -- this function will be called when we enter in a world
 function gameStarted()
     
@@ -40,27 +41,38 @@ function displayList()
 
     -- Initialize the main JSON-like structure
     local gameData = {
-        characterInfo = {},  -- Placeholder for character info
+        characterInfo = {},
         battleInfo = {}
     }
 
-    -- Placeholder for character information (to be filled later)
-    -- gameData.characterInfo = {
-    --     -- Add character details here
-    -- }
+    -- Populate characterInfo
+    gameData.characterInfo = {
+        Name = player:getName(),
+        Id = player:getId(),
+        --Voc = player:getVocation(),
+        Health = player:getHealth(),
+        --HealthMax = player:getMaxHealth(),
+        HealthPercent = player:getHealthPercent(),
+        Mana = player:getMana(),
+        ManaMax = player:getMaxMana(),
+        PositionX = player:getPosition().x,
+        PositionY = player:getPosition().y,
+        PositionZ = player:getPosition().z,
+        -- MagicLevel = player:getMagicLevel(),
+        -- Blessings = player:getBlessings(),
+    }
 
     -- Collect data of creatures in range for battle information
-    for index, creature in pairs(spectators) do
+    for _, creature in pairs(spectators) do
         if checkValidCreatureForListing(creature) then
-            gameData.battleInfo["pos" .. index .. "Battle"] = {
+            table.insert(gameData.battleInfo, {
                 Name = creature:getName(),
                 Id = creature:getId(),
                 HealthPercent = creature:getHealthPercent(),
-                ManaPercent = creature:getManaPercent(),
                 PositionX = creature:getPosition().x,
                 PositionY = creature:getPosition().y,
-                PositionZ = creature:getPosition().z,
-            }
+                PositionZ = creature:getPosition().z
+            })
         end
     end
 
