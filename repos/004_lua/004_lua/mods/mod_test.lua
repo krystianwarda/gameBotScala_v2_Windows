@@ -11,8 +11,8 @@ connect(g_game, {
 printConsole('Registered events')
 
 -- register some keyboard shortcuts
-g_keyboard.bindKeyDown('Ctrl+D', setAmulet)
-g_keyboard.bindKeyDown('Ctrl+C', getItem)
+g_keyboard.bindKeyDown('Ctrl+D', setBow)
+g_keyboard.bindKeyDown('Ctrl+C', attackHMM)
 g_keyboard.bindKeyDown('Ctrl+J', displayList)
 g_keyboard.bindKeyDown('Ctrl+Y',
     function()
@@ -93,8 +93,67 @@ function getBackpackItems()
     end
 end
 
+function attackHMM()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
 
-function setAmulet()
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local hmmhId = 3198 -- ID of the item to be used (Ultimate Healing Rune)
+    local foundItem = g_game.findPlayerItem(hmmhId, -1) -- -1 as the subtype if subtype is not specific
+
+    local attackingCreature = g_game.getAttackingCreature()
+
+    if foundItem and attackingCreature then
+        -- Use the found item on the attacking creature
+        g_game.useInventoryItemWith(hmmhId, attackingCreature, -1)
+        printConsole("Used item with ID " .. hmmhId .. " on attacking creature")
+    else
+        if not foundItem then
+            printConsole("Could not obtain item with ID " .. hmmhId)
+        end
+        if not attackingCreature then
+            printConsole("No attacking creature found")
+        end
+    end
+end
+
+
+
+function healUH()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local uhId = 3200 -- ID of the item to be used (Ultimate Healing Rune) MF 2874 UH 3160 HMM 
+    local foundItem = g_game.findPlayerItem(uhId, -1) -- -1 as the subtype if subtype is not specific
+
+    if foundItem then
+        -- Use the found item on the player
+        g_game.useInventoryItemWith(uhId, player, -1)
+        printConsole("Used item with ID " .. uhId .. " on player")
+    else
+        printConsole("Could not obtain item with ID " .. uhId)
+    end
+end
+
+
+function setBow()
     if not g_game.isOnline() then
         printConsole('Is not in game')
         return
@@ -120,6 +179,31 @@ function setAmulet()
     end
 end
 
+function setAmulet()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local amuletId = 3081 -- ID of the amulet
+    local foundItem = g_game.findPlayerItem(amuletId, -1)  -- -1 as the subtype if subtype is not specific
+
+    if foundItem then
+        -- Move the found amulet to the desired inventory slot (assuming slot 6 for the amulet)
+        local slotPosition = {x = 65535, y = 2, z = 0}  -- The inventory slot position for slot 6
+        g_game.move(foundItem, slotPosition, foundItem:getCount())
+        printConsole("Amulet moved to slot 6")
+    else
+        printConsole("Could not obtain item with ID " .. amuletId)
+    end
+end
 
 
 function setAmulet2()
