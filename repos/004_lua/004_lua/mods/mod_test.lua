@@ -11,9 +11,10 @@ connect(g_game, {
 printConsole('Registered events')
 
 -- register some keyboard shortcuts
-g_keyboard.bindKeyDown('Ctrl+D', setBow)
-g_keyboard.bindKeyDown('Ctrl+C', attackHMM)
-g_keyboard.bindKeyDown('Ctrl+J', displayList)
+g_keyboard.bindKeyDown('Ctrl+D', getItem)
+g_keyboard.bindKeyDown('Ctrl+A', setBow)
+g_keyboard.bindKeyDown('Ctrl+C', healUH)
+g_keyboard.bindKeyDown('Ctrl+J', useManaPotion)
 g_keyboard.bindKeyDown('Ctrl+Y',
     function()
         
@@ -125,7 +126,30 @@ function attackHMM()
     end
 end
 
+function useManaPotion()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
 
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local uhId = 2874 -- ID of the item to be used (Ultimate Healing Rune) MF 2874 UH 3160 fishing rod 3483 (sub1)
+    local foundItem = g_game.findPlayerItem(uhId, -1) -- -1 as the subtype if subtype is not specific
+
+    if foundItem then
+        -- Use the found item on the player
+        g_game.useWith(foundItem, player, -1)
+        printConsole("Used item with ID " .. uhId .. " on player")
+    else
+        printConsole("Could not obtain item with ID " .. uhId) 
+    end
+end
 
 function healUH()
     if not g_game.isOnline() then
@@ -140,15 +164,15 @@ function healUH()
         return
     end
 
-    local uhId = 3200 -- ID of the item to be used (Ultimate Healing Rune) MF 2874 UH 3160 HMM 
+    local uhId = 3160 -- ID of the item to be used (Ultimate Healing Rune) MF 2874 UH 3160 fishing rod 3483 (sub1)
     local foundItem = g_game.findPlayerItem(uhId, -1) -- -1 as the subtype if subtype is not specific
 
     if foundItem then
         -- Use the found item on the player
-        g_game.useInventoryItemWith(uhId, player, -1)
+        g_game.useWith(foundItem, player, -1)
         printConsole("Used item with ID " .. uhId .. " on player")
     else
-        printConsole("Could not obtain item with ID " .. uhId)
+        printConsole("Could not obtain item with ID " .. uhId) 
     end
 end
 
