@@ -12,9 +12,9 @@ printConsole('Registered events')
 
 -- register some keyboard shortcuts
 g_keyboard.bindKeyDown('Ctrl+D', getItem)
-g_keyboard.bindKeyDown('Ctrl+A', setBow)
-g_keyboard.bindKeyDown('Ctrl+C', healUH)
-g_keyboard.bindKeyDown('Ctrl+J', useManaPotion)
+g_keyboard.bindKeyDown('Ctrl+A', getPos)
+g_keyboard.bindKeyDown('Ctrl+C', workingUsingonMyself)
+g_keyboard.bindKeyDown('Ctrl+J', useFishingRod)
 g_keyboard.bindKeyDown('Ctrl+Y',
     function()
         
@@ -125,6 +125,92 @@ function attackHMM()
         end
     end
 end
+
+function getPos()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local playerXPos = player:getPosition().x
+    local playerYPos = player:getPosition().y
+    local playerZPos = player:getPosition().z
+    printConsole("Player pos: " .. tostring(playerXPos) .. ", " .. tostring(playerYPos) .. ", " .. tostring(playerZPos)) 
+
+end
+
+function workingUsingonMyself()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local itemId = 3483 -- ID of the item to be used (Ultimate Healing Rune) MF 2874 UH 3160 fishing rod 3483 (sub1)
+    local foundItem = g_game.findPlayerItem(itemId, -1) -- -1 as the subtype if subtype is not specific
+
+    if foundItem then
+        -- Use the found item on the player
+        g_game.useWith(foundItem, player, -1)
+        printConsole("Used item with ID " .. itemId .. " on player")
+    else
+        printConsole("Could not obtain item with ID " .. itemId) 
+    end
+end
+
+
+
+function useFishingRod()
+    math.randomseed(os.time())
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local itemId = 3483 -- ID of the fishing rod
+    local foundItem = g_game.findPlayerItem(itemId, -1)
+
+    local tiles = g_map.getTiles(tonumber(player:getPosition().z))
+
+    if #tiles > 0 then
+        local randomIndex = math.random(#tiles)
+        local tile = tiles[randomIndex]
+        if tile then
+            local topThing = tile:getTopUseThing()
+            if topThing and table.contains({618, 619, 620}, topThing:getId()) then
+                printConsole("Using item with random tile: " .. tostring(topThing:getId()))
+                g_game.useWith(foundItem, topThing, 1)
+            else
+                printConsole("No top thing found on the selected tile")
+            end
+        else
+            printConsole("Failed to get a random tile")
+        end
+    else
+        printConsole("No tiles found at the current level")
+    end
+
+end
+
 
 function useManaPotion()
     if not g_game.isOnline() then
