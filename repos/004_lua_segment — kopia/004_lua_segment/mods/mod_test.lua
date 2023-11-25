@@ -11,10 +11,10 @@ connect(g_game, {
 printConsole('Registered events')
 
 -- register some keyboard shortcuts
-g_keyboard.bindKeyDown('Ctrl+D', getItem)
-g_keyboard.bindKeyDown('Ctrl+A', getTilesA)
-g_keyboard.bindKeyDown('Ctrl+C', getTilesC)
-g_keyboard.bindKeyDown('Ctrl+J', getTilesJ)
+g_keyboard.bindKeyDown('Ctrl+D', getItemCount)
+g_keyboard.bindKeyDown('Ctrl+A', getLocA)
+g_keyboard.bindKeyDown('Ctrl+C', getLocC)
+g_keyboard.bindKeyDown('Ctrl+J', getLocJ)
 g_keyboard.bindKeyDown('Ctrl+Y',
     function()
         
@@ -204,6 +204,7 @@ function getTilesA()
     end
 end
 
+-- super
 function getTilesC()
     if not g_game.isOnline() then
         printConsole('Is not in game')
@@ -360,6 +361,122 @@ function healUH()
 end
 
 
+
+-- super
+function getTilesC()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+    
+    local tiles = g_map.getTiles(tonumber(player:getPosition().z))
+
+    if #tiles > 0 then
+        for i, tile in ipairs(tiles) do
+            local topThingList = tile:getItems()
+
+            if topThingList and #topThingList > 0 then
+                for j, topThing in ipairs(topThingList) do
+                    printConsole("Tile Pos: " .. tostring(tile:getPosition().x) .. ", " .. tostring(tile:getPosition().y) .. ", " .. tostring(tile:getPosition().z) .. ", Top thing at tile: " .. tostring(topThing:getId()))
+                    -- Additional properties of topThing can be printed here
+                end
+            else
+                printConsole("No items found at tile " .. i)
+            end
+        end
+    else
+        printConsole("No tiles found at the current level")
+    end
+end
+
+
+
+-- Merged function
+function displaceThingOnTheGround()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+    
+    local tiles = g_map.getTiles(tonumber(player:getPosition().z))
+
+    if #tiles > 0 then
+        for i, tile in ipairs(tiles) do
+            local topThingList = tile:getItems()
+
+            if topThingList and #topThingList > 0 then
+                for j, topThing in ipairs(topThingList) do
+                    if tostring(topThing:getId()) == "3277" then
+                        local currentPosition = tile:getPosition()
+                        local newPosition = {x = currentPosition.x, y = currentPosition.y + 1, z = currentPosition.z}
+                        g_game.move(topThing, newPosition, topThing:getCount())
+                        printConsole("Moved item with ID 3277 to position: " .. tostring(newPosition.x) .. ", " .. tostring(newPosition.y) .. ", " .. tostring(newPosition.z))
+                    else
+                        printConsole("Tile Pos: " .. tostring(tile:getPosition().x) .. ", " .. tostring(tile:getPosition().y) .. ", " .. tostring(tile:getPosition().z) .. ", Top thing at tile: " .. tostring(topThing:getId()))
+                    end
+                end
+            else
+                printConsole("No items found at tile " .. tostring(i))
+            end
+        end
+    else
+        printConsole("No tiles found at the current level")
+    end
+end
+
+-- Merged function
+function moveThingFromTheGroundToEquipment()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+    
+    local tiles = g_map.getTiles(tonumber(player:getPosition().z))
+
+    if #tiles > 0 then
+        for i, tile in ipairs(tiles) do
+            local topThingList = tile:getItems()
+
+            if topThingList and #topThingList > 0 then
+                for j, topThing in ipairs(topThingList) do
+                    if tostring(topThing:getId()) == "3277" then
+                        local currentPosition = tile:getPosition()
+                        local slotPosition = {x = 65535, y = 6, z = 0}
+                        g_game.move(topThing, slotPosition, topThing:getCount())
+                        printConsole("Moved item with ID 3277 to position: " .. tostring(newPosition.x) .. ", " .. tostring(newPosition.y) .. ", " .. tostring(newPosition.z))
+                    else
+                        printConsole("Tile Pos: " .. tostring(tile:getPosition().x) .. ", " .. tostring(tile:getPosition().y) .. ", " .. tostring(tile:getPosition().z) .. ", Top thing at tile: " .. tostring(topThing:getId()))
+                    end
+                end
+            else
+                printConsole("No items found at tile " .. tostring(i))
+            end
+        end
+    else
+        printConsole("No tiles found at the current level")
+    end
+end
+
+
+
 function setBow()
     if not g_game.isOnline() then
         printConsole('Is not in game')
@@ -427,7 +544,7 @@ function setAmulet2()
     end
 
     -- Retrieve the item object with ID 3350
-    local item = g_game.findPlayerItem(3350, -1)  -- -1 as the subtype if subtype is not specific
+    local item = g_game.findPlayerItem(3350, -1)  
 
     if item then
         -- Setting the retrieved item in inventory slot 6
@@ -438,6 +555,35 @@ function setAmulet2()
     end
 end
 
+-- 3081 ss
+function getItemCount()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    -- Fetching the item from inventory slot 2
+    local item = player:getInventoryItem(6)
+    if item then
+        -- Displaying information about the item in slot 2
+        -- You can replace 'getId' and 'getSubType' with other methods as needed
+        printConsole("Item in slot 6: ID = " .. item:getId() .. ", Count: " .. item:getCount() .. ", SubType = " .. item:getSubType())
+    else
+        printConsole("No item found in slot 6")
+    end
+
+    -- Include additional code here if needed
+
+    -- Error handling (if applicable)
+    -- [Your existing error handling code]
+end
 
 
 -- 3081 ss
@@ -471,8 +617,96 @@ function getItem()
 end
 
 
+function getLocA()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local item = player:getInventoryItem(6)
+    if item then
+        -- Assuming you can get the UIItem instance from the ItemPtr
+        local uiItem = item:getUIItem() -- This method needs to exist or be created
+        if uiItem then
+            local x = uiItem:getX()
+            local y = uiItem:getY()
+            printConsole("Item position: x=" .. tostring(x) .. ", y=" .. tostring(y))
+        else
+            printConsole("UIItem instance not found for the item")
+        end
+    else
+        printConsole("No item found in slot 6")
+    end
+end
 
 
+function getLocC()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    -- Retrieve the item object with ID 3483
+    local item = g_game.findPlayerItem(3483, -1)
+    if item then
+        -- Assuming you can get the UIItem instance from the ItemPtr
+        local uiItem = item:getUIItem() -- This method needs to exist or be created
+        if uiItem then
+            local x = uiItem:getX()
+            local y = uiItem:getY()
+            printConsole("Item position: x=" .. tostring(x) .. ", y=" .. tostring(y))
+        else
+            printConsole("UIItem instance not found for the item")
+        end
+    else
+        printConsole("No item with ID 3483 found")
+    end
+end
+
+
+
+function getLocJ()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    -- Fetching the item from inventory slot 2
+    local item = player:getInventoryItem(6)
+    if item then
+        -- Displaying information about the item in slot 2
+        -- You can replace 'getId' and 'getSubType' with other methods as needed
+        printConsole("getSize: " .. tostring(item:getSize()))
+    else
+        printConsole("No item found in slot 6")
+    end
+
+    -- Include additional code here if needed
+
+    -- Error handling (if applicable)
+    -- [Your existing error handling code]
+end
 
 
 function displayList()
