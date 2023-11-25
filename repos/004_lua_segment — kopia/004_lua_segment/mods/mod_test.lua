@@ -12,9 +12,9 @@ printConsole('Registered events')
 
 -- register some keyboard shortcuts
 g_keyboard.bindKeyDown('Ctrl+D', getItem)
-g_keyboard.bindKeyDown('Ctrl+A', getPos)
-g_keyboard.bindKeyDown('Ctrl+C', workingUsingonMyself)
-g_keyboard.bindKeyDown('Ctrl+J', useFishingRod)
+g_keyboard.bindKeyDown('Ctrl+A', getTilesA)
+g_keyboard.bindKeyDown('Ctrl+C', getTilesC)
+g_keyboard.bindKeyDown('Ctrl+J', getTilesJ)
 g_keyboard.bindKeyDown('Ctrl+Y',
     function()
         
@@ -166,12 +166,109 @@ function workingUsingonMyself()
         -- Use the found item on the player
         g_game.useWith(foundItem, player, -1)
         printConsole("Used item with ID " .. itemId .. " on player")
-    elsehello-world
+    else
         printConsole("Could not obtain item with ID " .. itemId) 
     end
 end
 
+function getTilesA()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
 
+    local player = g_game.getLocalPlayer()
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+    
+    local tiles = g_map.getTiles(tonumber(player:getPosition().z))
+
+    if #tiles > 0 then
+        for i, tile in ipairs(tiles) do
+            local topThing = tile:getTopMultiUseThing()
+            --local tilePosition = tile
+            -- local tilePosition = tile:getGround.getPosition()
+            -- local tileWalkable = tile.isWalkable()
+            -- local tilePathable = tile.isPathable()
+            if topThing then
+                printConsole("Tile Pos: " .. tostring(tile:getPosition().x) .. ", " .. tostring(tile:getPosition().y) ..  ", " .. tostring(tile:getPosition().z) .. ", Top thing at tile: " .. tostring(topThing:getId()))
+                -- .. ", Walkable: " .. tostring(tileWalkable) .. ", Pathable: " .. tostring(tilePathable))
+            else
+                printConsole("No top thing found at tile " .. i)
+            end
+        end
+    else
+        printConsole("No tiles found at the current level")
+    end
+end
+
+function getTilesC()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+    
+    local tiles = g_map.getTiles(tonumber(player:getPosition().z))
+
+    if #tiles > 0 then
+        for i, tile in ipairs(tiles) do
+            local topThingList = tile:getItems()
+
+            if topThingList and #topThingList > 0 then
+                for j, topThing in ipairs(topThingList) do
+                    printConsole("Tile Pos: " .. tostring(tile:getPosition().x) .. ", " .. tostring(tile:getPosition().y) .. ", " .. tostring(tile:getPosition().z) .. ", Top thing at tile: " .. tostring(topThing:getId()))
+                    -- Additional properties of topThing can be printed here
+                end
+            else
+                printConsole("No items found at tile " .. i)
+            end
+        end
+    else
+        printConsole("No tiles found at the current level")
+    end
+end
+
+
+function getTilesJ()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+    
+    local tiles = g_map.getTiles(tonumber(player:getPosition().z))
+
+    if #tiles > 0 then
+        for i, tile in ipairs(tiles) do
+            local topThing = tile:getTopUseThing()
+            --local tilePosition = tile
+            -- local tilePosition = tile:getGround.getPosition()
+            -- local tileWalkable = tile.isWalkable()
+            -- local tilePathable = tile.isPathable()
+            if topThing then
+                printConsole("Tile Pos: " .. tostring(tile:getPosition().x) .. ", " .. tostring(tile:getPosition().y) ..  ", " .. tostring(tile:getPosition().z) .. ", Top thing at tile: " .. tostring(topThing:getId()))
+                -- .. ", Walkable: " .. tostring(tileWalkable) .. ", Pathable: " .. tostring(tilePathable))
+            else
+                printConsole("No top thing found at tile " .. i)
+            end
+        end
+    else
+        printConsole("No tiles found at the current level")
+    end
+end
 
 function useFishingRod()
     math.randomseed(os.time())
