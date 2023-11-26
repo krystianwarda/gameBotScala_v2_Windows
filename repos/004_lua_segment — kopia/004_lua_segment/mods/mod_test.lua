@@ -11,10 +11,10 @@ connect(g_game, {
 printConsole('Registered events')
 
 -- register some keyboard shortcuts
-g_keyboard.bindKeyDown('Ctrl+D', getItemCount)
-g_keyboard.bindKeyDown('Ctrl+A', getLocA)
-g_keyboard.bindKeyDown('Ctrl+C', getLocC)
-g_keyboard.bindKeyDown('Ctrl+J', getLocJ)
+g_keyboard.bindKeyDown('Ctrl+D', getPos)
+g_keyboard.bindKeyDown('Ctrl+A', replaceTreeWithBush)
+g_keyboard.bindKeyDown('Ctrl+C', getTileInfoNextToPlayer)
+g_keyboard.bindKeyDown('Ctrl+J', replaceTreeWithBushJ)
 g_keyboard.bindKeyDown('Ctrl+Y',
     function()
         
@@ -238,6 +238,38 @@ function getTilesC()
 end
 
 
+function getTilesInfo()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+    
+    local tiles = g_map.getTiles(tonumber(player:getPosition().z))
+
+    if #tiles > 0 then
+        for i, tile in ipairs(tiles) do
+            local topThingList = tile:getItems()
+
+            if topThingList and #topThingList > 0 then
+                for j, topThing in ipairs(topThingList) do
+                    printConsole("Tile Pos: " .. tostring(tile:getPosition().x) .. ", " .. tostring(tile:getPosition().y) .. ", " .. tostring(tile:getPosition().z) .. ", Top thing at tile: " .. tostring(topThing:getId()))
+                    -- Additional properties of topThing can be printed here
+                end
+            else
+                printConsole("No items found at tile " .. i)
+            end
+        end
+    else
+        printConsole("No tiles found at the current level")
+    end
+end
+
 function getTilesJ()
     if not g_game.isOnline() then
         printConsole('Is not in game')
@@ -359,6 +391,221 @@ function healUH()
         printConsole("Could not obtain item with ID " .. uhId) 
     end
 end
+
+function replaceTreeWithBushJ()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+
+    local tree_array = { 3614, 3615, 3616, 3617 }  -- Define this outside the loop
+    local treeChange = 3682
+    local targetPosition = {x = 32104, y = 32241, z = 7}
+    local tiles = g_map.getTiles(player:getPosition().z)
+
+    -- Custom function to find an item in tree_array
+    local function isInTreeArray(id)
+        for _, treeId in ipairs(tree_array) do
+            if treeId == id then
+                return true
+            end
+        end
+        return false
+    end
+
+    for _, tile in ipairs(tiles) do
+        if tile:getPosition().x == targetPosition.x and 
+           tile:getPosition().y == targetPosition.y and 
+           tile:getPosition().z == targetPosition.z then
+
+            printConsole('The tile has been found.')
+            local itemList = tile:getItems()
+
+            if itemList and #itemList > 0 then
+                for j, item in ipairs(itemList) do
+                    printConsole("Tile Pos: " .. tostring(tile:getPosition().x) .. ", " .. tostring(tile:getPosition().y) .. ", " .. tostring(tile:getPosition().z) .. ", Top thing at tile: " .. tostring(item:getId()))
+                    if isInTreeArray(item:getId()) then
+                        item:setId(treeChange)
+                    end
+                 end
+            end
+
+            printConsole('Breaking loop.')
+            break
+        end
+    end
+end
+
+
+function replaceTreeWithBush()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local treeChange = 3682
+    local targetPosition = {x = 32104, y = 32241, z = 7}
+    local tiles = g_map.getTiles(player:getPosition().z)
+
+    for _, tile in ipairs(tiles) do
+        if tile:getPosition().x == targetPosition.x and 
+           tile:getPosition().y == targetPosition.y and 
+           tile:getPosition().z == targetPosition.z then
+
+            printConsole('The tile has been found.')
+            local itemList = tile:getItems()
+
+            printConsole('Before loop.')
+            for j, item in ipairs(itemList) do
+                printConsole("Tile Pos: " .. tostring(tile:getPosition().x) .. ", " .. tostring(tile:getPosition().y) .. ", " .. tostring(tile:getPosition().z) .. ", Top thing at tile: " .. tostring(topThing:getId()))
+                tree_array = { 3614, 3615, 3616, 3617 }
+                printConsole('Looking for tree.')
+                if table.find(tree_array, item:getId()) then
+                    printConsole('Tree found.')
+                    item:setId(treeChange)
+                    printConsole('Tree changed to bush.')
+                end
+                end
+
+
+
+            printConsole('Breaking loop.')
+            break
+        end
+    end
+end
+function getTileInfoNextToPlayer()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    -- Use the player's current position
+    local targetPosition = player:getPosition()
+    local tiles = g_map.getTiles(targetPosition.z)
+
+    for _, tile in ipairs(tiles) do
+        if tile:getPosition().x == targetPosition.x+1 and 
+           tile:getPosition().y == targetPosition.y and 
+           tile:getPosition().z == targetPosition.z then
+
+            printConsole('The tile has been found.')
+            local topThingList = tile:getItems()
+
+            if topThingList and #topThingList > 0 then
+                for j, topThing in ipairs(topThingList) do
+                    local priority = topThing:getStackPriority()
+                    printConsole("Tile stackPriority: " .. tostring(priority))
+                    printConsole("Tile Pos: " .. tostring(tile:getPosition().x) .. ", " .. tostring(tile:getPosition().y) .. ", " .. tostring(tile:getPosition().z) .. ", Top thing at tile: " .. tostring(topThing:getId()))
+                end
+            end
+
+            printConsole('Breaking loop.')
+            break
+        end
+    end
+end
+
+
+function reorderItemsOnTileC()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local targetPosition = {x = 32104, y = 32241, z = 7}
+    local tiles = g_map.getTiles(player:getPosition().z)
+
+    for _, tile in ipairs(tiles) do
+        if tile:getPosition().x == targetPosition.x and 
+           tile:getPosition().y == targetPosition.y and 
+           tile:getPosition().z == targetPosition.z then
+
+            printConsole('The tile has been found.')
+            local topThingList = tile:getItems()
+
+            if topThingList and #topThingList > 0 then
+                for j, topThing in ipairs(topThingList) do
+
+                    -- Calculate the correct stack position for the item
+                    local priority = topThing:getStackPriority()
+                    printConsole("Tile stackPriority: " .. tostring(priority))
+                    printConsole("Tile Pos: " .. tostring(tile:getPosition().x) .. ", " .. tostring(tile:getPosition().y) .. ", " .. tostring(tile:getPosition().z) .. ", Top thing at tile: " .. tostring(topThing:getId()))
+                    -- 
+                 end
+            end
+
+
+            printConsole('Breaking loop.')
+            break
+        end
+    end
+end
+
+function reorderItemsOnTileJ()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local targetPosition = {x = 32103, y = 32240, z = 7}
+    local tiles = g_map.getTiles(player:getPosition().z)
+
+    for _, tile in ipairs(tiles) do
+        if tile:getPosition().x == targetPosition.x and 
+           tile:getPosition().y == targetPosition.y and 
+           tile:getPosition().z == targetPosition.z then
+
+            printConsole('The tile has been found.')
+            local topThingList = tile:getItems()
+
+            if topThingList and #topThingList > 0 then
+                for j, topThing in ipairs(topThingList) do
+
+                    -- Calculate the correct stack position for the item
+                    local priority = topThing:getStackPriority()
+                    printConsole("Tile stackPriority: " .. tostring(priority))
+                    printConsole("Tile Pos: " .. tostring(tile:getPosition().x) .. ", " .. tostring(tile:getPosition().y) .. ", " .. tostring(tile:getPosition().z) .. ", Top thing at tile: " .. tostring(topThing:getId()))
+                end
+            end
+
+            printConsole('Breaking loop.')
+            break
+        end
+    end
+end
+
 
 
 
@@ -555,6 +802,78 @@ function setAmulet2()
     end
 end
 
+
+function getContainerLoc()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local itemId = 3483 -- Specify the item ID you want to find
+    local foundItem = g_game.findPlayerItem(itemId, -1)
+    if foundItem then
+        local position = foundItem:getPosition() -- Assuming getPosition returns the position of the item
+
+        if position.x == 65535 then -- Item is in a container
+            local containerId = position.y
+            local slot = position.z
+            printConsole("Found item: ID = " .. tostring(foundItem:getId()) .. 
+                         ", Count: " .. tostring(foundItem:getCount()) .. 
+                         ", SubType = " .. tostring(foundItem:getSubType()) ..
+                         ", Container ID: " .. tostring(containerId) ..
+                         ", Slot: " .. tostring(slot))
+        else
+            -- Item is in the game world
+            printConsole("Found item: ID = " .. tostring(foundItem:getId()) .. 
+                         ", Count: " .. tostring(foundItem:getCount()) .. 
+                         ", SubType = " .. tostring(foundItem:getSubType()) ..
+                         ", World Position: (" .. tostring(position.x) .. ", " .. tostring(position.y) .. ", " .. tostring(position.z) .. ")")
+        end
+    else
+        printConsole("Item with ID " .. tostring(itemId) .. " not found")
+    end
+end
+
+
+
+function getItemLoc()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local itemId = 3483 -- Specify the item ID you want to find
+    -- Finding the item with the specified ID
+    local foundItem = g_game.findPlayerItem(itemId, -1)
+    if foundItem then
+        local position = foundItem:getPosition() -- Assuming getPosition returns the position of the item
+
+        -- Displaying information about the found item
+        printConsole("Found item: ID = " .. tostring(foundItem:getId()) .. 
+                     ", Count: " .. tostring(foundItem:getCount()) .. 
+                     ", SubType = " .. tostring(foundItem:getSubType()) ..
+                     ", Position: (" .. tostring(position.x) .. ", " .. tostring(position.y) .. ", " .. tostring(position.z) .. ")")
+    else
+        printConsole("Item with ID " .. tostring(itemId) .. " not found")
+    end
+end
+
+
+
 -- 3081 ss
 function getItemCount()
     if not g_game.isOnline() then
@@ -574,15 +893,11 @@ function getItemCount()
     if item then
         -- Displaying information about the item in slot 2
         -- You can replace 'getId' and 'getSubType' with other methods as needed
-        printConsole("Item in slot 6: ID = " .. item:getId() .. ", Count: " .. item:getCount() .. ", SubType = " .. item:getSubType())
+        printConsole("!Item in slot 6: ID = " .. item:getId() .. ", Count: " .. item:getCount() .. ", SubType = " .. item:getSubType())
     else
         printConsole("No item found in slot 6")
     end
 
-    -- Include additional code here if needed
-
-    -- Error handling (if applicable)
-    -- [Your existing error handling code]
 end
 
 
@@ -617,34 +932,90 @@ function getItem()
 end
 
 
+
+function testGWindow()
+    if g_window then
+        printConsole("g_window exists.")
+    else
+        printConsole("g_window does not exist.")
+    end
+end
+
+function testGetMousePosition()
+    if g_window and g_window.getMousePosition then
+        local mousePos = g_window.getMousePosition()
+        if mousePos then
+            printConsole("Mouse position: x=" .. tostring(mousePos.x) .. ", y=" .. tostring(mousePos.y))
+        else
+            printConsole("Failed to get mouse position.")
+        end
+    else
+        printConsole("g_window or g_window.getMousePosition does not exist.")
+    end
+end
+
+function testGApp()
+    if g_app then
+        printConsole("g_app exists.")
+
+        -- Testing a method of g_app, like getName() or getVersion()
+        local appName = g_app.getName and g_app:getName() or "Method getName() does not exist"
+        local appVersion = g_app.getVersion and g_app:getVersion() or "Method getVersion() does not exist"
+
+        printConsole("Application Name: " .. appName)
+        printConsole("Application Version: " .. appVersion)
+    else
+        printConsole("g_app does not exist.")
+    end
+end
+
+function getItemScreenPosition(itemId)
+    printConsole("Getting screen position for item ID: " .. tostring(itemId))
+
+    local mousePos = g_window.getMousePosition()
+    printConsole("Current mouse position: x=" .. tostring(mousePos.x) .. ", y=" .. tostring(mousePos.y))
+
+    local gamePosition = UIMap:getPosition(mousePos)
+    printConsole("Game position from mouse position: " .. tostring(gamePosition.x) .. ", " .. tostring(gamePosition.y))
+    
+    local screenPosition = convertGamePositionToScreenPosition(gamePosition)
+    printConsole("Converted screen position: x=" .. tostring(screenPosition.x) .. ", y=" .. tostring(screenPosition.y))
+
+    return screenPosition
+end
+
 function getLocA()
+    print("Checking if game is online")
     if not g_game.isOnline() then
         printConsole('Is not in game')
         return
     end
 
+    print("Getting local player")
     local player = g_game.getLocalPlayer()
-
     if not player then
         printConsole('Couldn\'t get player, are you in game?')
         return
     end
 
-    local item = player:getInventoryItem(6)
-    if item then
-        -- Assuming you can get the UIItem instance from the ItemPtr
-        local uiItem = item:getUIItem() -- This method needs to exist or be created
-        if uiItem then
-            local x = uiItem:getX()
-            local y = uiItem:getY()
+    print("Getting inventory item from slot 6")
+    local itemPtr = player:getInventoryItem(6)
+    if itemPtr then
+        local itemId = itemPtr:getId()
+        print("Found item in slot 6 with ID:", itemId)
+
+        local x, y = getItemScreenPosition(itemId)
+        if x and y then
             printConsole("Item position: x=" .. tostring(x) .. ", y=" .. tostring(y))
         else
-            printConsole("UIItem instance not found for the item")
+            printConsole("UIItem for item ID " .. tostring(itemId) .. " not found")
         end
     else
         printConsole("No item found in slot 6")
     end
 end
+
+
 
 
 function getLocC()
