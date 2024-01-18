@@ -54,7 +54,9 @@ public:
     void CallFunction(const std::string& funcName);
 
     // function that breaks a code
+    // Declare the sendToServer method
     static LuaBridge& getInstance();
+
 private:
     static std::unique_ptr<LuaBridge> instance;
 };

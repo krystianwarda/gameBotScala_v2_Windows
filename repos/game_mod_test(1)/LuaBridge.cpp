@@ -45,13 +45,14 @@ LuaBridge::LuaBridge() {
         // Register the static wrapper function
         lua_pushlightuserdata(this->m_luaState, this);
         //lua_pushcclosure(this->m_luaState, LuaBridge::sendToScalaServerWrapper, 1);
-        lua_setglobal(this->m_luaState, "sendToScalaServer");
+        //lua_setglobal(this->m_luaState, "sendToServer");
     }
     catch (const std::exception& e) {
         std::cerr << "Error in LuaBridge constructor: " << e.what() << std::endl;
     }
 
 }
+
 
 void LuaBridge::gen_lua_table(lua_State* L, json _json, const std::string& name, bool arr)
 {
@@ -132,236 +133,118 @@ void LuaBridge::read_lua_table(lua_State* L, json& _json, int idx)
     }
 }
 
+
 DWORD __stdcall LuaBridge::T_Receive(LuaBridge* _this)
 {
-    auto& srv = _this->tcpServer;
-    auto& L = _this->m_luaState;
+    try {
+        auto& srv = _this->tcpServer;
+        auto& L = _this->m_luaState;
 
-    /*
-    while (tcp->connectionStatus)
-    {
-        auto s = tcp->receive();
-        if (s.empty())
-            continue;
-
-        json j = json::parse(s), r;
-        std::string fn = j["__command"];
-        lua_getglobal(L, fn.c_str());
-
-        if (!lua_isfunction(L, -1))
+        while (srv->IsRunning())
         {
-            tcp->send("{\"__status\":\"error\", \"message\": \"function does not exist\"}");
-            continue;
-        }
-
-        j.erase("__command");
-        if (!j.empty())
-            gen_lua_table(L, j);
-        else
-            lua_pushnil(L);
-
-        if(!lua_pcall(L, 1, 1, 0))
-        {
-            if (lua_istable(L, -1))
+            std::string data;
+            SOCKET sck;
+            sockaddr_in addr{};
+            if (srv->PollRequest(sck, addr, data))
             {
-                json j;
-                read_lua_table(L, j);
-                j.push_back({"__status", "ok"});
-                tcp->send(j.dump());
-            }
-            else if (lua_isnil(L, -1))
-                tcp->send("{\"__status\":\"ok\"}");
-
-            lua_pop(L, 1);
-        }
-        else
-        {
-            std::string err(lua_tostring(L, -1));
-            lua_pop(L, 1);
-
-            if (!err.empty())
-                std::cout << STDOUT_COLOR(SC_RED) "[Lua Remote Call Error] " STDOUT_COLOR_RESET << err << std::endl;
-
-            json j = {
-                {"__status", "error"},
-                {"message", err}
-            };
-            tcp->send(j.dump());
-        }
-    }
-    */
-
-    while (srv->IsRunning())
-    {
-        std::string data;
-        SOCKET sck;
-        sockaddr_in addr{};
-        if (srv->PollRequest(sck, addr, data))
-        {
-            try
-            {
-                json j = json::parse(data);
-                if (!j.count("__command"))
+                try
                 {
-                    srv->SendOn(sck, "{}");
-                    srv->SendOn(sck, "{\"__status\": \"error\", \"message\": \"no function name given\"}");
-                    srv->ShutdownClient(sck);
-                    continue;
-                }
-
-                std::string __cmd = j["__command"];
-                j.erase("__command");
-
-                lua_getglobal(L, __cmd.c_str());
-
-                if (!lua_isfunction(L, -1))
-                {
-                    srv->SendOn(sck, "{\"__status\":\"error\", \"message\": \"function does not exist\"}");
-                    srv->ShutdownClient(sck);
-                    continue;
-                }
-
-
-
-                /*
-                    Parameter structure for target function:
-                    arg = {
-                        data = <json from client>
-                        from = <client address (informational, no real use)>
-                        [1] = <socket handle>
-                        [2] = <server class pointer>
-                        send() = <a function to send data to client>
+                    std::cout << "Received data: " << data << std::endl;
+                    json j = json::parse(data);
+                    if (!j.count("__command"))
+                    {
+                        srv->SendOn(sck, "{}");
+                        srv->SendOn(sck, "{\"__status\": \"error\", \"message\": \"no function name given\"}");
+                        srv->ShutdownClient(sck);
+                        continue;
                     }
-                */
 
-                // arg
-                lua_createtable(L, 0, 2); // [] -> [[arg], [arg.data]]
+                    std::string __cmd = j["__command"];
+                    j.erase("__command");
 
-                // arg.data
-                gen_lua_table(L, j); // -> [...]
-                lua_setfield(L, -2, "data"); // data = [...]
+                    lua_getglobal(L, __cmd.c_str());
 
-                // arg:send()
-                lua_pushcfunction(L, sendfn); // -> [send()]
-                lua_setfield(L, -2, "send"); // send = send()
+                    if (!lua_isfunction(L, -1))
+                    {
+                        srv->SendOn(sck, "{\"__status\":\"error\", \"message\": \"function does not exist\"}");
+                        srv->ShutdownClient(sck);
+                        continue;
+                    }
 
-                // socket handle
-                lua_pushinteger(L, 1); // [1]
-                lua_pushinteger(L, sck); // [1, sck]
-                lua_settable(L, -3); // arg[1] = sck
 
-                // server pointer
-                // since a pointer is a numeric address, we can store the address directly without creating a user data
-                lua_pushinteger(L, 2); // [2]
-                lua_pushinteger(L, (lua_Integer)srv); // [2, srv]
-                lua_settable(L, -3); // arg[2] = srv
+                    // arg
+                    lua_createtable(L, 0, 2); // [] -> [[arg], [arg.data]]
 
-                // arg.from
-                lua_pushfstring(L, "%d.%d.%d.%d:%d", AddrToParams(addr), htons(addr.sin_port)); // [address string]
-                lua_setfield(L, -2, "from"); // arg.from = [address string]
+                    // arg.data
+                    gen_lua_table(L, j); // -> [...]
+                    lua_setfield(L, -2, "data"); // data = [...]
 
-                int e = lua_pcall(L, 1, 0, 0);
+                    // arg:send()
+                    lua_pushcfunction(L, sendfn); // -> [send()]
+                    lua_setfield(L, -2, "send"); // send = send()
 
-                // error handling
-                if (e != 0)
+                    // socket handle
+                    lua_pushinteger(L, 1); // [1]
+                    lua_pushinteger(L, sck); // [1, sck]
+                    lua_settable(L, -3); // arg[1] = sck
+
+                    // server pointer
+                    // since a pointer is a numeric address, we can store the address directly without creating a user data
+                    lua_pushinteger(L, 2); // [2]
+                    lua_pushinteger(L, (lua_Integer)srv); // [2, srv]
+                    lua_settable(L, -3); // arg[2] = srv
+
+                    // arg.from
+                    lua_pushfstring(L, "%d.%d.%d.%d:%d", AddrToParams(addr), htons(addr.sin_port)); // [address string]
+                    lua_setfield(L, -2, "from"); // arg.from = [address string]
+
+                    int e = lua_pcall(L, 1, 0, 0);
+
+                    // error handling
+                    if (e != 0) {
+                        // Error handling...
+                        auto msg = lua_tostring(L, -1);
+                        std::cout << "[Lua Remote Call Error - \"" << __cmd << "()\"] " << msg << std::endl;
+                        srv->SendOn(sck, json({
+                            {"__status", "error"},
+                            {"message", msg}
+                            }).dump());
+                    }
+                    else {
+                        lua_getglobal(L, "_responseSent"); // Get the flag
+                        bool responseSent = lua_toboolean(L, -1);
+                        std::cout << "Lua response sent status: " << (responseSent ? "true" : "false") << std::endl;  // Print the status
+                        lua_pop(L, 1); // Remove the flag from the stack
+
+                        if (!responseSent) {
+                            // Only send the default response if Lua hasn't sent one
+                            srv->SendOn(sck, "{\"__status\": \"ok\", \"msg\": \"Response from C++ (default)\"}");
+                        }
+
+                        lua_pushboolean(L, 0);  // Reset the flag for the next call
+                        lua_setglobal(L, "_responseSent");
+                    }
+                }
+                catch (const json::exception& ex)
                 {
-                    auto msg = lua_tostring(L, -1);
-                    std::cout << STDOUT_COLOR(SC_RED) "[Lua Remote Call Error - \"" << __cmd << "()\"] " STDOUT_COLOR_RESET << msg << std::endl;
+                    std::cerr << "[LuaBridge] Exception in data processing: " << ex.what() << std::endl;
                     srv->SendOn(sck, json({
                         {"__status", "error"},
-                        {"message", msg}
+                        {"message", ex.what()}
                         }).dump());
                 }
-                else srv->SendOn(sck, "{\"__status\": \"ok\"}");
-            }
-            catch (const json::exception& ex)
-            {
-                srv->SendOn(sck, json({
-                    {"__status", "error"},
-                    {"message", ex.what()}
-                    }).dump());
+
             }
 
-            srv->ShutdownClient(sck);
         }
+    }
+    catch (const std::exception& e) {
+        std::cerr << "[LuaBridge] Exception in T_Receive thread: " << e.what() << std::endl;
+        // Handle or log the exception
     }
     return 0;
 }
 
-//DWORD __stdcall LuaBridge::T_Receive(LuaBridge* _this)
-//{
-//    auto& srv = _this->tcpServer;
-//    auto& L = _this->m_luaState;
-//
-//    while (srv->IsRunning())
-//    {
-//        std::string data;
-//        SOCKET sck;
-//        sockaddr_in addr{};
-//        if (srv->PollRequest(sck, addr, data))
-//        {
-//            try
-//            {
-//                json j = json::parse(data);
-//                if (!j.count("__command"))
-//                {
-//                    srv->SendOn(sck, "{}");
-//                    srv->SendOn(sck, "{\"__status\": \"error\", \"message\": \"no function name given\"}");
-//                    srv->ShutdownClient(sck);
-//                    continue;
-//                }
-//
-//                std::string __cmd = j["__command"];
-//                j.erase("__command");
-//
-//                lua_getglobal(L, __cmd.c_str());
-//
-//                if (!lua_isfunction(L, -1))
-//                {
-//                    srv->SendOn(sck, "{\"__status\":\"error\", \"message\": \"function does not exist\"}");
-//                    srv->ShutdownClient(sck);
-//                    continue;
-//                }
-//
-//                // Pushing arguments onto the Lua stack
-//                int argCount = 0;
-//                if (j.contains("param1")) {
-//                    lua_pushstring(L, j["param1"].get<std::string>().c_str());
-//                    argCount++;
-//                }
-//                if (j.contains("param2")) {
-//                    lua_pushstring(L, j["param2"].get<std::string>().c_str());
-//                    argCount++;
-//                }
-//
-//                // Call Lua function
-//                int e = lua_pcall(L, argCount, 0, 0);
-//
-//                // Error handling
-//                if (e != 0)
-//                {
-//                    auto msg = lua_tostring(L, -1);
-//                    std::cout << STDOUT_COLOR(SC_RED) "[Lua Remote Call Error - \"" << __cmd << "()\"] " STDOUT_COLOR_RESET << msg << std::endl;
-//                    srv->SendOn(sck, json({
-//                        {"__status", "error"},
-//                        {"message", msg}
-//                        }).dump());
-//                }
-//                else srv->SendOn(sck, "{\"__status\": \"ok\"}");
-//            }
-//            catch (const json::exception& ex)
-//            {
-//                srv->SendOn(sck, json({
-//                    {"__status", "error"},
-//                    {"message", ex.what()}
-//                    }).dump());
-//            }
-//
-//            srv->ShutdownClient(sck);
-//        }
-//    }
-//    return 0;
-//}
 
 
 int LuaBridge::sendfn(lua_State* L)
@@ -566,14 +449,21 @@ int LuaBridge::__printConsole(lua_State* L)
 
 
 void LuaBridge::CallFunction(const std::string& funcName) {
-    std::cout << "Calling Lua function: " << funcName << std::endl;
     if (!m_luaState) {
         std::cerr << "Lua state is null in CallFunction." << std::endl;
-        throw std::runtime_error("Lua state is null");
+        return; // or handle this case
     }
-    std::cout << "m_luaState is checked: " << funcName << std::endl;
-    lua_getglobal(this->m_luaState, funcName.c_str());
-    if (lua_isfunction(this->m_luaState, -1)) {
-        lua_pcall(this->m_luaState, 0, 0, 0);
+
+    try {
+        lua_getglobal(m_luaState, funcName.c_str());
+        if (lua_isfunction(m_luaState, -1)) {
+            if (lua_pcall(m_luaState, 0, 0, 0) != 0) {
+                std::cerr << "[LuaBridge] Error calling Lua function: " << lua_tostring(m_luaState, -1) << std::endl;
+            }
+        }
+    }
+    catch (const std::exception& e) {
+        std::cerr << "[LuaBridge] Exception in CallFunction: " << e.what() << std::endl;
     }
 }
+
