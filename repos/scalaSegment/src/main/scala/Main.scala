@@ -1,3 +1,4 @@
+import MainApp.periodicFunctionActor
 import akka.actor.{Actor, ActorRef, ActorSystem, Cancellable, Props}
 import play.api.libs.json.Json.JsValueWrapper
 
@@ -9,6 +10,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.io.BufferedSource
 import scala.util.Random
+import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext.Implicits.global  // Import global ExecutionContext
 // Other imports remain the same
 
@@ -27,10 +29,108 @@ import scala.concurrent.duration._
 
 case class FunctionCall(functionName: String, arg1: Option[String] = None, arg2: Option[String] = None)
 case class JsonData(json: JsValue)
+case class SendJsonCommand(json: JsValue)
 
 class JsonProcessorActor extends Actor {
+
+  import context.dispatcher
+
+  private var reconnecting = false
+  val serverAddress = InetAddress.getByName("127.0.0.1")
+  val port = 9997
+  var socket: Option[Socket] = None
+  var out: Option[DataOutputStream] = None
+  var in: Option[DataInputStream] = None
   def receive: Receive = {
-    case JsonData(json) => println("JsonProcessorActor received JSON: " + json)
+    case JsonData(json) =>
+      println("JsonProcessorActor received JSON: " + json)
+      processJson(json)
+  }
+
+  private def processJson(json: JsValue): Unit = {
+    // Example: Determining the action based on JSON data
+    (json \ "__status").asOpt[String] match {
+      case Some("ok") => handleOkStatus(json)
+      case Some("error") => handleErrorStatus(json)
+      case _ => println("Unknown status")
+    }
+  }
+
+  private def handleErrorStatus(json: JsValue): Unit = {
+    // Handle error status
+  }
+  private def findRats(battleInfo: JsValue): Seq[Long] = {
+    battleInfo match {
+      case obj: JsObject => obj.fields.flatMap {
+        case (_, creature) =>
+          val name = (creature \ "Name").asOpt[String]
+          val id = (creature \ "Id").asOpt[Long]
+          if (name.contains("Rat")) id else None
+      }.toSeq
+      case _ => Seq.empty
+    }
+  }
+
+  private def handleOkStatus(json: JsValue): Unit = {
+    // Example: Handling 'ok' status
+    (json \ "battleInfo").asOpt[JsValue].foreach { battleInfo =>
+      findRats(battleInfo).foreach(attackOnRat)
+    }
+  }
+
+  private def attackOnRat(ratId: Long): Unit = {
+    val command = Json.obj("__command" -> "targetAttack", "ratId" -> ratId)
+    sendJson(command) // Directly send the command to the TCP server
+  }
+
+  def sendCommandToTcpServer(json: JsValue): Unit = {
+    sendJson(json)
+  }
+
+  def sendJson(json: JsValue): Boolean = {
+    try {
+      println("Sending JSON: " + json)
+      out.flatMap { o =>
+        val data = Json.stringify(json).getBytes("UTF-8")
+        try {
+          val lengthBytes = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(data.length).array()
+          o.write(lengthBytes)
+          o.write(data)
+          o.flush()
+          println("JSON sent successfully.")
+          Some(true) // Indicate success
+        } catch {
+          case e: IOException =>
+            println(s"Failed to send JSON: $e")
+            e.printStackTrace() // Print stack trace for debugging
+            None // Indicate failure
+        }
+      }.getOrElse(false) // Return false if 'out' is not available
+    } catch {
+      case e: SocketException =>
+        println(s"SocketException when sending JSON, attempting to reconnect: ${e.getMessage}")
+        connectToServer() // Reconnect and then retry or return false
+        false
+    }
+  }
+
+  override def preStart(): Unit = {
+    super.preStart()
+    connectToServer()
+  }
+  def connectToServer(): Unit = {
+
+    try {
+      println("Connecting to server...")
+      val s = new Socket(serverAddress, port)
+      socket = Some(s)
+      s.setSoTimeout(5000) // Set read timeout to 5000 milliseconds
+      out = Some(new DataOutputStream(s.getOutputStream))
+      in = Some(new DataInputStream(s.getInputStream))
+      println("Connected to server")
+    } catch {
+      case e: IOException => println(s"Failed to connect to server: $e")
+    }
   }
 }
 
@@ -114,7 +214,6 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
         connectToServer() // Reconnect and then retry or return false
         false
     }
-
   }
 
   def receiveJson(): Option[JsValue] = {
@@ -401,7 +500,7 @@ class ThirdProcessActor extends Actor {
   override def preStart(): Unit = {
     // Schedule the `initiateFunction` to be called every 5 seconds
     context.system.scheduler.scheduleWithFixedDelay(
-      initialDelay = 0.seconds,
+      initialDelay = 1.seconds,
       delay = 5.seconds,
       receiver = self,
       message = "Initiate"
@@ -419,8 +518,10 @@ object MainApp extends App {
   // Instantiate the JsonProcessorActor
   val jsonProcessorActor = system.actorOf(Props[JsonProcessorActor], "jsonProcessor")
 
-  // Starting actors with the correct Props for PeriodicFunctionActor
+  // Starting PeriodicFunctionActor with the correct Props
   val periodicFunctionActor = system.actorOf(Props(classOf[PeriodicFunctionActor], jsonProcessorActor), "periodicFunctionActor")
+
+  // Starting ThirdProcessActor
   val thirdProcessActor = system.actorOf(Props[ThirdProcessActor], "thirdProcess")
 
   // Rest of MainApp code...
