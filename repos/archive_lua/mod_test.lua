@@ -1,11 +1,91 @@
-function initOld()
-
+function buttonFunctions()
+    local message = '{ "status": "Button functions activated." }'
+    printConsole(message)
     -- register some keyboard shortcuts
-    g_keyboard.bindKeyDown('Ctrl+D', getPos)
+    g_keyboard.bindKeyDown('Ctrl+D', useFishingRodTest)
+    g_keyboard.bindKeyDown('Ctrl+E', whatIsinMyRightHand)
     g_keyboard.bindKeyDown('Ctrl+C', tempHello)
+end
+
+function whatIsinMyRightHand()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local item = player:getInventoryItem(6)
+    if item then
+        printConsole("!Item in slot 6: ID = " .. item:getId() .. ", Count: " .. item:getCount() .. ", SubType = " .. item:getSubType())
+    else
+        printConsole("No item found in slot 6")
+    end
 
 end
 
+
+function useFishingRodTest()
+    math.randomseed(os.time())
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local itemId = 3483 -- ID of the fishing rod
+    local foundItem = g_game.findPlayerItem(itemId, -1)
+
+    local tiles = g_map.getTiles(tonumber(player:getPosition().z))
+
+    if #tiles > 0 then
+        local attempts = 0
+        local maxAttempts = 10 -- Maximum number of attempts to find a suitable tile
+
+        while attempts < maxAttempts do
+            local randomIndex = math.random(#tiles)
+            local tile = tiles[randomIndex]
+
+            if tile then
+                local topThing = tile:getTopUseThing()
+                if topThing and table.contains({618, 619, 620}, topThing:getId()) then
+                    printConsole("Using item with suitable tile: " .. tostring(topThing:getId()) .. " Top thing: " .. tostring(topThing) )
+                    g_game.useWith(foundItem, topThing, 1)
+                    return -- Exit the function after successful use
+                else
+                    printConsole("Tile does not meet the condition, checking another tile")
+                end
+            else
+                printConsole("Failed to get a random tile")
+            end
+
+            attempts = attempts + 1
+        end
+
+        printConsole("Failed to find a suitable tile after " .. maxAttempts .. " attempts")
+    else
+        printConsole("No tiles found at the current level")
+    end
+end
+
+
+
+function useFishingRod(arg)
+    waterTileId = arg.data.waterTileId
+    local itemId = 3483 -- ID of the fishing rod
+    local foundItem = g_game.findPlayerItem(itemId, -1)
+    g_game.useWith(foundItem, waterTileId, 1)
+end
 
 function targetAttack(arg)
     printConsole("Attack target function initiated.")
@@ -54,18 +134,9 @@ function gameStarted(event)
     local message = '{ "status": "Game started." }'
     printConsole(message)
     -- Create a repeated event
-    timerEvent = cycleEvent(function() tick(event) end, 2000) -- 500 milliseconds or 0.5 seconds
+    timerEvent = cycleEvent(function() tick(event) end, 5000) -- 500 milliseconds or 0.5 seconds
 end
 
-
--- Function called when exiting the game world
-function gameEnded()
-    if timerEvent ~= nil then
-        removeEvent(timerEvent)
-    end
-    local message = '{ "status": "Quit from game world" }'
-    printConsole(message)
-end
 
 -- Function called periodically according to settings made in gameStarted()
 function tick(event)
@@ -83,7 +154,6 @@ function gameEnded()
     end
     local message = '{ "status": "Quit from game world" }'
     printConsole(message)
-    sendDataToServer(message)
 end
 
 function tableToJsonString(tbl)
@@ -312,3 +382,5 @@ function getPos()
     sendToScalaServer(posString)
 
 end
+
+buttonFunctions()

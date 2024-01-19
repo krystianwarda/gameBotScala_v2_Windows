@@ -39,11 +39,12 @@ trait CommandProcessor {
   def execute(json: JsValue, player: Player, settings: UISettings): cpResult
 }
 
-class JsonProcessorActor extends Actor {
-  // Immutable state
-//  var player: Player = // Initialize with default or fetch from a message
-//  var settings: UISettings = // Initialize with default or fetch from a message
+case class InitializeProcessor(player: Player, settings: UISettings)
 
+class JsonProcessorActor extends Actor {
+  // Mutable state
+  var player: Option[Player] = None
+  var settings: Option[UISettings] = None
   import context.dispatcher
 
   private var reconnecting = false
@@ -54,6 +55,11 @@ class JsonProcessorActor extends Actor {
   var in: Option[DataInputStream] = None
 
   def receive: Receive = {
+    case InitializeProcessor(p, s) =>
+      player = Some(p)
+      settings = Some(s)
+      println(s"Processor initialized with player: ${p.characterName} and settings: ${s.autoHeal}")
+
     case JsonData(json) =>
       println("JsonProcessorActor received JSON: " + json)
       processJson(json)
@@ -74,8 +80,20 @@ class JsonProcessorActor extends Actor {
   }
 
   private def handleErrorStatus(json: JsValue): Unit = {
-    // Handle error status
+    println("Error in processing json.")
   }
+
+  private def handleOkStatus(json: JsValue): Unit = {
+    // Handling 'ok' status
+    // Check for rat-related data and handle it
+    (json \ "battleInfo").asOpt[JsValue].foreach { battleInfo =>
+      findRats(battleInfo).foreach(attackOnRat)
+    }
+
+    // Call activateFishing if necessary
+    activateFishing(json)
+  }
+
   private def findRats(battleInfo: JsValue): Seq[Long] = {
     battleInfo match {
       case obj: JsObject => obj.fields.flatMap {
@@ -88,12 +106,29 @@ class JsonProcessorActor extends Actor {
     }
   }
 
-  private def handleOkStatus(json: JsValue): Unit = {
-    // Example: Handling 'ok' status
-    (json \ "battleInfo").asOpt[JsValue].foreach { battleInfo =>
-      findRats(battleInfo).foreach(attackOnRat)
+  private def activateFishing(json: JsValue): Unit = {
+    // Check for fishing-related data and handle it
+    (json \ "__status").asOpt[String].foreach { status =>
+      if (status == "ok") {
+        (json \ "areaInfo" \ "tiles").asOpt[JsObject].foreach { tiles =>
+          tiles.fields.foreach {
+            case (_, tileData) =>
+              val tileIds = tileData.as[JsObject].values.map(_.as[Int])
+              if (tileIds.exists(id => List(618, 619, 620).contains(id))) {
+                sendFishingCommand(tileData.as[JsObject].fields.head._1)
+              }
+          }
+        }
+      }
     }
   }
+
+  private def sendFishingCommand(waterTileId: String): Unit = {
+    val jsonCommand = Json.obj("__command" -> "useFishingRod", "data" -> Json.obj("waterTileId" -> waterTileId))
+    sendJson(jsonCommand)
+    println(s"Fishing command sent for waterTileId: $waterTileId")
+  }
+
   class RatAttackProcessor extends CommandProcessor {
     override def execute(json: JsValue, player: Player, settings: UISettings): cpResult = {
       // Pure function logic here

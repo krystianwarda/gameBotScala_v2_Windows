@@ -1,6 +1,7 @@
 // SwingActor.scala
 //package src.main.scala.userUI/*/
 
+import MainApp.jsonProcessorActorRef
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 
 import scala.swing._
@@ -36,7 +37,7 @@ class UIAppActor(playerClassList: List[Player],
 case class StartActors(settings: UISettings)
 
 // Define the UISettings case class
-case class UISettings(autoHeal: Boolean, runeMaker: Boolean /*, other settings */)
+case class UISettings(autoHeal: Boolean, runeMaker: Boolean, fishing: Boolean /*, other settings */)
 
 
 class SwingApp(playerClassList: List[Player],
@@ -56,22 +57,22 @@ class SwingApp(playerClassList: List[Player],
     UISettings(
       autoHeal = autoHealCheckbox.selected,
       runeMaker = runeMakerCheckbox.selected,
+      fishing = fishingCheckbox.selected,
       // ...other settings
     )
   }
 
-
+  val currentPlayer: Player = playerClassList.head
   val runButton = new Button("RUN") {
     reactions += {
       case ButtonClicked(_) =>
-        val settings = collectSettingsFromUI()
-        jsonProcessorActor ! StartActors(settings)
-        periodicFunctionActor ! StartActors(settings)
-        thirdProcessActor ! StartActors(settings)
+        val currentSettings = collectSettingsFromUI()
+        jsonProcessorActor ! StartActors(currentSettings)
+        periodicFunctionActor ! StartActors(currentSettings)
+        jsonProcessorActorRef ! InitializeProcessor(currentPlayer, currentSettings)
       // Additional UI logic
     }
   }
-
 
   def saveExample(): Unit = {
     val selectedName = exampleDropdown.selection.item
