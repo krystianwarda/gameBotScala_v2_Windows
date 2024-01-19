@@ -1,6 +1,8 @@
-import MainApp.periodicFunctionActor
+//import MainApp.periodicFunctionActor
 import akka.actor.{Actor, ActorRef, ActorSystem, Cancellable, Props}
+
 import play.api.libs.json.Json.JsValueWrapper
+import player.Player
 
 import java.io.EOFException
 import java.net.{ServerSocket, SocketException, SocketTimeoutException}
@@ -31,7 +33,16 @@ case class FunctionCall(functionName: String, arg1: Option[String] = None, arg2:
 case class JsonData(json: JsValue)
 case class SendJsonCommand(json: JsValue)
 
+case class cpResult(message: String, additionalData: Option[JsValue] = None)
+
+trait CommandProcessor {
+  def execute(json: JsValue, player: Player, settings: UISettings): cpResult
+}
+
 class JsonProcessorActor extends Actor {
+  // Immutable state
+//  var player: Player = // Initialize with default or fetch from a message
+//  var settings: UISettings = // Initialize with default or fetch from a message
 
   import context.dispatcher
 
@@ -41,11 +52,17 @@ class JsonProcessorActor extends Actor {
   var socket: Option[Socket] = None
   var out: Option[DataOutputStream] = None
   var in: Option[DataInputStream] = None
+
   def receive: Receive = {
     case JsonData(json) =>
       println("JsonProcessorActor received JSON: " + json)
       processJson(json)
+    // Handle other messages...
+    case StartActors(settings) =>
+    // existing logic for handling StartActors messages
+    // ... other cases ...
   }
+
 
   private def processJson(json: JsValue): Unit = {
     // Example: Determining the action based on JSON data
@@ -77,7 +94,12 @@ class JsonProcessorActor extends Actor {
       findRats(battleInfo).foreach(attackOnRat)
     }
   }
-
+  class RatAttackProcessor extends CommandProcessor {
+    override def execute(json: JsValue, player: Player, settings: UISettings): cpResult = {
+      // Pure function logic here
+      cpResult("Rat attacked")
+    }
+  }
   private def attackOnRat(ratId: Long): Unit = {
     val command = Json.obj("__command" -> "targetAttack", "ratId" -> ratId)
     sendJson(command) // Directly send the command to the TCP server
@@ -88,6 +110,13 @@ class JsonProcessorActor extends Actor {
   }
 
   def sendJson(json: JsValue): Boolean = {
+    // Improved socket check and reconnection logic
+    if (socket.isEmpty || socket.exists(!_.isConnected)) {
+      println("Socket is not connected. Attempting to reconnect.")
+      connectToServer()
+      return false
+    }
+
     try {
       println("Sending JSON: " + json)
       out.flatMap { o =>
@@ -98,18 +127,18 @@ class JsonProcessorActor extends Actor {
           o.write(data)
           o.flush()
           println("JSON sent successfully.")
-          Some(true) // Indicate success
+          Some(true)
         } catch {
           case e: IOException =>
-            println(s"Failed to send JSON: $e")
-            e.printStackTrace() // Print stack trace for debugging
-            None // Indicate failure
+            println(s"IOException during sending JSON: $e")
+            e.printStackTrace()
+            None
         }
-      }.getOrElse(false) // Return false if 'out' is not available
+      }.getOrElse(false)
     } catch {
       case e: SocketException =>
-        println(s"SocketException when sending JSON, attempting to reconnect: ${e.getMessage}")
-        connectToServer() // Reconnect and then retry or return false
+        println(s"SocketException when sending JSON: ${e.getMessage}")
+        connectToServer()
         false
     }
   }
@@ -143,35 +172,21 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
   var out: Option[DataOutputStream] = None
   var in: Option[DataInputStream] = None
 
-  override def preStart(): Unit = {
-    println("PeriodicFunctionActor starting...")
-    connectToServer()
-    initiateSendFunction("init") // Send 'init' command once on start
-    self ! "StartListening" // Start listening right away
+  override def receive: Receive = {
+    case StartActors(settings) =>
+      println("PeriodicFunctionActor received StartActors message.")
+      if (socket.isEmpty || socket.exists(!_.isConnected)) {
+        connectToServer()
+      }
+      startListening()
+      initiateSendFunction("init")
   }
-
-//  override def preStart(): Unit = {
+  override def preStart(): Unit = {
 //    println("PeriodicFunctionActor starting...")
 //    connectToServer()
-//    context.system.scheduler.scheduleWithFixedDelay(
-//      initialDelay = 0.seconds,
-//      delay = 60.seconds,
-//      receiver = self,
-//      message = "SendInitiate"
-//    )
+//    initiateSendFunction("init") // Send 'init' command once on start
 //    self ! "StartListening" // Start listening right away
-//  }
-
-//  override def preStart(): Unit = {
-//    println("PeriodicFunctionActor starting...")
-//    connectToServer() // Establish the connection on actor startup
-//    context.system.scheduler.scheduleWithFixedDelay(
-//      initialDelay = 0.seconds,
-//      delay = 60.seconds,
-//      receiver = self,
-//      message = "Initiate"
-//    )
-//  }
+  }
 
   def connectToServer(): Unit = {
 
@@ -190,6 +205,12 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
 
 
   def sendJson(json: JsValue): Boolean = {
+    if (socket.isEmpty || socket.exists(!_.isConnected)) {
+      println("Socket is not connected. Attempting to reconnect.")
+      connectToServer()
+      return false
+    }
+
     try {
       println("Sending JSON: " + json)
       out.flatMap { o =>
@@ -200,85 +221,60 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
           o.write(data)
           o.flush()
           println("JSON sent successfully.")
-          Some(true) // Indicate success
+          Some(true)
         } catch {
           case e: IOException =>
-            println(s"Failed to send JSON: $e")
-            e.printStackTrace() // Print stack trace for debugging
-            None // Indicate failure
+            println(s"IOException during sending JSON: $e")
+            e.printStackTrace()
+            None
         }
-      }.getOrElse(false) // Return false if 'out' is not available
+      }.getOrElse(false)
     } catch {
       case e: SocketException =>
-        println(s"SocketException when sending JSON, attempting to reconnect: ${e.getMessage}")
-        connectToServer() // Reconnect and then retry or return false
+        println(s"SocketException when sending JSON: ${e.getMessage}")
+        connectToServer()
         false
     }
   }
 
+
   def receiveJson(): Option[JsValue] = {
+    println("Recived a Json...")
     try {
       in.flatMap { i =>
-        try {
-          val lengthBytes = new Array[Byte](4)
-          i.readFully(lengthBytes)
-          val length = ByteBuffer.wrap(lengthBytes).order(ByteOrder.LITTLE_ENDIAN).getInt
-          if (length > 0) {
-            val data = new Array[Byte](length)
-            i.readFully(data)
-            Some(Json.parse(data))
-          } else {
-            None
+        val lengthBytes = new Array[Byte](4)
+        if (i.read(lengthBytes) == -1) {
+          throw new EOFException("End of stream reached")
+        }
+        val length = ByteBuffer.wrap(lengthBytes).order(ByteOrder.LITTLE_ENDIAN).getInt
+        if (length > 0) {
+          val data = new Array[Byte](length)
+          var totalRead = 0
+          while (totalRead < length) {
+            val read = i.read(data, totalRead, length - totalRead)
+            if (read == -1) throw new EOFException("End of stream reached")
+            totalRead += read
           }
-        } catch {
-          case _: EOFException =>
-            println("End of stream reached, connection closed by server.")
-            None
-          case _: SocketTimeoutException =>
-            // Handle timeout exception without breaking the loop
-            println("No data received, continuing to listen...")
-            None
-          case e: IOException =>
-            println(s"Failed to receive JSON: $e")
-            None
+          Some(Json.parse(data))
+        } else {
+          None
         }
       }
     } catch {
-      case e: SocketException =>
-        println(s"SocketException when receiving JSON: ${e.getMessage}")
-        None // Handle the exception appropriately
+      case _: EOFException =>
+        println("End of stream reached, connection closed by server.")
+        reconnectToServer()
+        None
+      case _: SocketTimeoutException =>
+        println("No data received, continuing to listen...")
+        None
+      case e: IOException =>
+        println(s"Failed to receive JSON: $e")
+        reconnectToServer()
+        None
     }
   }
 
-/*  def receiveJson(): Option[JsValue] = {
-    try {
-      in.flatMap { i =>
-        try {
-          val lengthBytes = new Array[Byte](4)
-          i.readFully(lengthBytes)
-          val length = ByteBuffer.wrap(lengthBytes).order(ByteOrder.LITTLE_ENDIAN).getInt
-          if (length > 0) {
-            val data = new Array[Byte](length)
-            i.readFully(data)
-            Some(Json.parse(data))
-          } else {
-            None
-          }
-        } catch {
-          case _: EOFException =>
-            println("End of stream reached, connection closed by server.")
-            None
-          case e: IOException =>
-            println(s"Failed to receive JSON: $e")
-            None
-        }
-      }
-    } catch {
-      case e: SocketException =>
-        println(s"SocketException when receiving JSON: ${e.getMessage}")
-        None // Handle the exception appropriately
-    }
-  }*/
 
   def receiveResponses(): Unit = {
     try {
@@ -318,29 +314,6 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
     }
   }
 
-  /*def initiateSendFunction(functionName: String, arg1: Option[String] = None, arg2: Option[String] = None): Unit = {
-    if (socket.exists(_.isClosed)) {
-      if (!reconnecting) {
-        println("Socket is closed, reconnecting before sending data...")
-        reconnectToServer()
-      }
-    } else {
-      sendData(functionName, arg1, arg2)
-    }
-  }*/
-
-  //  def initiateSendAndReceiveFunction(functionName: String, eventData: Option[JsValue] = None): Unit = {
-  //    if (socket.exists(_.isClosed)) {
-  //      if (!reconnecting) {
-  //        println("Socket is closed, reconnecting before sending data...")
-  //        reconnectToServer()
-  //      }
-  //    } else {
-  //      sendAndReceiveData(functionName, eventData)
-  //    }
-  //  }
-
-
   def initiateSendAndReceiveFunction(): Unit = {
     try {
       println("Initiating function...")
@@ -358,19 +331,6 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
         println(s"Unexpected error: ${e.getMessage}")
     }
   }
-
-  /* // Updated initiateFunction to use the new sendAndReceiveData
-   def initiateSendAndReceiveFunction(): Unit = {
-     if (socket.exists(_.isClosed)) {
-       if (!reconnecting) {
-         println("Socket is closed, reconnecting before sending data...")
-         reconnectToServer()
-       }
-     } else {
-       // Example usage
-       sendAndReceiveData("test", Map("asd" -> 978))
-     }
-   }*/
 
   def sendData(commandName: String, arg1: Option[String] = None, arg2: Option[String] = None): Unit = {
     println("Initiating function...")
@@ -403,17 +363,6 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
 
 
 
-  /*  def sendAndReceiveData(commandName: String, arg1: Option[String] = None, arg2: Option[String] = None): Unit = {
-    println("Initiating function...")
-    val command = Json.obj("__command" -> "test", "asd" -> 978)
-    if (sendJson(command)) {
-      receiveResponses()
-    } else {
-      println("Failed to send JSON, attempting to reconnect for the next task...")
-      reconnectToServer()
-    }
-  }*/
-
   def reconnectToServer(): Unit = {
     reconnecting = true
 
@@ -437,42 +386,6 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
     }
   }
 
-/*  def receive: Receive = {
-    case "Initiate" => initiateSendAndReceiveFunction()
-  }*/
-
-//  def receive: Receive = {
-//    case "SendInitiate" => initiateSendFunction("init")
-//    case "StartListening" => startListening()
-//  }
-
-  def receive: Receive = {
-    case "StartListening" => startListening()
-  }
-
-  /*  def receive: Receive = {
-      case FunctionCall(functionName, arg1, arg2) =>
-        initiateSendFunction(functionName, arg1, arg2)
-
-      case "Initiate" =>
-        val shouldSendAndReceive = true // Replace with actual condition or flag
-        if (shouldSendAndReceive) {
-          val eventData = Json.obj(
-            "from" -> "ScalaApp",
-            "data" -> Json.obj("asd" -> 978)
-          )
-          sendAndReceiveData("test", Map("event" -> eventData))
-        } else {
-          initiateSendFunction("sayFunction", Option("Hello"), Option("3"))
-        }
-    }*/
-
-  /*  def receive: Receive = {
-      case FunctionCall(functionName, arg1, arg2) => initiateSendFunction(functionName, arg1, arg2)
-      case "Initiate" =>
-        initiateSendFunction("getGameData")
-    }*/
-
   override def postStop(): Unit = {
     println("PeriodicFunctionActor stopping...")
     try {
@@ -491,10 +404,25 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
 class ThirdProcessActor extends Actor {
   import context.dispatcher // Import the execution context for scheduling
 
+  override def receive: Receive = {
+    case StartActors(settings) =>
+      println("ThirdProcessActor received StartActors message.")
+      // Improved scheduling logic to avoid multiple schedules
+      context.system.scheduler.scheduleWithFixedDelay(
+        initialDelay = 1.second,
+        delay = 5.seconds,
+        receiver = self,
+        message = "Initiate"
+      )
+
+    case "Initiate" =>
+      initiateFunction()
+  }
+
   // Define the function that will be called periodically
   def initiateFunction(): Unit = {
-    println("TEMP PRINT") // Log the message to the console
-    // Add any additional logic for the function here
+    println("TEMP PRINT")
+    // Additional logic
   }
 
   override def preStart(): Unit = {
@@ -506,28 +434,22 @@ class ThirdProcessActor extends Actor {
       message = "Initiate"
     )
   }
-
-  def receive: Receive = {
-    case "Initiate" => initiateFunction() // Call the function when the message is received
-  }
 }
 
 object MainApp extends App {
   val system = ActorSystem("MySystem")
 
-  // Instantiate the JsonProcessorActor
-  val jsonProcessorActor = system.actorOf(Props[JsonProcessorActor], "jsonProcessor")
+  // Keep references to actors, but don't start them immediately
+  val jsonProcessorActorRef = system.actorOf(Props[JsonProcessorActor], "jsonProcessor")
+  val periodicFunctionActorRef = system.actorOf(Props(classOf[PeriodicFunctionActor], jsonProcessorActorRef), "periodicFunctionActor")
+  val thirdProcessActorRef = system.actorOf(Props[ThirdProcessActor], "thirdProcess")
 
-  // Starting PeriodicFunctionActor with the correct Props
-  val periodicFunctionActor = system.actorOf(Props(classOf[PeriodicFunctionActor], jsonProcessorActor), "periodicFunctionActor")
+  // UI AppActor setup
+  val playerClassList: List[Player] = List(new Player("Player1"))
+  val uiAppActorRef = system.actorOf(Props(new UIAppActor(playerClassList, jsonProcessorActorRef, periodicFunctionActorRef, thirdProcessActorRef)), "uiAppActor")
 
-  // Starting ThirdProcessActor
-  val thirdProcessActor = system.actorOf(Props[ThirdProcessActor], "thirdProcess")
-
-  // Rest of MainApp code...
   println("Press ENTER to exit...")
   scala.io.StdIn.readLine()
 
-  // Shutdown the actor system gracefully
   system.terminate()
 }
