@@ -4,7 +4,147 @@ function buttonFunctions()
     -- register some keyboard shortcuts
     g_keyboard.bindKeyDown('Ctrl+D', useFishingRodTest)
     g_keyboard.bindKeyDown('Ctrl+E', whatIsinMyRightHand)
-    g_keyboard.bindKeyDown('Ctrl+C', tempHello)
+    g_keyboard.bindKeyDown('Ctrl+C', testUI)
+    g_keyboard.bindKeyDown('Ctrl+A', screenTest2)
+end
+
+
+function testUI()
+    printConsole('testUI function initiated')
+    local tempSlot = modules.game_inventory.inventoryWindow:recursiveGetChildById('slot6')
+
+    -- Assuming there's a function to get the position
+    local position = tempSlot:getPosition()
+
+    -- Extracting the x and y coordinates
+    local x = position.x
+    local y = position.y
+
+    -- Output or use the x, y coordinates as needed
+    printConsole("Slot6 position x = " .. x .. " y " .. y)
+    printConsole('testUI function closed')
+end
+
+function testUI3()
+    printConsole('testUI function initiated')
+    g_ui.importStyle('battlebutton')
+    battleButton = modules.client_topmenu.addRightGameToggleButton('battleButton', tr('Battle') .. ' (Ctrl+B)', '/images/topbuttons/battle', toggle, false, 2)
+    battleButton:setOn(true)
+    battleWindow = g_ui.loadUI('battle', modules.game_interface.getRightPanel())
+    g_keyboard.bindKeyDown('Ctrl+B', toggle)
+    if battleButton:isOn() then
+        battleWindow:close()
+        battleButton:setOn(false)
+    else
+        battleWindow:open()
+        battleButton:setOn(true)
+    end
+    printConsole('testUI function closed')
+end
+
+
+function testUI1()
+    printConsole('testUI function initiated')
+    optionsWindow = g_ui.displayUI('store')
+    printConsole('testUI function closed')
+
+
+
+end
+
+function getCurrentWidgetPosition()
+    printConsole('getCurrentWidgetPosition function initiated')
+    local myWidget = UIWidget.create()
+    -- Assuming g_window has a method getCurrentlyFocusedWidget
+    local currentWidget = myWidget.getCurrentlyFocusedWidget()
+
+    if currentWidget then
+        local x, y = currentWidget:getX(), currentWidget:getY()
+        print("Current widget position: X=" .. x .. ", Y=" .. y)
+        return x, y
+    else
+        print("No widget is currently focused.")
+        return nil
+    end
+end
+
+function testUIWidgetHeight()
+    -- Create an instance of UIWidget using the registered static function
+    local myWidget = UIWidget.create()
+
+    -- Check if the widget is valid
+    if myWidget then
+        -- Call the getHeight method
+        local height = myWidget:getHeight()
+        print("Height of the UIWidget is: " .. height)
+    else
+        print("Failed to create UIWidget instance")
+    end
+end
+
+
+function screenTest1()
+    printConsole('Screen test function initiated')
+    local displaySize = g_window.getDisplaySize()  -- Get display size
+    local message = "Display Size: width = " .. displaySize.width .. ", height = " .. displaySize.height
+    printConsole(message)  -- Print display size
+
+    g_settings = makesingleton(g_configs.getSettings())
+    local size = { width = 1024, height = 600 }
+    size = g_settings.getSize('window-size', size)
+    g_window.resize(size)
+end
+
+function screenTest2()
+    printConsole('Mouse test function initiated')
+
+    -- Get and print window position
+    local windowPosX = g_window.getX()
+    local windowPosY = g_window.getY()
+    local message = "!Window posX = " .. windowPosX .. ", posY = " .. windowPosY
+    printConsole(message)
+
+    -- Get and print mouse position
+    -- local mouseX, mouseY = g_window.getMousePosition()
+    -- printConsole("Mouse posX = " .. mouseX .. ", posY = " .. mouseY)
+
+
+    -- Get and print window width and height separately
+    local width = g_window.getWidth()
+    local height = g_window.getHeight()
+    printConsole("Window width = " .. width)
+    printConsole("Window height = " .. height)
+
+    -- Get and print unmaximized position of the window
+    -- local unmaxPosX, unmaxPosY = g_window.getUnmaximizedPos()
+    -- printConsole("Unmaximized Window posX = " .. unmaxPosX .. ", posY = " .. unmaxPosY)
+
+    -- Get and print current position of the window
+    -- local positionX, positionY = g_window.getPosition()
+    -- printConsole("Current Window Position: posX = " .. positionX .. ", posY = " .. positionY)
+
+    -- Get and print display width and height
+    local displayWidth = g_window.getDisplayWidth()
+    local displayHeight = g_window.getDisplayHeight()
+    printConsole("Display Width = " .. displayWidth)
+    printConsole("Display Height = " .. displayHeight)
+
+    -- Get mouse position
+    local pos = g_window.getMousePosition()
+    printConsole("Mouse posX = " .. pos.x .. ", posY = " .. pos.y)
+
+    -- Get and print window size
+    --local windowSize = g_window.getSize()
+    --printConsole("Window width = " .. windowSize.width .. " PosY " .. windowSize.height)
+
+end
+
+
+
+function screenTestOld()
+    printConsole('Screen test function initiated')
+    local displaySize = tostring(g_window.getDisplaySize())
+    printConsole(message)
 end
 
 function whatIsinMyRightHand()
@@ -29,7 +169,6 @@ function whatIsinMyRightHand()
 
 end
 
-
 function useFishingRodTest()
     math.randomseed(os.time())
     if not g_game.isOnline() then
@@ -46,20 +185,24 @@ function useFishingRodTest()
     local itemId = 3483 -- ID of the fishing rod
     local foundItem = g_game.findPlayerItem(itemId, -1)
 
-    local tiles = g_map.getTiles(tonumber(player:getPosition().z))
+    local playerPos = player:getPosition()
+    local allTiles = g_map.getTiles(playerPos.z)
+    local filteredTiles = filterTilesInRange(allTiles, playerPos)
 
-    if #tiles > 0 then
+    if #filteredTiles > 0 then
         local attempts = 0
         local maxAttempts = 10 -- Maximum number of attempts to find a suitable tile
 
         while attempts < maxAttempts do
-            local randomIndex = math.random(#tiles)
-            local tile = tiles[randomIndex]
+            local randomIndex = math.random(#filteredTiles)
+            local tile = filteredTiles[randomIndex]
+            printConsole("Tile pos: " .. tostring(tile:getPosition().x) .. ", " .. tostring(tile:getPosition().y) .. ", " .. tostring(tile:getPosition().z)) 
 
             if tile then
                 local topThing = tile:getTopUseThing()
                 if topThing and table.contains({618, 619, 620}, topThing:getId()) then
-                    printConsole("Using item with suitable tile: " .. tostring(topThing:getId()) .. " Top thing: " .. tostring(topThing) )
+                    
+                    printConsole("Using item with suitable tile: " .. tostring(topThing:getId()) .. " Top thing: " .. tostring(topThing))
                     g_game.useWith(foundItem, topThing, 1)
                     return -- Exit the function after successful use
                 else
@@ -74,10 +217,26 @@ function useFishingRodTest()
 
         printConsole("Failed to find a suitable tile after " .. maxAttempts .. " attempts")
     else
-        printConsole("No tiles found at the current level")
+        printConsole("No suitable tiles found at the current level")
     end
 end
 
+-- Helper function to filter tiles within a specified range
+function filterTilesInRange(tiles, playerPos)
+    local filtered = {}
+    for i, tile in ipairs(tiles) do
+        if isTileInRange(tile:getPosition(), playerPos) then
+            table.insert(filtered, tile)
+        end
+    end
+    return filtered
+end
+
+function isTileInRange(tilePos, playerPos)
+    local dx = tilePos.x - playerPos.x
+    local dy = tilePos.y - playerPos.y
+    return dx >= 2 and dx <= 7 and dy >= -5 and dy <= 5
+end
 
 
 function useFishingRod(arg)
@@ -380,6 +539,26 @@ function getPos()
     local posString = string.format('{ "!Player pos": { "x": %d, "y": %d, "z": %d } }', playerXPos, playerYPos, playerZPos)
     printConsole(posString)
     sendToScalaServer(posString)
+
+end
+
+function getPos()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local playerXPos = player:getPosition().x
+    local playerYPos = player:getPosition().y
+    local playerZPos = player:getPosition().z
+    printConsole("Player pos: " .. tostring(playerXPos) .. ", " .. tostring(playerYPos) .. ", " .. tostring(playerZPos)) 
 
 end
 
