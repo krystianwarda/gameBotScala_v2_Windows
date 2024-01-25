@@ -21,23 +21,35 @@ class UIAppActor(playerClassList: List[Player],
                  jsonProcessorActorRef: ActorRef,
                  periodicFunctionActorRef: ActorRef,
                  thirdProcessActorRef: ActorRef) extends Actor {
+
+  // Store the current player. For simplicity, let's use the first player from the list.
+  // You may want to update this based on your application's logic.
+  private val currentPlayer: Option[Player] = playerClassList.headOption
+
   Swing.onEDT {
     new SwingApp(playerClassList, self, jsonProcessorActorRef, periodicFunctionActorRef, thirdProcessActorRef).visible = true
   }
 
   def receive: Receive = {
     case StartActors(settings) =>
+      // Forward settings to JsonProcessorActor
+      // Ensure currentPlayer is not None before sending the message
+      currentPlayer.foreach { player =>
+        jsonProcessorActorRef ! InitializeProcessor(player, settings)
+      }
       // Use the settings to start or configure other actors
       println(s"Received settings: $settings")
-    // Logic to handle the StartActors message
+    // Additional logic for handling StartActors message
   }
+
+  // ... other methods ...
 }
 
 // Define the StartActors message
 case class StartActors(settings: UISettings)
 
 // Define the UISettings case class
-case class UISettings(autoHeal: Boolean, runeMaker: Boolean, fishing: Boolean /*, other settings */)
+case class UISettings(autoHeal: Boolean, runeMaker: Boolean, fishing: Boolean, mouseMovements: Boolean, caveBot: Boolean /*, other settings */)
 
 
 class SwingApp(playerClassList: List[Player],
@@ -58,6 +70,8 @@ class SwingApp(playerClassList: List[Player],
       autoHeal = autoHealCheckbox.selected,
       runeMaker = runeMakerCheckbox.selected,
       fishing = fishingCheckbox.selected,
+      mouseMovements = mouseMovementsCheckbox.selected,
+      caveBot = caveBotCheckbox.selected,
       // ...other settings
     )
   }
@@ -67,12 +81,31 @@ class SwingApp(playerClassList: List[Player],
     reactions += {
       case ButtonClicked(_) =>
         val currentSettings = collectSettingsFromUI()
+
+        // Sending the settings to the UIAppActor
+        uiAppActor ! StartActors(currentSettings)
+
+        // Additionally, sending the settings to other relevant actors
         jsonProcessorActor ! StartActors(currentSettings)
         periodicFunctionActor ! StartActors(currentSettings)
+
+        // Initializing the processor with the player and settings
         jsonProcessorActorRef ! InitializeProcessor(currentPlayer, currentSettings)
-      // Additional UI logic
+
+      // Additional UI logic can be added here if needed
     }
   }
+
+//  val runButton = new Button("RUN") {
+//    reactions += {
+//      case ButtonClicked(_) =>
+//        val currentSettings = collectSettingsFromUI()
+//        jsonProcessorActor ! StartActors(currentSettings)
+//        periodicFunctionActor ! StartActors(currentSettings)
+//        jsonProcessorActorRef ! InitializeProcessor(currentPlayer, currentSettings)
+//      // Additional UI logic
+//    }
+//  }
 
   def saveExample(): Unit = {
     val selectedName = exampleDropdown.selection.item
@@ -156,10 +189,13 @@ class SwingApp(playerClassList: List[Player],
   val caveBotCheckbox = new CheckBox("Cave Bot")
   val protectionZoneCheckbox = new CheckBox("Protection Zone")
   val fishingCheckbox = new CheckBox("Fishing")
+  val mouseMovementsCheckbox = new CheckBox("Mouse Movements")
   // ...and other fields and buttons as in the second snippet
 
   // Define UI behavior and event handling here, similar to the second snippet...
-  listenTo(autoHealCheckbox, runeMakerCheckbox, trainingCheckbox, caveBotCheckbox, protectionZoneCheckbox, fishingCheckbox, exampleDropdown.selection)
+  listenTo(autoHealCheckbox, runeMakerCheckbox, trainingCheckbox, caveBotCheckbox,
+    protectionZoneCheckbox, fishingCheckbox, mouseMovementsCheckbox,
+    exampleDropdown.selection)
   reactions += {
     case ButtonClicked(`autoHealCheckbox`) =>
       println("Auto Heal Checkbox clicked")
@@ -188,6 +224,10 @@ class SwingApp(playerClassList: List[Player],
 
     case ButtonClicked(`fishingCheckbox`) =>
       println("Fishing Checkbox clicked")
+    // Add logic for when caveBotCheckbox is clicked
+
+    case ButtonClicked(`mouseMovementsCheckbox`) =>
+      println("Mouse Movements Checkbox clicked")
     // Add logic for when caveBotCheckbox is clicked
 
     case SelectionChanged(`exampleDropdown`) =>

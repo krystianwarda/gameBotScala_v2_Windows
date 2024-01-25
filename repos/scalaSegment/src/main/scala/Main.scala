@@ -47,6 +47,11 @@ class JsonProcessorActor extends Actor {
   var settings: Option[UISettings] = None
   import context.dispatcher
 
+  // Add a lastFishingCommandSent variable
+  private var lastFishingCommandSent: Long = 0
+  private val fishingCommandInterval: Long = 10000 // 10 seconds interval
+
+
   private var reconnecting = false
   val serverAddress = InetAddress.getByName("127.0.0.1")
   val port = 9997
@@ -84,17 +89,23 @@ class JsonProcessorActor extends Actor {
   }
 
   private def handleOkStatus(json: JsValue): Unit = {
-    // Handling 'ok' status
-    // Check for rat-related data and handle it
-    (json \ "battleInfo").asOpt[JsValue].foreach { battleInfo =>
-      findRats(battleInfo).foreach(attackOnRat)
-    }
+    settings.foreach { currentSettings =>
+      if (currentSettings.caveBot) {
+        // Assuming findRats is related to the Cavebot functionality
+        (json \ "battleInfo").asOpt[JsValue].foreach { battleInfo =>
+          findRats(battleInfo, currentSettings.mouseMovements).foreach(attackOnRat)
+        }
+      }
 
-    // Call activateFishing if necessary
-    activateFishing(json)
+      if (currentSettings.fishing) {
+        activateFishing(json, currentSettings.mouseMovements)
+      }
+
+      // ... additional functionalities based on settings ...
+    }
   }
 
-  private def findRats(battleInfo: JsValue): Seq[Long] = {
+  private def findRats(battleInfo: JsValue, mouseMovement: Boolean): Seq[Long] = {
     battleInfo match {
       case obj: JsObject => obj.fields.flatMap {
         case (_, creature) =>
@@ -106,28 +117,70 @@ class JsonProcessorActor extends Actor {
     }
   }
 
-  private def activateFishing(json: JsValue): Unit = {
-    // Check for fishing-related data and handle it
+  private def activateFishing(json: JsValue, mouseMovement: Boolean): Unit = {
     (json \ "__status").asOpt[String].foreach { status =>
       if (status == "ok") {
-        (json \ "areaInfo" \ "tiles").asOpt[JsObject].foreach { tiles =>
-          tiles.fields.foreach {
-            case (_, tileData) =>
-              val tileIds = tileData.as[JsObject].values.map(_.as[Int])
-              if (tileIds.exists(id => List(618, 619, 620).contains(id))) {
-                sendFishingCommand(tileData.as[JsObject].fields.head._1)
-              }
+        (json \ "characterInfo").asOpt[JsObject].foreach { characterInfo =>
+          val charX = (characterInfo \ "PositionX").asOpt[Int].getOrElse(0)
+          val charY = (characterInfo \ "PositionY").asOpt[Int].getOrElse(0)
+          val charZ = (characterInfo \ "PositionZ").asOpt[Int].getOrElse(0)
+
+          // parse the tile IDs and extract their positions
+          (json \ "areaInfo" \ "tiles").asOpt[JsObject].foreach { tiles =>
+            tiles.fields.foreach {
+              case (tileId, _) =>
+                val tileX = tileId.substring(0, 5).toInt
+                val tileY = tileId.substring(5, 10).toInt
+                val tileZ = tileId.substring(10, 12).toInt
+
+                val currentTime = System.currentTimeMillis()
+                if (currentTime - lastFishingCommandSent > fishingCommandInterval) {
+
+                  // check if the tile's X position is within +2 to +6 of the character's X position
+                  // and if the tile's Y and Z positions match the character's Y and Z positions
+                  if ((tileX >= charX + 2) && (tileX <= charX + 6) && (tileY == charY) && (tileZ == charZ)) {
+                    val waterTileId = tileId
+                    println(waterTileId) // Correctly fetch and print the waterTileId
+                    sendFishingCommand(waterTileId) // Send the correct waterTileId
+                    lastFishingCommandSent = currentTime
+                  }
+                }
+            }
+          }
+
+          // Calculate the target tile position to the right of the character
+          val targetX = charX + 1
+          val targetY = charY // y coordinate remains the same for 'right' direction
+
+          // Ensure the target tile is not more than 6 tiles away in y direction
+          if (targetY - charY <= 6) {
+            val currentTime = System.currentTimeMillis()
+            if (currentTime - lastFishingCommandSent > fishingCommandInterval) {
+              val waterTileId = f"$targetX%05d$targetY%05d$charZ%02d"
+              println(waterTileId) // Correctly fetch and print the waterTileId
+              sendFishingCommand(waterTileId) // Send the correct waterTileId
+              lastFishingCommandSent = currentTime
+            }
           }
         }
       }
     }
   }
 
+
   private def sendFishingCommand(waterTileId: String): Unit = {
-    val jsonCommand = Json.obj("__command" -> "useFishingRod", "data" -> Json.obj("waterTileId" -> waterTileId))
+    val x = waterTileId.substring(0, 5).toInt
+    val y = waterTileId.substring(5, 10).toInt
+    val zLength = waterTileId.length - 10
+    val z = waterTileId.substring(10, 10 + zLength).toInt
+
+    val jsonCommand = Json.obj("__command" -> "useFishingRod", "tilePosition" -> Json.obj("x" -> x, "y" -> y, "z" -> z))
     sendJson(jsonCommand)
-    println(s"Fishing command sent for waterTileId: $waterTileId")
+    println(s"Fishing command sent for position: x=$x, y=$y, z=$z")
   }
+
+
+
 
   class RatAttackProcessor extends CommandProcessor {
     override def execute(json: JsValue, player: Player, settings: UISettings): cpResult = {
@@ -136,6 +189,7 @@ class JsonProcessorActor extends Actor {
     }
   }
   private def attackOnRat(ratId: Long): Unit = {
+
     val command = Json.obj("__command" -> "targetAttack", "ratId" -> ratId)
     sendJson(command) // Directly send the command to the TCP server
   }

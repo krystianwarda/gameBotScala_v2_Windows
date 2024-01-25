@@ -3,13 +3,181 @@ function buttonFunctions()
     printConsole(message)
     -- register some keyboard shortcuts
     g_keyboard.bindKeyDown('Ctrl+D', useFishingRodTest)
-    g_keyboard.bindKeyDown('Ctrl+E', whatIsinMyRightHand)
-    g_keyboard.bindKeyDown('Ctrl+C', testUI)
-    g_keyboard.bindKeyDown('Ctrl+A', screenTest2)
+    g_keyboard.bindKeyDown('Ctrl+E', tileUnderCursor)
+    g_keyboard.bindKeyDown('Ctrl+C', testUIC)
+    g_keyboard.bindKeyDown('Ctrl+A', calculateMapPanelLoc)
+end
+
+function calculateMapPanelLoc()
+
+    local jsonPoints = {}
+
+    -- Get display width and height
+    local displayWidth = g_window.getDisplayWidth()
+    local displayHeight = g_window.getDisplayHeight()
+
+    -- Calculate GameWindow position
+    local windowPosX = g_window.getX()
+    local windowPosY = g_window.getY()
+    local gameWindowPoint = { x = windowPosX, y = windowPosY }
+
+    -- Get ParentRect properties
+    local tempMapPanelChildren = modules.game_interface.gameMapPanel:getRect()
+
+    -- Calculate ParentRect position relative to GameWindow
+    local parentRectPoint = { 
+        x = gameWindowPoint.x + tempMapPanelChildren.x, 
+        y = gameWindowPoint.y + tempMapPanelChildren.y 
+    }
+
+    -- Calculate and print the 4 corners of ParentRect
+    local topLeft = { x = parentRectPoint.x, y = parentRectPoint.y }
+    local topRight = { x = parentRectPoint.x + tempMapPanelChildren.width, y = parentRectPoint.y }
+    local bottomRight = { x = parentRectPoint.x + tempMapPanelChildren.width, y = parentRectPoint.y + tempMapPanelChildren.height }
+    local bottomLeft = { x = parentRectPoint.x, y = parentRectPoint.y + tempMapPanelChildren.height }
+
+    -- Calculate aspect ratio of InnerScreen
+    local innerScreenAspectRatio = 630 / 460
+
+    -- Calculate maximum InnerScreen dimensions that fit within ParentRect
+    local innerScreenWidth = math.min(tempMapPanelChildren.width, tempMapPanelChildren.height * innerScreenAspectRatio)
+    local innerScreenHeight = innerScreenWidth / innerScreenAspectRatio
+
+    -- Calculate margins and position of InnerScreen within ParentRect
+    local marginY = (tempMapPanelChildren.height - innerScreenHeight) / 2
+    local innerScreenTopLeft = {
+        x = parentRectPoint.x + (tempMapPanelChildren.width - innerScreenWidth) / 2,
+        y = parentRectPoint.y + marginY
+    }
+    local innerScreenTopRight = {
+        x = innerScreenTopLeft.x + innerScreenWidth,
+        y = innerScreenTopLeft.y
+    }
+    local innerScreenBottomRight = {
+        x = innerScreenTopRight.x,
+        y = innerScreenTopLeft.y + innerScreenHeight
+    }
+    local innerScreenBottomLeft = {
+        x = innerScreenTopLeft.x,
+        y = innerScreenBottomRight.y
+    }
+
+    -- Calculate the size of the smaller rectangles within the inner rectangle
+    local smallerRectWidth = innerScreenWidth / 15
+    local smallerRectHeight = innerScreenHeight / 11
+
+    -- Loop to calculate and add the middle points to the jsonPoints table
+    for i = 1, 15 do
+        for j = 1, 11 do
+            local middlePoint = {
+                x = math.floor(innerScreenTopLeft.x + (i - 0.5) * smallerRectWidth),
+                y = math.floor(innerScreenTopLeft.y + (j - 0.5) * smallerRectHeight)
+            }
+            local key = i .. "_" .. j
+            jsonPoints[key] = { x = middlePoint.x, y = middlePoint.y }
+        end
+    end
+    --printConsole(tableToString(jsonPoints))
+
+    return jsonPoints
+
 end
 
 
-function testUI()
+function tableToString(tbl)
+    local result = "{"
+    for k, v in pairs(tbl) do
+        result = result .. '"' .. k .. '": { "x": ' .. v.x .. ', "y": ' .. v.y .. ' }, '
+    end
+    result = result:sub(1, -3)  -- Remove the last comma and space
+    return result .. "}"
+end
+
+
+
+function testUIC_works2()
+    printConsole('testUI function initiated')
+    local tempMapPanelChildren = modules.game_interface.gameMapPanel:getRect()
+    printConsole('ParentRect x ' .. tostring(tempMapPanelChildren.x) .. ' y ' .. tostring(tempMapPanelChildren.y))
+    printConsole('ParentRect width ' .. tostring(tempMapPanelChildren.width) .. ' height ' .. tostring(tempMapPanelChildren.height))
+    printConsole('testUI function closed')
+end
+
+
+
+function testUIC_Works()
+    printConsole('testUI function initiated')
+    local tempMapPanelChildren = modules.game_interface.gameMapPanel:getRect()
+
+    printConsole('ParentRect x ' .. tostring(tempMapPanelChildren.x) .. ' y ' .. tostring(tempMapPanelChildren.y))
+    printConsole('testUI function closed')
+end
+
+
+function testUIAsave_butDontunderstand()
+    printConsole('testUI function initiated')
+    local tempMapPanelChildren = modules.game_interface.gameMapPanel:getChildren()
+
+    -- Iterate through the children list and print their content
+    for i, child in ipairs(tempMapPanelChildren) do
+        printConsole('Child ' .. i .. ': ' .. tostring(child))
+    end
+    printConsole('testUI function closed')
+end
+
+
+
+function testUIAnotworking()
+    printConsole('testUI function initiated')
+    local tempTile = modules.game_interface.gameMapPanel:getTile(modules.game_interface.gameMapPanel.mousePos)
+    local tempTileId = tempTile.asTile().getId()
+
+    local tempItem = modules.game_inventory.inventoryWindow:getChildById(tostring(tempTileId))
+    -- Assuming there's a function to get the position
+    local position = tempItem:getPosition()
+
+    -- Extracting the x and y coordinates
+    local x = position.x
+    local y = position.y
+
+    -- Output or use the x, y coordinates as needed
+    printConsole("Map position x = " .. x .. " y " .. y)
+    printConsole('testUI function closed')
+end
+
+function testUInotWorking()
+    printConsole('testUI function initiated')
+    local tempMapPanelChildren= modules.game_interface.gameMapPanel:getChildren()
+    printConsole("Tile position x = " .. tempTile.getPosition().x .. " y " .. tempTile.getPosition().y)
+    local position = tempMapPanel
+
+    -- Extracting the x and y coordinates
+    local x = position.x
+    local y = position.y
+
+    -- Output or use the x, y coordinates as needed
+    printConsole("Map position x = " .. x .. " y " .. y)
+    printConsole('testUI function closed')
+end
+
+-- function location a tile, but in game terms not in px
+function tileUnderCursor()
+    local tempTile = modules.game_interface.gameMapPanel:getTile(modules.game_interface.gameMapPanel.mousePos)
+
+    -- Assuming there's a function to get the position
+    local position = tempTile:getPosition()
+
+    -- Extracting the x and y coordinates
+    local x = position.x
+    local y = position.y
+
+    -- Output or use the x, y coordinates as needed
+    printConsole("Tile position x = " .. x .. " y " .. y)
+end
+
+
+-- works great, displaying x,y of slot6
+function testUISlot6()
     printConsole('testUI function initiated')
     local tempSlot = modules.game_inventory.inventoryWindow:recursiveGetChildById('slot6')
 
@@ -95,7 +263,8 @@ function screenTest1()
     g_window.resize(size)
 end
 
-function screenTest2()
+--good script
+function screenInfo()
     printConsole('Mouse test function initiated')
 
     -- Get and print window position
@@ -104,24 +273,11 @@ function screenTest2()
     local message = "!Window posX = " .. windowPosX .. ", posY = " .. windowPosY
     printConsole(message)
 
-    -- Get and print mouse position
-    -- local mouseX, mouseY = g_window.getMousePosition()
-    -- printConsole("Mouse posX = " .. mouseX .. ", posY = " .. mouseY)
-
-
     -- Get and print window width and height separately
     local width = g_window.getWidth()
     local height = g_window.getHeight()
     printConsole("Window width = " .. width)
     printConsole("Window height = " .. height)
-
-    -- Get and print unmaximized position of the window
-    -- local unmaxPosX, unmaxPosY = g_window.getUnmaximizedPos()
-    -- printConsole("Unmaximized Window posX = " .. unmaxPosX .. ", posY = " .. unmaxPosY)
-
-    -- Get and print current position of the window
-    -- local positionX, positionY = g_window.getPosition()
-    -- printConsole("Current Window Position: posX = " .. positionX .. ", posY = " .. positionY)
 
     -- Get and print display width and height
     local displayWidth = g_window.getDisplayWidth()
@@ -133,10 +289,11 @@ function screenTest2()
     local pos = g_window.getMousePosition()
     printConsole("Mouse posX = " .. pos.x .. ", posY = " .. pos.y)
 
-    -- Get and print window size
-    --local windowSize = g_window.getSize()
-    --printConsole("Window width = " .. windowSize.width .. " PosY " .. windowSize.height)
-
+    local tempMapPanelChildren = modules.game_interface.gameMapPanel:getRect()
+    printConsole('ParentRect x ' .. tostring(tempMapPanelChildren.x) .. ' y ' .. tostring(tempMapPanelChildren.y))
+    printConsole('ParentRect width ' .. tostring(tempMapPanelChildren.width) .. ' height ' .. tostring(tempMapPanelChildren.height))
+    
+    printConsole('ParentRect top ' .. tostring(modules.game_interface.gameMapPanel:getMarginTop()) .. ' bottom ' .. tostring(modules.game_interface.gameMapPanel:getMarginBottom()))
 end
 
 
@@ -238,13 +395,45 @@ function isTileInRange(tilePos, playerPos)
     return dx >= 2 and dx <= 7 and dy >= -5 and dy <= 5
 end
 
-
 function useFishingRod(arg)
-    waterTileId = arg.data.waterTileId
+    -- Accessing 'x', 'y', and 'z' directly from the 'data' table
+    local x = tonumber(arg.data.tilePosition.x)
+    local y = tonumber(arg.data.tilePosition.y)
+    local z = tonumber(arg.data.tilePosition.z)
+
+    printConsole("Fishing function: x=" .. tostring(x) .. ", y=" .. tostring(y) .. ", z=" .. tostring(z))
+
+    local player = g_game.getLocalPlayer()
+    local playerPos = player:getPosition()
+    local allTiles = g_map.getTiles(playerPos.z)
+
+    local foundTile = nil
+    for _, tile in ipairs(allTiles) do
+        local tilePos = tile:getPosition()
+        if tilePos.x == x and tilePos.y == y and tilePos.z == z then
+	    printConsole("Tile Found.")	
+            foundTile = tile
+            break
+        end
+    end
+
+    if not foundTile then
+        printConsole("Error: No matching tile found.")
+        return
+    end
+    printConsole("Getting top thing.")	
     local itemId = 3483 -- ID of the fishing rod
     local foundItem = g_game.findPlayerItem(itemId, -1)
-    g_game.useWith(foundItem, waterTileId, 1)
+    local topThing = foundTile:getTopUseThing()
+    if topThing then
+        g_game.useWith(foundItem, topThing, 1)
+    else
+        printConsole("Error: No top thing on the found tile.")
+    end
 end
+
+
+
 
 function targetAttack(arg)
     printConsole("Attack target function initiated.")
@@ -395,7 +584,7 @@ function getGameData(event)
         characterInfo = {},
         battleInfo = {},
 	areaInfo = {},
-
+        screenInfo = {}
     }
 
     -- Populate characterInfo
@@ -460,7 +649,18 @@ function getGameData(event)
             })
         end
     end
-    
+
+     -- Populate screenInfo
+    local tempSlot = modules.game_inventory.inventoryWindow:recursiveGetChildById('slot6')
+    local position = tempSlot:getPosition()
+
+
+    gameData.screenInfo = {
+        slot6x = position.x,
+        slot6y = position.y,
+        mapPanelLoc = calculateMapPanelLoc()
+    }
+
     local sent = event:send(gameData)
 
     if sent then
