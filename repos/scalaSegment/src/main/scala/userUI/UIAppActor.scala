@@ -245,6 +245,7 @@ class SwingApp(playerClassList: List[Player],
       contents += trainingCheckbox
       contents += caveBotCheckbox
       contents += fishingCheckbox
+      contents += mouseMovementsCheckbox
       contents += runButton
 
       // ...and other components as in the second snippet

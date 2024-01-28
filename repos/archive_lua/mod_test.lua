@@ -3,10 +3,190 @@ function buttonFunctions()
     printConsole(message)
     -- register some keyboard shortcuts
     g_keyboard.bindKeyDown('Ctrl+D', useFishingRodTest)
-    g_keyboard.bindKeyDown('Ctrl+E', tileUnderCursor)
-    g_keyboard.bindKeyDown('Ctrl+C', testUIC)
-    g_keyboard.bindKeyDown('Ctrl+A', calculateMapPanelLoc)
+    g_keyboard.bindKeyDown('Ctrl+E', whatIsinMyRightHand)
+    g_keyboard.bindKeyDown('Ctrl+C', calculateInventoryPanelLocTest)
+    g_keyboard.bindKeyDown('Ctrl+A', calculateMapPanelLocTest)
 end
+
+
+
+
+function calculateInventoryPanelLocTest()
+
+    local jsonPoints = {}
+
+    -- Get display width and height
+    local displayWidth = g_window.getDisplayWidth()
+    local displayHeight = g_window.getDisplayHeight()
+
+    -- Calculate GameWindow position
+    local windowPosX = g_window.getX()
+    local windowPosY = g_window.getY()
+    local gameWindowPoint = { x = windowPosX, y = windowPosY }
+    
+    local tempMapPanelChildren = modules.game_interface.gameMapPanel:getRect()
+    local mapPanelPoint = { x = tempMapPanelChildren.x, y = tempMapPanelChildren.y }
+
+
+
+    -- Define slot names and their IDs
+    local slotNames = {
+        "helmet", "amulet", "backpack", "armor", 
+        "hand_right", "hand_left", "legs", "boots", 
+        "ring", "arrows"
+    }
+
+    -- Iterate through each slot, calculate and store its position
+    for i, slotName in ipairs(slotNames) do
+        local slotId = "slot" .. i
+
+        local slotChild = modules.game_inventory.inventoryWindow:recursiveGetChildById(slotId):getPosition()
+
+        if slotChild then
+
+            -- Calculate Slot position relative to GameWindow
+
+            local slotPoint = { 
+                x = gameWindowPoint.x + mapPanelPoint.x + slotChild.x, 
+                y = gameWindowPoint.y + mapPanelPoint.y + slotChild.y + 35
+            }
+            -- Store the position with the named slot key
+            jsonPoints[slotName] = { x = slotPoint.x, y = slotPoint.y }
+        end
+    end
+
+    printConsole(tableToString(jsonPoints))
+
+end
+
+
+function calculateInventoryPanelLoc()
+
+
+    local jsonPoints = {}
+
+    -- Get display width and height
+    local displayWidth = g_window.getDisplayWidth()
+    local displayHeight = g_window.getDisplayHeight()
+
+    -- Calculate GameWindow position
+    local windowPosX = g_window.getX()
+    local windowPosY = g_window.getY()
+    local gameWindowPoint = { x = windowPosX, y = windowPosY }
+    
+    local tempMapPanelChildren = modules.game_interface.gameMapPanel:getRect()
+    local mapPanelPoint = { x = tempMapPanelChildren.x, y = tempMapPanelChildren.y }
+
+
+
+    -- Define slot names and their IDs
+    local slotNames = {
+        "helmet", "amulet", "backpack", "armor", 
+        "hand_right", "hand_left", "legs", "boots", 
+        "ring", "arrows"
+    }
+
+    -- Iterate through each slot, calculate and store its position
+    for i, slotName in ipairs(slotNames) do
+        local slotId = "slot" .. i
+
+        local slotChild = modules.game_inventory.inventoryWindow:recursiveGetChildById(slotId):getPosition()
+
+        if slotChild then
+
+            -- Calculate Slot position relative to GameWindow
+
+            local slotPoint = { 
+                x = gameWindowPoint.x + mapPanelPoint.x + slotChild.x + 10, 
+                y = gameWindowPoint.y + mapPanelPoint.y + slotChild.y - 35 + 10
+            }
+            -- Store the position with the named slot key
+            jsonPoints[slotName] = { x = slotPoint.x, y = slotPoint.y }
+        end
+    end
+
+    return jsonPoints
+
+end
+
+
+
+function calculateMapPanelLocTest()
+
+    local jsonPoints = {}
+
+    -- Get display width and height
+    local displayWidth = g_window.getDisplayWidth()
+    local displayHeight = g_window.getDisplayHeight()
+
+    -- Calculate GameWindow position
+    local windowPosX = g_window.getX()
+    local windowPosY = g_window.getY()
+    local gameWindowPoint = { x = windowPosX, y = windowPosY }
+
+    -- Get ParentRect properties
+    local tempMapPanelChildren = modules.game_interface.gameMapPanel:getRect()
+
+    -- Calculate ParentRect position relative to GameWindow
+    local parentRectPoint = { 
+        x = gameWindowPoint.x + tempMapPanelChildren.x, 
+        y = gameWindowPoint.y + tempMapPanelChildren.y 
+    }
+
+    -- Calculate and print the 4 corners of ParentRect
+    local topLeft = { x = parentRectPoint.x, y = parentRectPoint.y }
+    local topRight = { x = parentRectPoint.x + tempMapPanelChildren.width, y = parentRectPoint.y }
+    local bottomRight = { x = parentRectPoint.x + tempMapPanelChildren.width, y = parentRectPoint.y + tempMapPanelChildren.height }
+    local bottomLeft = { x = parentRectPoint.x, y = parentRectPoint.y + tempMapPanelChildren.height }
+
+    -- Calculate aspect ratio of InnerScreen
+    local innerScreenAspectRatio = 630 / 460
+
+    -- Calculate maximum InnerScreen dimensions that fit within ParentRect
+    local innerScreenWidth = math.min(tempMapPanelChildren.width, tempMapPanelChildren.height * innerScreenAspectRatio)
+    local innerScreenHeight = innerScreenWidth / innerScreenAspectRatio
+
+    -- Calculate margins and position of InnerScreen within ParentRect
+    local marginY = (tempMapPanelChildren.height - innerScreenHeight) / 2
+    local innerScreenTopLeft = {
+        x = parentRectPoint.x + (tempMapPanelChildren.width - innerScreenWidth) / 2,
+        y = parentRectPoint.y + marginY
+    }
+    local innerScreenTopRight = {
+        x = innerScreenTopLeft.x + innerScreenWidth,
+        y = innerScreenTopLeft.y
+    }
+    local innerScreenBottomRight = {
+        x = innerScreenTopRight.x,
+        y = innerScreenTopLeft.y + innerScreenHeight
+    }
+    local innerScreenBottomLeft = {
+        x = innerScreenTopLeft.x,
+        y = innerScreenBottomRight.y
+    }
+
+    -- Calculate the size of the smaller rectangles within the inner rectangle
+    local smallerRectWidth = innerScreenWidth / 15
+    local smallerRectHeight = innerScreenHeight / 11
+
+    -- Loop to calculate and add the middle points to the jsonPoints table
+    for i = 1, 15 do
+
+        for j = 1, 11 do
+            local middlePoint = {
+                x = math.floor(gameWindowPoint.x + innerScreenTopLeft.x + (i - 0.5) * smallerRectWidth),
+                y = math.floor(gameWindowPoint.y + innerScreenTopLeft.y + (j - 0.5) * smallerRectHeight)
+            }
+
+            local key = i .. "x" .. j
+            jsonPoints[key] = { x = middlePoint.x, y = middlePoint.y }
+        end
+    end
+
+    printConsole(tableToString(jsonPoints))
+
+end
+
 
 function calculateMapPanelLoc()
 
@@ -70,14 +250,13 @@ function calculateMapPanelLoc()
     for i = 1, 15 do
         for j = 1, 11 do
             local middlePoint = {
-                x = math.floor(innerScreenTopLeft.x + (i - 0.5) * smallerRectWidth),
-                y = math.floor(innerScreenTopLeft.y + (j - 0.5) * smallerRectHeight)
+                x = math.floor(gameWindowPoint.x + innerScreenTopLeft.x + (i - 0.5) * smallerRectWidth),
+                y = math.floor(gameWindowPoint.y + innerScreenTopLeft.y + (j - 0.5) * smallerRectHeight - 30)
             }
-            local key = i .. "_" .. j
+            local key = i .. "x" .. j
             jsonPoints[key] = { x = middlePoint.x, y = middlePoint.y }
         end
     end
-    --printConsole(tableToString(jsonPoints))
 
     return jsonPoints
 
@@ -95,23 +274,7 @@ end
 
 
 
-function testUIC_works2()
-    printConsole('testUI function initiated')
-    local tempMapPanelChildren = modules.game_interface.gameMapPanel:getRect()
-    printConsole('ParentRect x ' .. tostring(tempMapPanelChildren.x) .. ' y ' .. tostring(tempMapPanelChildren.y))
-    printConsole('ParentRect width ' .. tostring(tempMapPanelChildren.width) .. ' height ' .. tostring(tempMapPanelChildren.height))
-    printConsole('testUI function closed')
-end
 
-
-
-function testUIC_Works()
-    printConsole('testUI function initiated')
-    local tempMapPanelChildren = modules.game_interface.gameMapPanel:getRect()
-
-    printConsole('ParentRect x ' .. tostring(tempMapPanelChildren.x) .. ' y ' .. tostring(tempMapPanelChildren.y))
-    printConsole('testUI function closed')
-end
 
 
 function testUIAsave_butDontunderstand()
@@ -297,12 +460,6 @@ function screenInfo()
 end
 
 
-
-function screenTestOld()
-    printConsole('Screen test function initiated')
-    local displaySize = tostring(g_window.getDisplaySize())
-    printConsole(message)
-end
 
 function whatIsinMyRightHand()
     if not g_game.isOnline() then
@@ -650,15 +807,12 @@ function getGameData(event)
         end
     end
 
-     -- Populate screenInfo
-    local tempSlot = modules.game_inventory.inventoryWindow:recursiveGetChildById('slot6')
-    local position = tempSlot:getPosition()
-
 
     gameData.screenInfo = {
-        slot6x = position.x,
-        slot6y = position.y,
+        tuest = "tibiatuest",
+        inventoryPanelLoc = calculateInventoryPanelLoc(),
         mapPanelLoc = calculateMapPanelLoc()
+        
     }
 
     local sent = event:send(gameData)

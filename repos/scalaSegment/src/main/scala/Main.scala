@@ -1,9 +1,11 @@
 //import MainApp.periodicFunctionActor
 import akka.actor.{Actor, ActorRef, ActorSystem, Cancellable, Props}
-
 import play.api.libs.json.Json.JsValueWrapper
 import player.Player
+import utils.Mouse
+import play.api.libs.json._
 
+import java.awt.Robot
 import java.io.EOFException
 import java.net.{ServerSocket, SocketException, SocketTimeoutException}
 import java.nio.{ByteBuffer, ByteOrder}
@@ -11,7 +13,7 @@ import java.util.concurrent.TimeUnit
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.io.BufferedSource
-import scala.util.Random
+import scala.util.{Random, Try}
 import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext.Implicits.global  // Import global ExecutionContext
 // Other imports remain the same
@@ -49,7 +51,7 @@ class JsonProcessorActor extends Actor {
 
   // Add a lastFishingCommandSent variable
   private var lastFishingCommandSent: Long = 0
-  private val fishingCommandInterval: Long = 10000 // 10 seconds interval
+  private val fishingCommandInterval: Long = 5 // 10 seconds interval
 
 
   private var reconnecting = false
@@ -117,6 +119,8 @@ class JsonProcessorActor extends Actor {
     }
   }
 
+  // Assuming necessary imports and context are available
+
   private def activateFishing(json: JsValue, mouseMovement: Boolean): Unit = {
     (json \ "__status").asOpt[String].foreach { status =>
       if (status == "ok") {
@@ -125,48 +129,60 @@ class JsonProcessorActor extends Actor {
           val charY = (characterInfo \ "PositionY").asOpt[Int].getOrElse(0)
           val charZ = (characterInfo \ "PositionZ").asOpt[Int].getOrElse(0)
 
-          // parse the tile IDs and extract their positions
           (json \ "areaInfo" \ "tiles").asOpt[JsObject].foreach { tiles =>
             tiles.fields.foreach {
-              case (tileId, _) =>
+              case (tileId, tileValues) =>
                 val tileX = tileId.substring(0, 5).toInt
                 val tileY = tileId.substring(5, 10).toInt
                 val tileZ = tileId.substring(10, 12).toInt
 
-                val currentTime = System.currentTimeMillis()
-                if (currentTime - lastFishingCommandSent > fishingCommandInterval) {
+                // Check if any value in tileValues matches the specified IDs
+                val isValidTileId = tileValues.as[JsObject].values.exists {
+                  case JsNumber(n) => List(619, 620, 621, 618).contains(n.toInt)
+                  case _ => false
+                }
 
-                  // check if the tile's X position is within +2 to +6 of the character's X position
-                  // and if the tile's Y and Z positions match the character's Y and Z positions
-                  if ((tileX >= charX + 2) && (tileX <= charX + 6) && (tileY == charY) && (tileZ == charZ)) {
-                    val waterTileId = tileId
-                    println(waterTileId) // Correctly fetch and print the waterTileId
-                    sendFishingCommand(waterTileId) // Send the correct waterTileId
-                    lastFishingCommandSent = currentTime
+                val currentTime = System.currentTimeMillis()
+                if (currentTime - lastFishingCommandSent > fishingCommandInterval && isValidTileId) {
+
+                  // Calculate X and Y distance
+                  val deltaX = Math.abs(charX - tileX)
+                  val deltaY = Math.abs(charY - tileY)
+
+                  if (deltaX >= 2 && deltaX <= 6 && deltaY == 0) {
+                    if (!mouseMovement) {
+                      val waterTileId = tileId
+                      println(waterTileId)
+                      sendFishingCommand(waterTileId)
+                      lastFishingCommandSent = currentTime
+                    } else {
+                      val robotInstance = new Robot()
+
+                      val arrowsLoc = (json \ "screenInfo" \ "inventoryPanelLoc" \ "arrows").asOpt[JsObject]
+                      val arrowsX = arrowsLoc.flatMap(loc => (loc \ "x").asOpt[Int]).getOrElse(0)
+                      val arrowsY = arrowsLoc.flatMap(loc => (loc \ "y").asOpt[Int]).getOrElse(0)
+
+                      // Calculate target tile key
+                      val targetTileScreenKey = s"${8 + deltaX}x${6 + deltaY}"
+                      val targetTileScreenX = (json \ "screenInfo" \ "mapPanelLoc" \ targetTileScreenKey \ "x").asOpt[Int].getOrElse(0)
+                      val targetTileScreenY = (json \ "screenInfo" \ "mapPanelLoc" \ targetTileScreenKey \ "y").asOpt[Int].getOrElse(0)
+
+                      println(s"Target Tile Screen X: $targetTileScreenX, Y: $targetTileScreenY") // Print the target tile screen coordinates
+
+                      Mouse.mouseMoveSmooth(robotInstance, Some((arrowsX, arrowsY)))
+                      Mouse.rightClick(robotInstance, Some((arrowsX, arrowsY)))
+                      Mouse.mouseMoveSmooth(robotInstance, Some((targetTileScreenX, targetTileScreenY)))
+                      Mouse.leftClick(robotInstance, Some((targetTileScreenX, targetTileScreenY)))
+                      lastFishingCommandSent = currentTime
+                    }
                   }
                 }
-            }
-          }
-
-          // Calculate the target tile position to the right of the character
-          val targetX = charX + 1
-          val targetY = charY // y coordinate remains the same for 'right' direction
-
-          // Ensure the target tile is not more than 6 tiles away in y direction
-          if (targetY - charY <= 6) {
-            val currentTime = System.currentTimeMillis()
-            if (currentTime - lastFishingCommandSent > fishingCommandInterval) {
-              val waterTileId = f"$targetX%05d$targetY%05d$charZ%02d"
-              println(waterTileId) // Correctly fetch and print the waterTileId
-              sendFishingCommand(waterTileId) // Send the correct waterTileId
-              lastFishingCommandSent = currentTime
             }
           }
         }
       }
     }
   }
-
 
   private def sendFishingCommand(waterTileId: String): Unit = {
     val x = waterTileId.substring(0, 5).toInt
