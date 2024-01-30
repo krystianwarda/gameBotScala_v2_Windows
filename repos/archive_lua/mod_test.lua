@@ -718,8 +718,9 @@ local function formatKey(x, y, z)
 end
 
 
--- Function to get list of spectators
+
 function getGameData(event)
+
     _responseSent = false  -- Reset global flag at the beginning of the function
 
     if not g_game.isOnline() then
@@ -743,7 +744,7 @@ function getGameData(event)
 	areaInfo = {},
         screenInfo = {}
     }
-
+        
     -- Populate characterInfo
     gameData.characterInfo = {
         Name = player:getName(),
@@ -802,17 +803,15 @@ function getGameData(event)
                 HealthPercent = creature:getHealthPercent(),
                 PositionX = creature:getPosition().x,
                 PositionY = creature:getPosition().y,
-                PositionZ = creature:getPosition().z
+                PositionZ = creature:getPosition().z,
             })
         end
     end
 
 
     gameData.screenInfo = {
-        tuest = "tibiatuest",
         inventoryPanelLoc = calculateInventoryPanelLoc(),
         mapPanelLoc = calculateMapPanelLoc()
-        
     }
 
     local sent = event:send(gameData)
@@ -825,6 +824,108 @@ function getGameData(event)
 end
 
 
+
+function innitialGetGameData(event)
+    printConsole('{ "status": "Innitial function started." }')
+
+    if not g_game.isOnline() then
+        printConsole('{ "status": "Is not in game" }')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    local dimension = modules.game_interface.getMapPanel():getVisibleDimension()
+    local spectators = g_map.getSpectatorsInRangeEx(player:getPosition(), false,
+                                                     math.floor(dimension.width / 2),
+                                                     math.floor(dimension.width / 2) + 1,
+                                                     math.floor(dimension.height / 2),
+                                                     math.floor(dimension.height / 2) + 1)
+    
+    printConsole('1')
+    -- Initialize the main JSON-like structure
+    local gameData = {
+        characterInfo = {},
+        battleInfo = {},
+	areaInfo = {},
+        screenInfo = {}
+    }
+
+    -- Populate characterInfo
+    gameData.characterInfo = {
+        Name = player:getName(),
+        Id = player:getId(),
+        --Voc = player:getVocation(),
+        Health = player:getHealth(),
+        --HealthMax = player:getMaxHealth(),
+        HealthPercent = player:getHealthPercent(),
+        Mana = player:getMana(),
+        ManaMax = player:getMaxMana(),
+        PositionX = player:getPosition().x,
+        PositionY = player:getPosition().y,
+        PositionZ = player:getPosition().z,
+        -- MagicLevel = player:getMagicLevel(),
+        -- Blessings = player:getBlessings(),
+    }
+    printConsole('2')
+    -- Collect data about area around player
+    gameData.areaInfo = {
+        tiles = {}
+    }
+
+    local targetPosition = player:getPosition()
+    local tiles = g_map.getTiles(targetPosition.z)
+
+    for _, tile in ipairs(tiles) do
+        local x = tile:getPosition().x
+        local y = tile:getPosition().y
+        local z = tile:getPosition().z
+        local key = formatKey(x, y, z)
+
+        gameData.areaInfo.tiles[key] = {}
+
+        local topThingList = tile:getItems()
+        if topThingList and #topThingList > 0 then
+            for j, topThing in ipairs(topThingList) do
+                local itemInfo = {
+                    id = topThing:getId()
+                    -- Include additional properties of topThing if needed
+                }
+                gameData.areaInfo.tiles[key][tostring(j)] = itemInfo.id
+            end
+        end
+    end
+    printConsole('3')
+    -- Optionally, convert gameData.areaInfo to a JSON string if needed
+    -- local jsonString = toJSON(gameData.areaInfo)
+
+    -- Collect data of creatures in range for battle information
+    for _, creature in pairs(spectators) do
+        if checkValidCreatureForListing(creature) then
+            table.insert(gameData.battleInfo, {
+                Name = creature:getName(),
+                Id = creature:getId(),
+                HealthPercent = creature:getHealthPercent(),
+                PositionX = creature:getPosition().x,
+                PositionY = creature:getPosition().y,
+                PositionZ = creature:getPosition().z,
+            })
+        end
+    end
+    printConsole('4')
+    gameData.screenInfo = {
+        inventoryPanelLoc = calculateInventoryPanelLoc(),
+        mapPanelLoc = calculateMapPanelLoc()
+    }
+    printConsole('5')
+    local sent = event:send(gameData)
+    printConsole('6')
+    if sent then
+        _responseSent = true  -- Set global flag if the message was sent successfully
+    else
+        printConsole("Failed to send game data")
+    end
+end
 
 
 function test(event)

@@ -1,13 +1,14 @@
 // SwingActor.scala
 //package src.main.scala.userUI/*/
-
-import MainApp.jsonProcessorActorRef
+//import actors.JsonProcessorActor
+import MainApp.{jsonProcessorActorRef, mainActorRef}
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 
 import scala.swing._
 import scala.swing.event._
 import java.awt.event._
 import player.Player
+import utils.StartMouseMovementActor
 
 import java.awt.Dimension
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -17,18 +18,29 @@ import scala.runtime.BoxesRunTime.add
 import scala.swing.GridBagPanel.Fill
 import scala.swing.ListView.Renderer
 
+
 class UIAppActor(playerClassList: List[Player],
                  jsonProcessorActorRef: ActorRef,
                  periodicFunctionActorRef: ActorRef,
-                 thirdProcessActorRef: ActorRef) extends Actor {
+                 thirdProcessActorRef: ActorRef,
+                 mainActorRef: ActorRef) extends Actor {
+
 
   // Store the current player. For simplicity, let's use the first player from the list.
   // You may want to update this based on your application's logic.
   private val currentPlayer: Option[Player] = playerClassList.headOption
 
   Swing.onEDT {
-    new SwingApp(playerClassList, self, jsonProcessorActorRef, periodicFunctionActorRef, thirdProcessActorRef).visible = true
+    new SwingApp(
+      playerClassList,
+      self, // the UIAppActor itself
+      jsonProcessorActorRef,
+      periodicFunctionActorRef,
+      thirdProcessActorRef,
+      mainActorRef // add the MainActor reference here
+    ).visible = true
   }
+
 
   def receive: Receive = {
     case StartActors(settings) =>
@@ -36,6 +48,10 @@ class UIAppActor(playerClassList: List[Player],
       // Ensure currentPlayer is not None before sending the message
       currentPlayer.foreach { player =>
         jsonProcessorActorRef ! InitializeProcessor(player, settings)
+      }
+      // Tell MainActor to start MouseMovementActor if necessary
+      if (settings.mouseMovements) {
+        mainActorRef ! StartMouseMovementActor
       }
       // Use the settings to start or configure other actors
       println(s"Received settings: $settings")
@@ -51,12 +67,12 @@ case class StartActors(settings: UISettings)
 // Define the UISettings case class
 case class UISettings(autoHeal: Boolean, runeMaker: Boolean, fishing: Boolean, mouseMovements: Boolean, caveBot: Boolean /*, other settings */)
 
-
 class SwingApp(playerClassList: List[Player],
                uiAppActor: ActorRef,
                jsonProcessorActor: ActorRef,
                periodicFunctionActor: ActorRef,
-               thirdProcessActor: ActorRef) extends MainFrame {
+               thirdProcessActor: ActorRef,
+               mainActorRef: ActorRef) extends MainFrame {
 
   title = "TibiaYBB - Younger Brother Bot"
   preferredSize = new Dimension(600, 300)
@@ -82,30 +98,27 @@ class SwingApp(playerClassList: List[Player],
       case ButtonClicked(_) =>
         val currentSettings = collectSettingsFromUI()
 
-        // Sending the settings to the UIAppActor
+        // Send the settings to the UIAppActor
         uiAppActor ! StartActors(currentSettings)
 
-        // Additionally, sending the settings to other relevant actors
+        // Send a message to JsonProcessorActor to connect to the server
+        jsonProcessorActor ! ConnectToServer
+
+        // Additional logic based on settings
+        if (currentSettings.mouseMovements) {
+          mainActorRef ! StartMouseMovementActor
+        }
+
+        // Sending the settings to other relevant actors
         jsonProcessorActor ! StartActors(currentSettings)
         periodicFunctionActor ! StartActors(currentSettings)
 
-        // Initializing the processor with the player and settings
+        // Initialize the processor with the player and settings
         jsonProcessorActorRef ! InitializeProcessor(currentPlayer, currentSettings)
 
       // Additional UI logic can be added here if needed
     }
   }
-
-//  val runButton = new Button("RUN") {
-//    reactions += {
-//      case ButtonClicked(_) =>
-//        val currentSettings = collectSettingsFromUI()
-//        jsonProcessorActor ! StartActors(currentSettings)
-//        periodicFunctionActor ! StartActors(currentSettings)
-//        jsonProcessorActorRef ! InitializeProcessor(currentPlayer, currentSettings)
-//      // Additional UI logic
-//    }
-//  }
 
   def saveExample(): Unit = {
     val selectedName = exampleDropdown.selection.item
