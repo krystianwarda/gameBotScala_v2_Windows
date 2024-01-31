@@ -1,7 +1,8 @@
-
+package utils
 import akka.actor.{Actor, ActorRef}
 import play.api.libs.json.{JsValue, Json}
 import play.api.libs.json.Json.JsValueWrapper
+import main.scala.MainApp.StartActors
 
 import java.io.{DataInputStream, DataOutputStream, EOFException, IOException}
 import java.net.{InetAddress, Socket, SocketException, SocketTimeoutException}

@@ -1,9 +1,11 @@
-//package actors/*/
+package processing
 
 import akka.actor.{Actor, ActorRef}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
 import player.Player
 import mouse.Mouse
+import main.scala.MainApp
+import userUI.SettingsUtils.UISettings
 
 import java.awt.Robot
 import java.io.{DataInputStream, DataOutputStream, IOException}
@@ -13,6 +15,7 @@ import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
 import scala.util.Random
 // import userUI.UIAppActor
+//import src.main.scala.Main.JsonData
 
 
 case class cpResult(message: String, additionalData: Option[JsValue] = None)
@@ -55,17 +58,13 @@ class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
       settings = Some(s)
       println(s"Processor initialized with player: ${p.characterName} and settings: ${s.autoHeal}")
 
-    case JsonData(json) =>
+    case MainApp.JsonData(json) =>
       println("JsonProcessorActor received JSON: " + json)
       processJson(json)
 
     case ConnectToServer =>
       connectToServer() // Connect to server when this message is received
 
-    // Handle other messages...
-    case StartActors(settings) =>
-    // existing logic for handling StartActors messages
-    // ... other cases ...
 
   }
 

@@ -1,10 +1,14 @@
+package main.scala
+
 //import MainApp.periodicFunctionActor
 import akka.actor.{Actor, ActorRef, ActorSystem, Cancellable, Props}
 import play.api.libs.json.Json.JsValueWrapper
 import player.Player
 import mouse.{Mouse, MouseMovementActor}
 import play.api.libs.json._
-import utils.{InitialJsonProcessorActor, MainActor}
+import processing.JsonProcessorActor
+import userUI.UIAppActor
+import utils.{InitialJsonProcessorActor, MainActor, InitialRunActor, PeriodicFunctionActor}
 
 import java.awt.Robot
 import java.io.EOFException
@@ -37,13 +41,16 @@ case class FunctionCall(functionName: String, arg1: Option[String] = None, arg2:
 case class SendJsonCommand(json: JsValue)
 
 
-case class JsonData(json: JsValue)
+
+
+
+import userUI.SettingsUtils.UISettings
 
 class ThirdProcessActor extends Actor {
   import context.dispatcher // Import the execution context for scheduling
 
   override def receive: Receive = {
-    case StartActors(settings) =>
+    case MainApp.StartActors(settings) =>
       println("ThirdProcessActor received StartActors message.")
       // Improved scheduling logic to avoid multiple schedules
       context.system.scheduler.scheduleWithFixedDelay(
@@ -75,6 +82,8 @@ class ThirdProcessActor extends Actor {
 }
 
 object MainApp extends App {
+  case class StartActors(settings: UISettings)
+  case class JsonData(json: JsValue)
   val system = ActorSystem("MySystem")
   // Create a placeholder for MouseMovementActor
   val mouseMovementActorRef = system.deadLetters
