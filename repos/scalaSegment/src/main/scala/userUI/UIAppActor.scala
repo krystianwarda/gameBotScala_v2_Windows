@@ -8,6 +8,7 @@ import scala.swing._
 import scala.swing.event._
 import java.awt.event._
 import player.Player
+import userUI.AutoHeal
 import utils.StartMouseMovementActor
 
 import java.awt.Dimension
@@ -78,6 +79,8 @@ class SwingApp(playerClassList: List[Player],
   preferredSize = new Dimension(600, 300)
   var runningBot = false
 
+  // Initialize AutoHeal class
+  val autoHeal = new AutoHeal(currentPlayer, uiAppActor, jsonProcessorActor)
 
   // Update the collectSettingsFromUI method to return UISettings
   def collectSettingsFromUI(): UISettings = {
@@ -263,8 +266,9 @@ class SwingApp(playerClassList: List[Player],
 
       // ...and other components as in the second snippet
     })
+    pages += new TabbedPane.Page("Auto Heal", autoHeal.autoHealTab)
 
-    pages += new TabbedPane.Page("Auto Heal", Component.wrap(new JPanel(new GridBagLayout) {
+    pages += new TabbedPane.Page("Auto Heal Old", Component.wrap(new JPanel(new GridBagLayout) {
       val lightHealLabel = new JLabel("LoSpell")
       val lightHealHealthLabel = new JLabel("Health")
       val lightHealManaLabel = new JLabel("Mana")
