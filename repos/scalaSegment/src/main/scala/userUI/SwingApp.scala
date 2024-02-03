@@ -44,6 +44,14 @@ class SwingApp(playerClassList: List[Player],
   // Update the collectSettingsFromUI method to return UISettings
   def collectSettingsFromUI(): UISettings = {
     // Collect settings from various UI components and return them
+    val selectedSpell = runeMaker.spellComboBox.selection.item
+    // Attempt to parse manaTextField's text to an Int, default to 0 (or another sensible default) if parsing fails
+    val requiredMana = try {
+      runeMaker.manaTextField.text.toInt
+    } catch {
+      case _: NumberFormatException => 0
+    }
+
     UISettings(
       autoHeal = autoHealCheckbox.selected,
       runeMaker = runeMakerCheckbox.selected,
@@ -51,6 +59,9 @@ class SwingApp(playerClassList: List[Player],
       mouseMovements = mouseMovementsCheckbox.selected,
       caveBot = caveBotCheckbox.selected,
       protectionZone = protectionZoneCheckbox.selected,
+      playerOnScreenAlert = protectionZoneBot.playerOnScreenAlertCheckbox.selected,
+      selectedSpell = selectedSpell,
+      requiredMana = requiredMana,
       // ...other settings
     )
   }
@@ -85,6 +96,7 @@ class SwingApp(playerClassList: List[Player],
     mouseMovementsCheckbox.selected = settings.mouseMovements
     caveBotCheckbox.selected = settings.caveBot
     protectionZoneCheckbox.selected = settings.protectionZone
+    protectionZoneBot.playerOnScreenAlertCheckbox.selected = settings.playerOnScreenAlert
     // Update other UI components as needed
   }
 

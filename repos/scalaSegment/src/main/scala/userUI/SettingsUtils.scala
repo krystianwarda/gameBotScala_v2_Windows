@@ -5,7 +5,15 @@ object SettingsUtils {
   import play.api.libs.json.Json
 
   // Define the UISettings case class here if it's not already defined elsewhere
-  case class UISettings(autoHeal: Boolean, runeMaker: Boolean, fishing: Boolean, mouseMovements: Boolean, caveBot: Boolean, protectionZone: Boolean /*, other settings */)
+  case class UISettings(autoHeal: Boolean,
+                        runeMaker: Boolean,
+                        fishing: Boolean,
+                        mouseMovements: Boolean,
+                        caveBot: Boolean,
+                        protectionZone: Boolean,
+                        playerOnScreenAlert: Boolean,
+                        selectedSpell: String,
+                        requiredMana: Int/*, other settings */)
 
   // Implicit Json format for UISettings
   implicit val format = Json.format[UISettings]

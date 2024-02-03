@@ -7,7 +7,7 @@ import mouse.Mouse
 import main.scala.MainApp
 import userUI.SettingsUtils.UISettings
 
-import java.awt.Robot
+import java.awt.{Robot, Toolkit}
 import java.io.{DataInputStream, DataOutputStream, IOException}
 import java.net.{InetAddress, Socket, SocketException}
 import java.nio.{ByteBuffer, ByteOrder}
@@ -41,6 +41,8 @@ class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
   private val fishingCommandInterval: Long = 5 // 10 seconds interval
   private var reconnectAttempts = 0
   private val maxReconnectAttempts = 5 // Maximum number of reconnection attempts
+  private var lastSpellCastTime: Long = 0
+  private val spellCastInterval: Long = 5000 // 5 seconds
 
 
   private var reconnecting = false
@@ -93,10 +95,58 @@ class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
       if (currentSettings.fishing) {
         activateFishing(json, currentSettings.mouseMovements)
       }
+      // New logic for player detection and sound alert
+      if (currentSettings.protectionZone && currentSettings.playerOnScreenAlert) {
+        (json \ "battleInfo").asOpt[JsObject].foreach { battleInfo =>
+          if (isPlayerDetected(battleInfo)) {
+            // Trigger a beep sound as an alert
+            Toolkit.getDefaultToolkit().beep()
+            // Log or perform additional actions as needed
+            println("Player on the screen!")
+          }
+        }
+      }
 
+      // Check if RuneMaker is enabled
+      if (currentSettings.runeMaker) {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastSpellCastTime >= spellCastInterval) {
+          lastSpellCastTime = currentTime // Update the last spell cast time
+
+          if (!currentSettings.mouseMovements) {
+            // Command for non-mouse movement rune making
+            sendJson(Json.obj("__command" -> "setBlankRune")) // Example command
+            println("Rune making command sent to TCP server.")
+          } else {
+            // Placeholder for future mouse movement-based rune making
+            // "// Future code amendments here"
+            println("Placeholder for mouse movement-based rune making.")
+          }
+        }
+      }
     }
   }
+  private def makeRune(json: JsValue): Unit = {
+    settings.foreach { currentSettings =>
+      if (currentSettings.runeMaker && System.currentTimeMillis() - lastSpellCastTime >= spellCastInterval) {
+        lastSpellCastTime = System.currentTimeMillis()
 
+        if (!currentSettings.mouseMovements) {
+          // Send command to TCP server for setBlankRune if mouse movements are off
+          sendJson(Json.obj("__command" -> "setBlankRune"))
+        } else {
+          // Placeholder for future mouse movement-based rune making
+          // "//"
+        }
+      }
+    }
+  }
+  // Helper function to check for players in battleInfo
+  private def isPlayerDetected(battleInfo: JsObject): Boolean = {
+    battleInfo.fields.exists {
+      case (_, creature) => (creature \ "IsPlayer").asOpt[Boolean].getOrElse(false)
+    }
+  }
   private def findRats(battleInfo: JsValue, mouseMovement: Boolean): Seq[Long] = {
     battleInfo match {
       case obj: JsObject => obj.fields.flatMap {

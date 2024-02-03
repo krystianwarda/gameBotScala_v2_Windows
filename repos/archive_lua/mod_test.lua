@@ -90,14 +90,12 @@ function setBlankRune()
         return
     end
 
-    local amuletId = 3147 -- ID of the amulet
-    local foundItem = g_game.findPlayerItem(amuletId, -1)  -- -1 as the subtype if subtype is not specific
+    local blankId = 3147
+    local foundItem = g_game.findPlayerItem(blankId, -1)
 
     if foundItem then
-        -- Move the found amulet to the desired inventory slot (assuming slot 6 for the amulet)
-        local slotPosition = {x = 65535, y = 6, z = 0}  -- The inventory slot position for slot 6
+        local slotPosition = {x = 65535, y = 6, z = 0}  
         g_game.move(foundItem, slotPosition, foundItem:getCount())
-        printConsole("Amulet moved to slot 6")
     else
         printConsole("Could not obtain item with ID " .. amuletId)
     end
