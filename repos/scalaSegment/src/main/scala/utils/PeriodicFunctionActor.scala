@@ -1,5 +1,6 @@
 package utils
 import akka.actor.{Actor, ActorRef}
+import main.scala.MainApp
 import play.api.libs.json.{JsValue, Json}
 import play.api.libs.json.Json.JsValueWrapper
 import main.scala.MainApp.StartActors
@@ -31,6 +32,7 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
   }
 
   override def receive: Receive = {
+
     case StartActors(settings) =>
       println("PeriodicFunctionActor received StartActors message.")
       if (socket.isEmpty || socket.exists(!_.isConnected)) {
@@ -38,6 +40,9 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
       }
       startListening()
       initiateSendFunction("init")
+
+    case _ => println("PeriodicFunctionActor received an unhandled message type.")
+
   }
 
 
@@ -127,7 +132,7 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
     Future {
       while (true) {
         receiveJson() match {
-          case Some(json) => jsonProcessorActor ! JsonData(json)
+          case Some(json) => jsonProcessorActor ! MainApp.JsonData(json)
           case None => // Keep listening
         }
         Thread.sleep(300) // Add a small delay, e.g., 100 ms

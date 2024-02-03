@@ -3,6 +3,7 @@ package userUI
 //package src.main.scala.userUI/*/
 //import actors.JsonProcessorActor
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
+import main.scala.MainApp
 import play.api.libs.json.Json
 
 import scala.swing._
@@ -44,23 +45,28 @@ class UIAppActor(playerClassList: List[Player],
       mainActorRef // add the MainActor reference here
     ).visible = true
   }
-
-
   def receive: Receive = {
-    case StartActors(settings) =>
-      // Forward settings to JsonProcessorActor
-      // Ensure currentPlayer is not None before sending the message
-      currentPlayer.foreach { player =>
-        jsonProcessorActorRef ! InitializeProcessor(player, settings)
-      }
-      // Tell MainActor to start MouseMovementActor if necessary
-      if (settings.mouseMovements) {
-        mainActorRef ! StartMouseMovementActor
-      }
-      // Use the settings to start or configure other actors
-      println(s"Received settings: $settings")
-    // Additional logic for handling StartActors message
+    case _ => println("UIAppActor activated.")
+
   }
+//    case MainApp.StartActors(settings) =>
+//      // Existing logic for forwarding settings to JsonProcessorActor
+//      currentPlayer.foreach { player =>
+//        jsonProcessorActorRef ! InitializeProcessor(player, settings)
+//      }
+//
+//      // Logic to start MouseMovementActor if necessary
+//      if (settings.mouseMovements) {
+//        mainActorRef ! StartMouseMovementActor
+//      }
+//
+//      // Send StartActors message to PeriodicFunctionActor
+//      periodicFunctionActorRef ! MainApp.StartActors(settings) // This line ensures PeriodicFunctionActor receives StartActors message
+//
+//      println(s"Received settings: $settings")
+//    // Additional logic for handling StartActors message
+//  }
+
 
   // ... other methods ...
 }

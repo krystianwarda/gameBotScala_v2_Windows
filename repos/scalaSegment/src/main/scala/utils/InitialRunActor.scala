@@ -1,5 +1,6 @@
 package utils
 import akka.actor.{Actor, ActorRef}
+import main.scala.MainApp
 import play.api.libs.json.{JsValue, Json}
 
 import java.net.{InetAddress, Socket, SocketException, SocketTimeoutException}
@@ -8,7 +9,7 @@ import java.nio.{ByteBuffer, ByteOrder}
 import java.util.concurrent.TimeUnit
 import scala.concurrent.Future
 import scala.concurrent.Future.never.recover
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.{Duration, DurationInt}
 import scala.util.{Random, Try}
 import scala.util.control.NonFatal
 
@@ -26,10 +27,12 @@ class InitialRunActor(initialJsonProcessorActor: ActorRef) extends Actor {
 
   override def preStart(): Unit = {
     // Execute your code here immediately upon actor creation
-//    connectToServer()
-//    startListening()
-//    val command = Json.obj("__command" -> "innitialGetGameData")
-//    sendJson(command) // Directly send the command to the TCP server
+    /*connectToServer()
+    startListening()
+    context.system.scheduler.scheduleOnce(2.seconds) {
+      val command = Json.obj("__command" -> "initialGetGameData")
+      sendJson(command) // Directly send the command to the TCP server
+    }*/
   }
 
   override def receive: Receive = {
@@ -159,7 +162,7 @@ class InitialRunActor(initialJsonProcessorActor: ActorRef) extends Actor {
       while (listening && socket.exists(_.isConnected)) {
         receiveJson() match {
           case Some(json) =>
-            initialJsonProcessorActor ! JsonData(json)
+            initialJsonProcessorActor ! MainApp.JsonData(json)
             closeConnection()
             listening = false
           case None =>

@@ -49,23 +49,22 @@ class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
   var socket: Option[Socket] = None
   var out: Option[DataOutputStream] = None
   var in: Option[DataInputStream] = None
+  var isInitialized = false // Add a flag to track initialization
+
 
 
   def receive: Receive = {
+
+    case MainApp.JsonData(json) =>
+      println("JsonProcessorActor received JSON: " + json)
+      processJson(json)
 
     case InitializeProcessor(p, s) =>
       player = Some(p)
       settings = Some(s)
       println(s"Processor initialized with player: ${p.characterName} and settings: ${s.autoHeal}")
 
-    case MainApp.JsonData(json) =>
-      println("JsonProcessorActor received JSON: " + json)
-      processJson(json)
-
-    case ConnectToServer =>
-      connectToServer() // Connect to server when this message is received
-
-
+    case _ => println("JsonProcessorActor received an unhandled message type.")
   }
 
 

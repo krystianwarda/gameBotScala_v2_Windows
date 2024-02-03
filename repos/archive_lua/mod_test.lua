@@ -2,13 +2,148 @@ function buttonFunctions()
     local message = '{ "status": "Button functions activated." }'
     printConsole(message)
     -- register some keyboard shortcuts
-    g_keyboard.bindKeyDown('Ctrl+D', useFishingRodTest)
+    g_keyboard.bindKeyDown('Ctrl+D', getBackpackItems)
     g_keyboard.bindKeyDown('Ctrl+E', whatIsinMyRightHand)
-    g_keyboard.bindKeyDown('Ctrl+C', calculateInventoryPanelLocTest)
-    g_keyboard.bindKeyDown('Ctrl+A', calculateMapPanelLocTest)
+    g_keyboard.bindKeyDown('Ctrl+C', setBlankRune)
+    g_keyboard.bindKeyDown('Ctrl+A', getContainerLoc)
+    g_keyboard.bindKeyDown('Ctrl+1', getItemLoc)
+end
+
+function getItemLoc()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local itemId = 3483 -- Specify the item ID you want to find
+    -- Finding the item with the specified ID
+    local foundItem = g_game.findPlayerItem(itemId, -1)
+    if foundItem then
+        local position = foundItem:getPosition() -- Assuming getPosition returns the position of the item
+
+        -- Displaying information about the found item
+        printConsole("Found item: ID = " .. tostring(foundItem:getId()) .. 
+                     ", Count: " .. tostring(foundItem:getCount()) .. 
+                     ", SubType = " .. tostring(foundItem:getSubType()) ..
+                     ", Position: (" .. tostring(position.x) .. ", " .. tostring(position.y) .. ", " .. tostring(position.z) .. ")")
+    else
+        printConsole("Item with ID " .. tostring(itemId) .. " not found")
+    end
+end
+
+function getContainerLoc()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local itemId = 3483 -- Specify the item ID you want to find
+    local foundItem = g_game.findPlayerItem(itemId, -1)
+    if foundItem then
+        local position = foundItem:getPosition() -- Assuming getPosition returns the position of the item
+
+        if position.x == 65535 then -- Item is in a container
+            local containerId = position.y
+            local slot = position.z
+            printConsole("Found item: ID = " .. tostring(foundItem:getId()) .. 
+                         ", Count: " .. tostring(foundItem:getCount()) .. 
+                         ", SubType = " .. tostring(foundItem:getSubType()) ..
+                         ", Container ID: " .. tostring(containerId) ..
+                         ", Slot: " .. tostring(slot))
+        else
+            -- Item is in the game world
+            printConsole("Found item: ID = " .. tostring(foundItem:getId()) .. 
+                         ", Count: " .. tostring(foundItem:getCount()) .. 
+                         ", SubType = " .. tostring(foundItem:getSubType()) ..
+                         ", World Position: (" .. tostring(position.x) .. ", " .. tostring(position.y) .. ", " .. tostring(position.z) .. ")")
+        end
+    else
+        printConsole("Item with ID " .. tostring(itemId) .. " not found")
+    end
 end
 
 
+function setBlankRune()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local amuletId = 3147 -- ID of the amulet
+    local foundItem = g_game.findPlayerItem(amuletId, -1)  -- -1 as the subtype if subtype is not specific
+
+    if foundItem then
+        -- Move the found amulet to the desired inventory slot (assuming slot 6 for the amulet)
+        local slotPosition = {x = 65535, y = 6, z = 0}  -- The inventory slot position for slot 6
+        g_game.move(foundItem, slotPosition, foundItem:getCount())
+        printConsole("Amulet moved to slot 6")
+    else
+        printConsole("Could not obtain item with ID " .. amuletId)
+    end
+end
+
+
+function getBackpackItems()
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    -- Retrieve the backpack item from inventory slot 3
+    local backpack = player:getInventoryItem(3)
+
+    if not backpack then
+        printConsole('No backpack found in slot 3')
+        return
+    end
+
+    -- Assuming getContainerItems() and getContainerItem() are methods to access container's items
+    local backpackItems = backpack:getContainerItems()
+    if not backpackItems then
+        printConsole('No items found in the backpack')
+        return
+    end
+
+    -- Displaying items from the backpack
+    for i, item in ipairs(backpackItems) do
+        local containerItem = backpack:getContainerItem(i)
+        if containerItem then
+            printConsole("Item in backpack slot " .. i .. ": " .. containerItem:getId())
+            -- You can serialize or process each item as needed
+        end
+    end
+end
+
+-- function blank_rune
+-- blank rune id 3147
 
 
 function calculateInventoryPanelLocTest()
@@ -804,6 +939,9 @@ function getGameData(event)
                 PositionX = creature:getPosition().x,
                 PositionY = creature:getPosition().y,
                 PositionZ = creature:getPosition().z,
+                IsNpc = creature:isNpc(),
+                IsPlayer = creature:isPlayer(),
+                IsMonster = creature:isMonster(),
             })
         end
     end
@@ -825,7 +963,7 @@ end
 
 
 
-function innitialGetGameData(event)
+function initialGetGameData(event)
     printConsole('{ "status": "Innitial function started." }')
 
     if not g_game.isOnline() then
@@ -846,8 +984,6 @@ function innitialGetGameData(event)
     -- Initialize the main JSON-like structure
     local gameData = {
         characterInfo = {},
-        battleInfo = {},
-	areaInfo = {},
         screenInfo = {}
     }
 
@@ -868,51 +1004,6 @@ function innitialGetGameData(event)
         -- Blessings = player:getBlessings(),
     }
     printConsole('2')
-    -- Collect data about area around player
-    gameData.areaInfo = {
-        tiles = {}
-    }
-
-    local targetPosition = player:getPosition()
-    local tiles = g_map.getTiles(targetPosition.z)
-
-    for _, tile in ipairs(tiles) do
-        local x = tile:getPosition().x
-        local y = tile:getPosition().y
-        local z = tile:getPosition().z
-        local key = formatKey(x, y, z)
-
-        gameData.areaInfo.tiles[key] = {}
-
-        local topThingList = tile:getItems()
-        if topThingList and #topThingList > 0 then
-            for j, topThing in ipairs(topThingList) do
-                local itemInfo = {
-                    id = topThing:getId()
-                    -- Include additional properties of topThing if needed
-                }
-                gameData.areaInfo.tiles[key][tostring(j)] = itemInfo.id
-            end
-        end
-    end
-    printConsole('3')
-    -- Optionally, convert gameData.areaInfo to a JSON string if needed
-    -- local jsonString = toJSON(gameData.areaInfo)
-
-    -- Collect data of creatures in range for battle information
-    for _, creature in pairs(spectators) do
-        if checkValidCreatureForListing(creature) then
-            table.insert(gameData.battleInfo, {
-                Name = creature:getName(),
-                Id = creature:getId(),
-                HealthPercent = creature:getHealthPercent(),
-                PositionX = creature:getPosition().x,
-                PositionY = creature:getPosition().y,
-                PositionZ = creature:getPosition().z,
-            })
-        end
-    end
-    printConsole('4')
     gameData.screenInfo = {
         inventoryPanelLoc = calculateInventoryPanelLoc(),
         mapPanelLoc = calculateMapPanelLoc()

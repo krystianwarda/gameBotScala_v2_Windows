@@ -50,6 +50,9 @@ TcpServer::~TcpServer()
     DeleteCriticalSection(&this->m_mutex);
 }
 
+
+
+
 bool TcpServer::PollRequest(SOCKET& sckFd, sockaddr_in& clientAddr, std::string& requestStr)
 {
     bool exitQuery = false;

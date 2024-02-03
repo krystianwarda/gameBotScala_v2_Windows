@@ -82,9 +82,12 @@ class ThirdProcessActor extends Actor {
 }
 
 object MainApp extends App {
-  case class StartActors(settings: UISettings)
-  case class JsonData(json: JsValue)
+
   val system = ActorSystem("MySystem")
+
+  case class StartActors(settings: UISettings)
+
+  case class JsonData(json: JsValue)
   // Create a placeholder for MouseMovementActor
   val mouseMovementActorRef = system.deadLetters
   val initialJsonProcessorActorRef = system.actorOf(Props[InitialJsonProcessorActor], "initialJsonProcessor")
