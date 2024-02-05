@@ -33,6 +33,7 @@ LuaBridge::LuaBridge() {
             luaL_openlibs(this->m_luaState);
             std::cout << "New Lua state initialized." << std::endl;
         }
+        else 
         // Register printConsole as before
         this->registerFunction("printConsole", LuaBridge::__printConsole);
 

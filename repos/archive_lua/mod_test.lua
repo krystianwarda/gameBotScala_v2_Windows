@@ -6,8 +6,151 @@ function buttonFunctions()
     g_keyboard.bindKeyDown('Ctrl+E', whatIsinMyRightHand)
     g_keyboard.bindKeyDown('Ctrl+C', setBlankRune)
     g_keyboard.bindKeyDown('Ctrl+A', getContainerLoc)
-    g_keyboard.bindKeyDown('Ctrl+1', getItemLoc)
+    g_keyboard.bindKeyDown('Ctrl+1', containerTest1)
+    g_keyboard.bindKeyDown('Ctrl+2', containerTest2)
+    g_keyboard.bindKeyDown('Ctrl+3', containerTest3)
+    g_keyboard.bindKeyDown('Ctrl+4', containerTest4)
 end
+
+-- [unknown source]: Container Panel: 4
+function containerTest1()
+    local containerPanel = g_settings.getNumber("containerPanel")
+    printConsole('Container Panel: ' .. containerPanel)
+end
+
+
+--[unknown source]: Right Panel: userdata: 0x15d55558
+function containerTest2_old1()
+    local rightPanel = modules.game_interface.getRightPanel()
+    printConsole('Right Panel: ' .. tostring(rightPanel)) -- Adjusted the text to match the variable name
+end
+
+-- good
+function containerTest2_old2()
+    local rightPanel = modules.game_interface.getRightPanel()
+    local rightPanelRect = rightPanel:getRect()
+    local offset = 30
+    printConsole("Right Panel x=" .. tostring(rightPanelRect.x) .. ", y=" .. tostring(rightPanelRect.y + offset))
+    printConsole('ParentRect width ' .. tostring(rightPanelRect.width) .. ' height ' .. tostring(rightPanelRect.height))
+    
+    local rightPanelChildrenCount = rightPanel:getChildCount()
+    printConsole('Right Panel Count: ' .. tostring(rightPanelChildrenCount))
+
+    -- Iterate over all children of the right panel
+    for i = 1, rightPanelChildrenCount do
+        local child = rightPanel:getChildByIndex(i)
+
+        local childRect = child:getRect()
+        -- Check if childRect.x is not equal to 0 before displaying
+        if childRect.x ~= 0 then
+            printConsole("Child " .. i .. " Rect x=" .. tostring(childRect.x) .. ", y=" .. tostring(childRect.y + offset) .. ', width ' .. tostring(childRect.width) .. ' height ' .. tostring(childRect.height))
+        end
+    end
+end
+
+function containerTest2_old3()
+    local rightPanel = modules.game_interface.getRightPanel()
+    local rightPanelRect = rightPanel:getRect()
+    local offset = 30
+    printConsole("Right Panel x=" .. tostring(rightPanelRect.x) .. ", y=" .. tostring(rightPanelRect.y + offset))
+    printConsole('ParentRect width ' .. tostring(rightPanelRect.width) .. ' height ' .. tostring(rightPanelRect.height))
+    
+    local rightPanelChildrenCount = rightPanel:getChildCount()
+    printConsole('Right Panel Count: ' .. tostring(rightPanelChildrenCount))
+
+    -- Iterate over all children of the right panel
+    for i = 1, rightPanelChildrenCount do
+        local child = rightPanel:getChildByIndex(i)
+        local childRect = child:getRect()
+        -- Check if childRect.x is not equal to 0 before displaying
+        if childRect.x ~= 0 then
+            printConsole("Child " .. i .. " Rect x=" .. tostring(childRect.x) .. ", y=" .. tostring(childRect.y + offset) .. ', width ' .. tostring(childRect.width) .. ' height ' .. tostring(childRect.height))
+            local childChildrenCount = child:getChildCount()
+            printConsole('Child Panel Count: ' .. tostring(childChildrenCount))
+
+            -- Nested loop to iterate over the children of the child
+            for j = 1, childChildrenCount do
+                local subChild = child:getChildByIndex(j)
+                local subChildRect = subChild:getRect()
+                -- Check if subChildRect.x is not equal to 0 before displaying
+                if subChildRect.x ~= 0 then
+                    printConsole("Sub-Child " .. j .. " of Child " .. i .. " Rect x=" .. tostring(subChildRect.x) .. ", y=" .. tostring(subChildRect.y + offset) .. ', width ' .. tostring(subChildRect.width) .. ' height ' .. tostring(subChildRect.height))
+                end
+            end
+        end
+    end
+end
+
+function containerTest2()
+    local rightPanel = modules.game_interface.getRightPanel()
+    local rightPanelRect = rightPanel:getRect()
+    local offset = 30
+    printConsole("Right Panel x=" .. tostring(rightPanelRect.x) .. ", y=" .. tostring(rightPanelRect.y + offset))
+    printConsole('ParentRect width ' .. tostring(rightPanelRect.width) .. ' height ' .. tostring(rightPanelRect.height))
+    
+    local rightPanelChildrenCount = rightPanel:getChildCount()
+    printConsole('Right Panel Count: ' .. tostring(rightPanelChildrenCount))
+
+    -- Iterate over all children of the right panel
+    for i = 1, rightPanelChildrenCount do
+        local child = rightPanel:getChildByIndex(i)
+        local childRect = child:getRect()
+        -- Check if width and height of child are greater than 20
+        if childRect.x ~= 0 and childRect.width > 20 and childRect.height > 20 then
+            printConsole("Child " .. i .. " Rect x=" .. tostring(childRect.x) .. ", y=" .. tostring(childRect.y + offset) .. ', width ' .. tostring(childRect.width) .. ' height ' .. tostring(childRect.height))
+            local childChildrenCount = child:getChildCount()
+
+            -- Nested loop to iterate over the children of the child
+            for j = 1, childChildrenCount do
+                local subChild = child:getChildByIndex(j)
+                local subChildRect = subChild:getRect()
+                -- Check if width and height of subChild are greater than 20
+                if subChildRect.x ~= 0 and subChildRect.width > 20 and subChildRect.height > 20 then
+                    printConsole("Sub-Child " .. j .. " of Child " .. i .. " Rect x=" .. tostring(subChildRect.x) .. ", y=" .. tostring(subChildRect.y + offset) .. ', width ' .. tostring(subChildRect.width) .. ' height ' .. tostring(subChildRect.height))
+                    
+                    local subChildChildrenCount = subChild:getChildCount()
+                    -- Nested loop for sub-sub-children
+                    for k = 1, subChildChildrenCount do
+                        local subSubChild = subChild:getChildByIndex(k)
+                        local subSubChildRect = subSubChild:getRect()
+                        -- Check if width and height of subSubChild are greater than 20
+                        if subSubChildRect.x ~= 0 and subSubChildRect.width > 20 and subSubChildRect.height > 20 then
+                            printConsole("Sub-Sub-Child " .. k .. " of Sub-Child " .. j .. " of Child " .. i .. " Rect x=" .. tostring(subSubChildRect.x) .. ", y=" .. tostring(subSubChildRect.y + offset) .. ', width ' .. tostring(subSubChildRect.width) .. ' height ' .. tostring(subSubChildRect.height))
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- [unknown source]: Container: userdata: 0x154fa658
+-- [unknown source]: Container: userdata: 0x154fa6c0
+-- [unknown source]: Container: userdata: 0x154fa6e0
+function containerTest3_old1()
+    for _, container in pairs(g_game.getContainers()) do -- Added 'do' keyword
+        printConsole('Container: ' .. tostring(container)) -- Assuming 'container' is a userdata or table, converting to string for concatenation
+    end
+end
+
+function containerTest3()
+    for _, container in pairs(g_game.getContainers()) do -- Added 'do' keyword
+    local containerPos = container.getRect()
+        printConsole('Container: ' .. tostring(containerPos.x)) 
+    end
+end
+
+-- [unknown source]: Item: 3503 (parcel)
+-- [unknown source]: Item: 3503 (parcel)
+-- [unknown source]: Item: 2853 (bag)
+function containerTest4()
+    for _, container in pairs(g_game.getContainers()) do -- Added 'do' keyword
+        local tempItem = container:getContainerItem():getId()
+        printConsole('Item: ' .. tostring(tempItem))
+    end
+end
+
+
 
 function getItemLoc()
     if not g_game.isOnline() then

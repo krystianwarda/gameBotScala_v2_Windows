@@ -87,7 +87,9 @@ bool InjectDLL(const wchar_t* dllPath, const wchar_t* processSubstring)
 int main()
 {
     const wchar_t* dllPath = L"C:\\MyLibraries\\game_mod_test.dll";
-    const wchar_t* processSubstring = L"eale";
+    //const wchar_t* processSubstring = L"eale";
+    const wchar_t* processSubstring = L"otclient";
+    
 
     if (InjectDLL(dllPath, processSubstring))
         std::cout << "DLL Injected successfully!" << std::endl;

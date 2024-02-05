@@ -80,6 +80,7 @@ DWORD WINAPI HackThread(HMODULE hModule)
             do
             {
                 if (wcsstr(pe32.szExeFile, L"eale"))
+                //if (wcsstr(pe32.szExeFile, L"otclient"))
                 {
                     moduleBase = (uintptr_t)GetModuleHandleW(pe32.szExeFile);
                     break;
@@ -120,7 +121,7 @@ DWORD WINAPI HackThread(HMODULE hModule)
         FreeLibraryAndExitThread(hModule, 0);
         return 0;
     }
-
+     
     pBit32 += (size_t)s_data;
 
     unsigned char pushPattern[7] = { 0x68, 0, 0, 0, 0, 0xFF, 0x35 };
