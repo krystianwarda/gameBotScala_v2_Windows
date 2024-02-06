@@ -97,7 +97,7 @@ function containerTest2()
         local childRect = child:getRect()
         -- Check if width and height of child are greater than 20
         if childRect.x ~= 0 and childRect.width > 20 and childRect.height > 20 then
-            printConsole("Child " .. i .. " Rect x=" .. tostring(childRect.x) .. ", y=" .. tostring(childRect.y + offset) .. ', width ' .. tostring(childRect.width) .. ' height ' .. tostring(childRect.height))
+            printConsole("Child " .. i .. " Id: " .. tostring(child:getId()) .. " Rect x=" .. tostring(childRect.x) .. ", y=" .. tostring(childRect.y + offset) .. ', width ' .. tostring(childRect.width) .. ' height ' .. tostring(childRect.height))
             local childChildrenCount = child:getChildCount()
 
             -- Nested loop to iterate over the children of the child
@@ -106,7 +106,7 @@ function containerTest2()
                 local subChildRect = subChild:getRect()
                 -- Check if width and height of subChild are greater than 20
                 if subChildRect.x ~= 0 and subChildRect.width > 20 and subChildRect.height > 20 then
-                    printConsole("Sub-Child " .. j .. " of Child " .. i .. " Rect x=" .. tostring(subChildRect.x) .. ", y=" .. tostring(subChildRect.y + offset) .. ', width ' .. tostring(subChildRect.width) .. ' height ' .. tostring(subChildRect.height))
+                    printConsole("Sub-Child " .. j .. " of Child " .. i .. " Id: " .. tostring(subChild:getId()) .. " Rect x=" .. tostring(subChildRect.x) .. ", y=" .. tostring(subChildRect.y + offset) .. ', width ' .. tostring(subChildRect.width) .. ' height ' .. tostring(subChildRect.height))
                     
                     local subChildChildrenCount = subChild:getChildCount()
                     -- Nested loop for sub-sub-children
@@ -115,7 +115,7 @@ function containerTest2()
                         local subSubChildRect = subSubChild:getRect()
                         -- Check if width and height of subSubChild are greater than 20
                         if subSubChildRect.x ~= 0 and subSubChildRect.width > 20 and subSubChildRect.height > 20 then
-                            printConsole("Sub-Sub-Child " .. k .. " of Sub-Child " .. j .. " of Child " .. i .. " Rect x=" .. tostring(subSubChildRect.x) .. ", y=" .. tostring(subSubChildRect.y + offset) .. ', width ' .. tostring(subSubChildRect.width) .. ' height ' .. tostring(subSubChildRect.height))
+                            printConsole("Sub-Sub-Child " .. k .. " of Sub-Child " .. j .. " of Child " .. i .. " Id: " .. tostring(subSubChild:getId()) .." Rect x=" .. tostring(subSubChildRect.x) .. ", y=" .. tostring(subSubChildRect.y + offset) .. ', width ' .. tostring(subSubChildRect.width) .. ' height ' .. tostring(subSubChildRect.height))
                         end
                     end
                 end
@@ -123,6 +123,69 @@ function containerTest2()
         end
     end
 end
+
+function calculateInventoryPositions()
+    local inventoryData = {}
+    local offset = 30
+
+    local rightPanel = modules.game_interface.getRightPanel()
+    local rightPanelChildrenCount = rightPanel:getChildCount()
+
+    -- Iterate over all children of the right panel
+    for i = 1, rightPanelChildrenCount do
+        local child = rightPanel:getChildByIndex(i)
+        local childId = child:getId()
+        local childRect = child:getRect()
+
+        -- Check if child meets the specified conditions
+        if childRect.x ~= 0 and childRect.width > 20 and childRect.height > 20 then
+            local containerOrEqWindowData = {}
+            local childChildrenCount = child:getChildCount()
+
+            -- Iterate over the sub-children (contentsPanel assumed) of the child
+            for j = 1, childChildrenCount do
+                local subChild = child:getChildByIndex(j)
+                local subChildId = subChild:getId()
+                local subChildRect = subChild:getRect()
+
+                -- Check if subChild meets the specified conditions
+                if subChildRect.x ~= 0 and subChildRect.width > 20 and subChildRect.height > 20 then
+                    local slotsData = {}
+                    local subChildChildrenCount = subChild:getChildCount()
+
+                    -- Iterate over the sub-sub-children (slots) of the subChild
+                    for k = 1, subChildChildrenCount do
+                        local subSubChild = subChild:getChildByIndex(k)
+                        local subSubChildRect = subSubChild:getRect()
+
+                        -- Check if subSubChild meets the specified conditions
+                        if subSubChildRect.x ~= 0 and subSubChildRect.width > 20 and subSubChildRect.height > 20 then
+                            -- Calculate slot's center position and adjust with offset for y
+                            local slotPosition = {
+                                x = subSubChildRect.x + subSubChildRect.width / 2,
+                                y = subSubChildRect.y + subSubChildRect.height / 2 + offset
+                            }
+                            slotsData["slot" .. k] = slotPosition
+                        end
+                    end
+
+                    if next(slotsData) ~= nil then -- Check if slotsData is not empty
+                        containerOrEqWindowData[subChildId] = slotsData
+                    end
+                end
+            end
+
+            if next(containerOrEqWindowData) ~= nil then -- Check if containerOrEqWindowData is not empty
+                -- Assuming each child of the right panel is a unique container or EqWindow
+                inventoryData[childId] = containerOrEqWindowData
+            end
+        end
+    end
+
+    return inventoryData
+end
+
+
 
 -- [unknown source]: Container: userdata: 0x154fa658
 -- [unknown source]: Container: userdata: 0x154fa6c0
@@ -336,11 +399,9 @@ function calculateInventoryPanelLocTest()
 end
 
 
-function calculateInventoryPanelLoc()
-
+function calculateInventoryPanelLocOld()
 
     local jsonPoints = {}
-
     -- Get display width and height
     local displayWidth = g_window.getDisplayWidth()
     local displayHeight = g_window.getDisplayHeight()
@@ -1089,7 +1150,7 @@ function getGameData(event)
 
 
     gameData.screenInfo = {
-        inventoryPanelLoc = calculateInventoryPanelLoc(),
+        inventoryPanelLoc = calculateInventoryPositions(),
         mapPanelLoc = calculateMapPanelLoc()
     }
 
@@ -1146,7 +1207,7 @@ function initialGetGameData(event)
     }
     printConsole('2')
     gameData.screenInfo = {
-        inventoryPanelLoc = calculateInventoryPanelLoc(),
+        inventoryPanelLoc = calculateInventoryPositions(),
         mapPanelLoc = calculateMapPanelLoc()
     }
     printConsole('5')
