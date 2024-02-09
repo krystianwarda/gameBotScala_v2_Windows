@@ -41,8 +41,8 @@ class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
   private val fishingCommandInterval: Long = 5 // 10 seconds interval
   private var reconnectAttempts = 0
   private val maxReconnectAttempts = 5 // Maximum number of reconnection attempts
-  private var lastSpellCastTime: Long = 0
-  private val spellCastInterval: Long = 5000 // 5 seconds
+  private var lastSpellCastTime: Long = 10000
+  private val spellCastInterval: Long = 30000 // 5 seconds
 
 
   private var reconnecting = false
@@ -71,13 +71,19 @@ class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
 
 
   private def processJson(json: JsValue): Unit = {
-    // Example: Determining the action based on JSON data
+    // First, check if the status is "ok" and if the 'msg' key is not present
     (json \ "__status").asOpt[String] match {
-      case Some("ok") => handleOkStatus(json)
-      case Some("error") => handleErrorStatus(json)
-      case _ => println("Unknown status")
+      case Some("ok") if (json \ "msg").isDefined => // If 'msg' key exists, do nothing or log
+        println("Message key exists. Skipping handleOkStatus.")
+      case Some("ok") => // If 'msg' key doesn't exist, proceed to handleOkStatus
+        handleOkStatus(json)
+      case Some("error") => // Handle error status as before
+        handleErrorStatus(json)
+      case _ => // Handle unknown status as before
+        println("Unknown status")
     }
   }
+
 
   private def handleErrorStatus(json: JsValue): Unit = {
     println("Error in processing json.")
@@ -107,25 +113,72 @@ class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
         }
       }
 
-      // Check if RuneMaker is enabled
       if (currentSettings.runeMaker) {
         val currentTime = System.currentTimeMillis()
-        if (currentTime - lastSpellCastTime >= spellCastInterval) {
-          lastSpellCastTime = currentTime // Update the last spell cast time
 
-          if (!currentSettings.mouseMovements) {
-            // Command for non-mouse movement rune making
-            sendJson(Json.obj("__command" -> "setBlankRune")) // Example command
-            println("Rune making command sent to TCP server.")
-          } else {
-            // Placeholder for future mouse movement-based rune making
-            // "// Future code amendments here"
-            println("Placeholder for mouse movement-based rune making.")
-          }
+        // Check if mana is higher than 300
+        (json \ "characterInfo" \ "Mana").asOpt[Int] match {
+          case Some(mana) if mana > 300 =>
+            // Correctly access slot 6 data from "EqInfo"
+            (json \ "EqInfo" \ "6" \ "itemId").asOpt[Int] match {
+              case Some(itemId) =>
+                itemId match {
+                  case 3147 => // Blank rune ID
+                    if (currentTime - lastSpellCastTime >= spellCastInterval) {
+                      lastSpellCastTime = currentTime // Update the last spell cast time
+                      val sayCommand = Json.obj("__command" -> "sayText", "text" -> "adura gran")
+                      sendJson(sayCommand)
+                      println("Say command for 'adori vuita vis' sent to TCP server.")
+                      // Break the function after sayText command
+                    } else {
+                      println("Spell cast interval not met. Waiting for the next run.")
+                    }
+
+                  case _ => // Item in hand is not a blank rune
+                    // Consider moving the item back
+                    findBackpackPosition(json).foreach { backPosition =>
+                      val moveCommand = Json.obj("__command" -> "moveBlankRuneBack", "backPosition" -> backPosition)
+                      sendJson(moveCommand)
+                      println("Command to move the item back sent to TCP server.")
+                    }
+                    return // Break the function after moveBlankRuneBack command
+                }
+
+              case None =>
+                // Slot 6 is empty, put a blank rune
+                sendJson(Json.obj("__command" -> "setBlankRune"))
+                println("Rune making command sent to TCP server.")
+                return // Break the function after setting a blank rune
+            }
+
+          case _ =>
+            println("Mana is not higher than 300. Rune making cannot proceed.")
+            return // Break the function if mana is not higher than 300
+        }
+
+      } else {
+        println("RuneMaker setting is disabled.")
+      }
+
+
+      println("End off HandleOkStatus.")
+    }
+  }
+
+  def findBackpackPosition(json: JsValue): Option[JsObject] = {
+    (json \ "containersInfo").asOpt[JsObject].flatMap { containersInfo =>
+      containersInfo.value.headOption.flatMap { case (_, containerInfo) =>
+        val posX = (containerInfo \ "items" \ "slot1" \ "posX").asOpt[Int]
+        val posY = (containerInfo \ "items" \ "slot1" \ "posY").asOpt[Int]
+        val posZ = (containerInfo \ "items" \ "slot1" \ "posZ").asOpt[Int]
+        (posX, posY, posZ) match {
+          case (Some(x), Some(y), Some(z)) => Some(Json.obj("x" -> x, "y" -> y, "z" -> z))
+          case _ => None
         }
       }
     }
   }
+
   private def makeRune(json: JsValue): Unit = {
     settings.foreach { currentSettings =>
       if (currentSettings.runeMaker && System.currentTimeMillis() - lastSpellCastTime >= spellCastInterval) {

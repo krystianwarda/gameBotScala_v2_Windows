@@ -2,7 +2,7 @@ function buttonFunctions()
     local message = '{ "status": "Button functions activated." }'
     printConsole(message)
     -- register some keyboard shortcuts
-    g_keyboard.bindKeyDown('Ctrl+D', getBackpackItems)
+    g_keyboard.bindKeyDown('Ctrl+D', whatIsInEq)
     g_keyboard.bindKeyDown('Ctrl+E', whatIsinMyRightHand)
     g_keyboard.bindKeyDown('Ctrl+C', setBlankRune)
     g_keyboard.bindKeyDown('Ctrl+A', getContainerLoc)
@@ -115,7 +115,18 @@ function containerTest2()
                         local subSubChildRect = subSubChild:getRect()
                         -- Check if width and height of subSubChild are greater than 20
                         if subSubChildRect.x ~= 0 and subSubChildRect.width > 20 and subSubChildRect.height > 20 then
-                            printConsole("Sub-Sub-Child " .. k .. " of Sub-Child " .. j .. " of Child " .. i .. " Id: " .. tostring(subSubChild:getId()) .." Rect x=" .. tostring(subSubChildRect.x) .. ", y=" .. tostring(subSubChildRect.y + offset) .. ', width ' .. tostring(subSubChildRect.width) .. ' height ' .. tostring(subSubChildRect.height))
+                            printConsole("Sub-Sub-Child " .. k .. " of Sub-Child " .. j .. " of Child " .. i .. " Id: " .. tostring(subSubChild:getId()) .. " Rect x=" .. tostring(subSubChildRect.x) .. ", y=" .. tostring(subSubChildRect.y + offset) .. ', width ' .. tostring(subSubChildRect.width) .. ' height ' .. tostring(subSubChildRect.height))
+                            
+                            local subSubChildChildrenCount = subSubChild:getChildCount()
+                            -- Nested loop for sub-sub-sub-children
+                            for l = 1, subSubChildChildrenCount do
+                                local subSubSubChild = subSubChild:getChildByIndex(l)
+                                local subSubSubChildRect = subSubSubChild:getRect()
+                                -- Check if width and height of subSubSubChild are greater than 20
+                                if subSubSubChildRect.x ~= 0 and subSubSubChildRect.width > 20 and subSubSubChildRect.height > 20 then
+                                    printConsole("Sub-Sub-Sub-Child " .. l .. " of Sub-Sub-Child " .. k .. " of Sub-Child " .. j .. " of Child " .. i .. " Id: " .. tostring(subSubSubChild:getId()) .. " Rect x=" .. tostring(subSubSubChildRect.x) .. ", y=" .. tostring(subSubSubChildRect.y + offset) .. ', width ' .. tostring(subSubSubChildRect.width) .. ' height ' .. tostring(subSubSubChildRect.height))
+                                end
+                            end
                         end
                     end
                 end
@@ -174,8 +185,14 @@ function calculateInventoryPositions()
                     end
                 end
             end
-
             if next(containerOrEqWindowData) ~= nil then -- Check if containerOrEqWindowData is not empty
+                -- Check if childId starts with "container"
+                if string.sub(childId, 1, 9) == "container" then
+                    local num = string.match(childId, "%d+")
+                    -- Directly construct the childId using "container" and the number
+                    -- This avoids issues with spaces or incomplete names
+                    childId = "container" .. num
+                end
                 -- Assuming each child of the right panel is a unique container or EqWindow
                 inventoryData[childId] = containerOrEqWindowData
             end
@@ -187,14 +204,6 @@ end
 
 
 
--- [unknown source]: Container: userdata: 0x154fa658
--- [unknown source]: Container: userdata: 0x154fa6c0
--- [unknown source]: Container: userdata: 0x154fa6e0
-function containerTest3_old1()
-    for _, container in pairs(g_game.getContainers()) do -- Added 'do' keyword
-        printConsole('Container: ' .. tostring(container)) -- Assuming 'container' is a userdata or table, converting to string for concatenation
-    end
-end
 
 function containerTest3()
     for _, container in pairs(g_game.getContainers()) do -- Added 'do' keyword
@@ -206,11 +215,86 @@ end
 -- [unknown source]: Item: 3503 (parcel)
 -- [unknown source]: Item: 3503 (parcel)
 -- [unknown source]: Item: 2853 (bag)
-function containerTest4()
+function containerTest4old()
     for _, container in pairs(g_game.getContainers()) do -- Added 'do' keyword
         local tempItem = container:getContainerItem():getId()
         printConsole('Item: ' .. tostring(tempItem))
     end
+end
+
+
+function containerTest4()
+    for _, container in pairs(g_game.getContainers()) do
+        local containerName = container:getName()
+        local containerCapacity = container:getCapacity()
+        local containerSize = container:getSize()
+        local containerId = container:getId()
+        local hasParent = container:hasParent()
+
+        printConsole('Container Name: ' .. tostring(containerName))
+        printConsole('Container ID: ' .. tostring(containerId)) 
+        printConsole('Capacity: ' .. tostring(containerCapacity))
+        printConsole('Size: ' .. tostring(containerSize)) 
+        printConsole('Has Parent: ' .. tostring(hasParent))
+
+        local items = container:getItems()
+        if #items > 0 then
+            for slot, item in ipairs(items) do
+                printConsole('Slot: ' .. tostring(slot))
+                local itemId = item:getId()
+                printConsole('itemId: ' .. tostring(itemId))
+                local itemCount = item:getCount()
+                printConsole('itemCount: ' .. tostring(itemCount))
+                local itemSubType = item:getSubType()
+                printConsole('itemSubType: ' .. tostring(itemSubType))
+                local itemPosition = item:getPosition()
+                printConsole("Position: (" .. tostring(itemPosition.x) .. ", " .. tostring(itemPosition.y) .. ", " .. tostring(itemPosition.z) .. ")")
+                
+            end
+        else
+            printConsole('No items in this container.')
+        end
+    end
+end
+
+function getOpenContainersData()
+    local allContainers = {}
+
+    for _, container in pairs(g_game.getContainers()) do
+        local containerKey = "container" .. tostring(container:getId())
+        local containerData = {
+            name = container:getName(),
+            capacity = container:getCapacity(),
+            hasParent = container:hasParent(),
+            items = {}
+        }
+
+        local items = container:getItems()
+        if #items > 0 then
+            for slot, item in ipairs(items) do
+                -- Construct item data for each slot
+                local itemData = {
+                    itemId = item:getId(),
+                    itemCount = item:getCount(),
+                    itemSubType = item:getSubType(),
+                    posX = item:getPosition().x,
+                    posY = item:getPosition().y,
+                    posZ = item:getPosition().z
+                }
+                -- Use 'slotX' format for keys
+                containerData.items["slot" .. tostring(slot)] = itemData
+            end
+        else
+            -- Use a special string to indicate an empty container
+            containerData.items = "empty"
+        end
+
+        -- Assign constructed container data to the allContainers table
+        allContainers[containerKey] = containerData
+    end
+
+    -- Return the constructed Lua table
+    return allContainers
 end
 
 
@@ -282,6 +366,18 @@ function getContainerLoc()
     end
 end
 
+function sayText(arg)
+    g_game.talk(arg.data.text)
+end
+
+
+
+function moveBlankRuneBack(arg)
+    local player = g_game.getLocalPlayer()
+    local itemInHand = player:getInventoryItem(6)
+    local backPositionTemp = {x=arg.data.backPosition.x, y=arg.data.backPosition.y, z=arg.data.backPosition.z}
+    g_game.move(itemInHand, backPositionTemp, itemInHand:getCount())
+end
 
 function setBlankRune()
     if not g_game.isOnline() then
@@ -300,6 +396,7 @@ function setBlankRune()
     local foundItem = g_game.findPlayerItem(blankId, -1)
 
     if foundItem then
+        local backpack = player:getInventoryItem(3)
         local slotPosition = {x = 65535, y = 6, z = 0}  
         g_game.move(foundItem, slotPosition, foundItem:getCount())
     else
@@ -797,6 +894,66 @@ function screenInfo()
 end
 
 
+function getEqData()
+    local inventoryData = {}
+    local slotNames = {
+        "helmet", "amulet", "backpack", "armor",
+        "hand_right", "hand_left", "legs", "boots",
+        "ring", "arrows"
+    }
+
+    if not g_game.isOnline() then
+        printConsole('Is not in game')
+        return
+    end
+
+    local player = g_game.getLocalPlayer()
+
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    -- Iterate through inventory slots 1 to 10
+    for slot = 1, 10 do
+        local item = player:getInventoryItem(slot)
+        if item then
+            local itemName = item:getName() or "Unknown Item"
+            inventoryData[tostring(slot)] = {
+                slotName = slotNames[slot],
+                itemId = item:getId(),
+                itemCount = item:getCount(),
+                itemSubType = item:getSubType(),
+                itemName = itemName
+            }
+        else
+            inventoryData[tostring(slot)] = {
+                slotName = slotNames[slot],
+                itemId = nil,
+                itemCount = nil,
+                itemSubType = nil,
+                itemName = "Empty Slot"
+            }
+        end
+    end
+
+    return inventoryData
+end
+
+
+function whatIsInEq()
+    local player = g_game.getLocalPlayer()
+    -- Iterate through inventory slots 1 to 10
+    for slot = 1, 10 do
+        local item = player:getInventoryItem(slot)
+        if item then
+            printConsole("!Item in slot " .. slot .. ": ID = " .. item:getId() .. ", Count: " .. item:getCount() .. ", SubType = " .. item:getSubType() .. ", Item Name: " .. item:getName())
+        else
+            printConsole("No item found in slot " .. slot)
+        end
+    end
+end
+
 
 function whatIsinMyRightHand()
     if not g_game.isOnline() then
@@ -1077,11 +1234,16 @@ function getGameData(event)
     -- Initialize the main JSON-like structure
     local gameData = {
         characterInfo = {},
+        EqInfo = {},
+        containersInfo = {},
         battleInfo = {},
 	areaInfo = {},
         screenInfo = {}
     }
-        
+     
+    gameData.containersInfo = getOpenContainersData()
+    gameData.EqInfo = getEqData()
+ 
     -- Populate characterInfo
     gameData.characterInfo = {
         Name = player:getName(),
