@@ -7,6 +7,13 @@ import java.awt.event.KeyEvent
 
 object Mouse {
 
+  def mousePress(robot: Robot, buttons: Int): Unit = {
+    robot.mousePress(buttons)
+  }
+
+  def mouseRelease(robot: Robot, buttons: Int): Unit = {
+    robot.mouseRelease(buttons)
+  }
   def leftClick(robotInstance: Robot, loc: Option[(Int, Int)]): Unit = {
     loc.foreach { case (x, y) =>
       mouseMoveSmooth(robotInstance, Some(x, y))

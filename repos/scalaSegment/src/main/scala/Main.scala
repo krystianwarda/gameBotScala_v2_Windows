@@ -88,7 +88,7 @@ object MainApp extends App {
   case class StartActors(settings: UISettings)
 
   case class JsonData(json: JsValue)
-  // Create a placeholder for MouseMovementActor
+  // Create a placeholder for MouseMovementActorz
   val mouseMovementActorRef = system.deadLetters
   val initialJsonProcessorActorRef = system.actorOf(Props[InitialJsonProcessorActor], "initialJsonProcessor")
   val initialRunActorRef = system.actorOf(Props(new InitialRunActor(initialJsonProcessorActorRef)), "initialRunActor")

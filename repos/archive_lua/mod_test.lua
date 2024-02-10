@@ -262,14 +262,17 @@ function getOpenContainersData()
 
     for _, container in pairs(g_game.getContainers()) do
         local containerKey = "container" .. tostring(container:getId())
+        local items = container:getItems()
         local containerData = {
             name = container:getName(),
             capacity = container:getCapacity(),
+            itemsCount = #items,
             hasParent = container:hasParent(),
-            items = {}
+            items = {},
+            freeSpace = container:getCapacity() - #items,
         }
 
-        local items = container:getItems()
+        
         if #items > 0 then
             for slot, item in ipairs(items) do
                 -- Construct item data for each slot

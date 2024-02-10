@@ -7,6 +7,7 @@ import mouse.Mouse
 import main.scala.MainApp
 import userUI.SettingsUtils.UISettings
 
+import java.awt.event.{InputEvent, KeyEvent}
 import java.awt.{Robot, Toolkit}
 import java.io.{DataInputStream, DataOutputStream, IOException}
 import java.net.{InetAddress, Socket, SocketException}
@@ -16,7 +17,7 @@ import scala.concurrent.duration.Duration
 import scala.util.Random
 // import userUI.UIAppActor
 //import src.main.scala.Main.JsonData
-
+import mouse.{MouseMoveCommand, MouseMovementSettings}
 
 case class cpResult(message: String, additionalData: Option[JsValue] = None)
 
@@ -41,8 +42,8 @@ class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
   private val fishingCommandInterval: Long = 5 // 10 seconds interval
   private var reconnectAttempts = 0
   private val maxReconnectAttempts = 5 // Maximum number of reconnection attempts
-  private var lastSpellCastTime: Long = 10000
-  private val spellCastInterval: Long = 30000 // 5 seconds
+  private var lastSpellCastTime: Long = 50000
+  private val spellCastInterval: Long = 10000 // 5 seconds
 
 
   private var reconnecting = false
@@ -116,46 +117,120 @@ class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
       if (currentSettings.runeMaker) {
         val currentTime = System.currentTimeMillis()
 
-        // Check if mana is higher than 300
-        (json \ "characterInfo" \ "Mana").asOpt[Int] match {
-          case Some(mana) if mana > 300 =>
-            // Correctly access slot 6 data from "EqInfo"
-            (json \ "EqInfo" \ "6" \ "itemId").asOpt[Int] match {
-              case Some(itemId) =>
-                itemId match {
-                  case 3147 => // Blank rune ID
-                    if (currentTime - lastSpellCastTime >= spellCastInterval) {
-                      lastSpellCastTime = currentTime // Update the last spell cast time
-                      val sayCommand = Json.obj("__command" -> "sayText", "text" -> "adura gran")
-                      sendJson(sayCommand)
-                      println("Say command for 'adori vuita vis' sent to TCP server.")
-                      // Break the function after sayText command
-                    } else {
-                      println("Spell cast interval not met. Waiting for the next run.")
-                    }
+        // Check what's in hand
+        (json \ "EqInfo" \ "6" \ "itemId").asOpt[Int] match {
+          case Some(itemId) if itemId != 3147 => // If there's something other than a blank rune
+            if (!currentSettings.mouseMovements) {
+              // Send command to move the item back
+              findBackpackPosition(json).foreach { backPosition =>
+                val moveCommand = Json.obj("__command" -> "moveBlankRuneBack", "backPosition" -> backPosition)
+                sendJson(moveCommand)
+                println("Command to move the item back sent to TCP server.")
+              }
+            } else {
+              println("Case with actual rune in hand.")
+              // Simulate mouse movements to drag the item from the inventory to the backpack
+              val slot6Position = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "slot6").as[JsObject]
+              val robotInstance = new Robot()
+              val backpackSlotForBlankOption = findBackpackSlotForBlank(json)
 
-                  case _ => // Item in hand is not a blank rune
-                    // Consider moving the item back
-                    findBackpackPosition(json).foreach { backPosition =>
-                      val moveCommand = Json.obj("__command" -> "moveBlankRuneBack", "backPosition" -> backPosition)
-                      sendJson(moveCommand)
-                      println("Command to move the item back sent to TCP server.")
-                    }
-                    return // Break the function after moveBlankRuneBack command
-                }
+              backpackSlotForBlankOption.foreach { backpackSlotForBlank =>
+                val startX = (slot6Position \ "x").as[Int]
+                val startY = (slot6Position \ "y").as[Int]
+                val endX = (backpackSlotForBlank \ "x").as[Int]
+                val endY = (backpackSlotForBlank \ "y").as[Int]
 
-              case None =>
-                // Slot 6 is empty, put a blank rune
-                sendJson(Json.obj("__command" -> "setBlankRune"))
-                println("Rune making command sent to TCP server.")
-                return // Break the function after setting a blank rune
+                // Move to slot6 and right-click to pick up the item
+                Mouse.mouseMoveSmooth(robotInstance, Some((startX, startY)))
+                Mouse.mousePress(robotInstance, InputEvent.BUTTON1_DOWN_MASK)
+
+                // Smoothly move to backpack slot and left-click to drop the item
+                Mouse.mouseMoveSmooth(robotInstance, Some((endX, endY)))
+                Mouse.mouseRelease(robotInstance, InputEvent.BUTTON1_DOWN_MASK)
+              }
             }
 
-          case _ =>
-            println("Mana is not higher than 300. Rune making cannot proceed.")
-            return // Break the function if mana is not higher than 300
-        }
+            return // Break the function
 
+          case None => // If slot 6 is empty
+            println("Nothing in hand.")
+            if (!currentSettings.mouseMovements) {
+              // Send command to set a blank rune
+              sendJson(Json.obj("__command" -> "setBlankRune"))
+              println("Rune making command sent to TCP server.")
+            } else {
+              // Simulate mouse movements to drag the blank rune from the backpack to the inventory
+              println("Move blank with hand.")
+              val robotInstance = new Robot()
+              val backpackSlotForBlankOption = findBackpackSlotForBlank(json)
+              val slot6Position = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "slot6").as[JsObject]
+
+              println(s"Backpack slot for blank: $backpackSlotForBlankOption")
+              println(s"Slot 6 position: $slot6Position")
+
+              backpackSlotForBlankOption.foreach { backpackSlotForBlank =>
+                val startX = (backpackSlotForBlank \ "x").as[Int]
+                val startY = (backpackSlotForBlank \ "y").as[Int]
+                val endX = (slot6Position \ "x").as[Int]
+                val endY = (slot6Position \ "y").as[Int]
+
+                // Move to the start position
+                Mouse.mouseMoveSmooth(robotInstance, Some((startX, startY)))
+
+                // Press and hold the left mouse button
+                Mouse.mousePress(robotInstance, InputEvent.BUTTON1_DOWN_MASK)
+
+                // Smoothly move to the end position while holding the left mouse button
+                Mouse.mouseMoveSmooth(robotInstance, Some((endX, endY)))
+
+                // Release the left mouse button
+                Mouse.mouseRelease(robotInstance, InputEvent.BUTTON1_DOWN_MASK)
+              }
+
+            }
+            return // Break the function
+
+          case Some(3147) => // If there's a blank rune
+            println("Blank rune in hand.")
+            (json \ "characterInfo" \ "Mana").asOpt[Int] match {
+              case Some(mana) if mana > 300 =>
+                if (currentTime - lastSpellCastTime >= spellCastInterval) {
+                  lastSpellCastTime = currentTime // Update the last spell cast time
+                  if (!currentSettings.mouseMovements) {
+                    // Send command directly when mouse movements are off
+                    val sayCommand = Json.obj("__command" -> "sayText", "text" -> "adura gran")
+                    sendJson(sayCommand)
+                    println("Say command for 'adura gran' sent to TCP server.")
+                  } else {
+                    // Use Robot to simulate typing the spell "adura gran" when mouse movements are on
+                    val robotInstance = new Robot()
+                    println("Typing spell 'adura gran' using keyboard simulation.")
+
+                    val spell = "adura gran"
+                    spell.foreach { char =>
+                      val keyCode = KeyEvent.getExtendedKeyCodeForChar(char.toUpper)
+                      if (Character.isUpperCase(char)) {
+                        robotInstance.keyPress(KeyEvent.VK_SHIFT)
+                      }
+                      robotInstance.keyPress(keyCode)
+                      robotInstance.keyRelease(keyCode)
+                      if (Character.isUpperCase(char)) {
+                        robotInstance.keyRelease(KeyEvent.VK_SHIFT)
+                      }
+                      // Add a small delay between key presses
+                      Thread.sleep(50)
+                    }
+                    // Simulate pressing Enter to send the spell
+                    robotInstance.keyPress(KeyEvent.VK_ENTER)
+                    robotInstance.keyRelease(KeyEvent.VK_ENTER)
+                  }
+                } else {
+                    println("Spell cast interval not met. Waiting for the next run.")
+                }
+              case _ =>
+                println("Mana is not higher than 300. Rune making cannot proceed.")
+            }
+        }
       } else {
         println("RuneMaker setting is disabled.")
       }
@@ -164,6 +239,41 @@ class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
       println("End off HandleOkStatus.")
     }
   }
+
+  def performMouseAction(position: JsObject, action: String): Unit = {
+    val x = (position \ "x").as[Int]
+    val y = (position \ "y").as[Int]
+
+    mouseMovementActor ! MouseMoveCommand(MouseMovementSettings(x, y, action))
+  }
+
+
+  // Function to find the backpack slot for a blank rune
+  def findBackpackSlotForBlank(json: JsValue): Option[JsObject] = {
+    // Attempt to extract the container information
+    val containerOpt = (json \ "containersInfo").asOpt[JsObject]
+    println(s"Containers: $containerOpt") // Log the container information for debugging
+
+    containerOpt.flatMap { containers =>
+      // Log the attempt to iterate over containers
+      println("Iterating over containers to find a blank rune slot...")
+      containers.fields.collectFirst {
+        case (containerName, containerInfo: JsObject) =>
+          println(s"Checking container $containerName for blank runes...")
+          (containerInfo \ "items").as[JsObject].fields.collectFirst {
+            case (slotName, slotInfo: JsObject) if (slotInfo \ "itemId").asOpt[Int].contains(3147) =>
+              println(s"Found blank rune in $containerName at slot $slotName")
+              // Attempt to retrieve the screen position using the slot name
+              (json \ "screenInfo" \ "inventoryPanelLoc" \ "container0" \ "contentsPanel" \ slotName).asOpt[JsObject].map { screenPos =>
+                println(s"Screen position for blank rune: $screenPos")
+                screenPos
+              }
+          }.flatten
+      }.flatten
+    }
+  }
+
+
 
   def findBackpackPosition(json: JsValue): Option[JsObject] = {
     (json \ "containersInfo").asOpt[JsObject].flatMap { containersInfo =>
