@@ -1,14 +1,15 @@
 package main.scala
 
 //import MainApp.periodicFunctionActor
+import akka.actor.TypedActor.context
 import akka.actor.{Actor, ActorRef, ActorSystem, Cancellable, Props}
 import play.api.libs.json.Json.JsValueWrapper
 import player.Player
-import mouse.{Mouse, MouseMovementActor}
+import mouse.{ActionStateManager, Mouse, MouseMovementActor}
 import play.api.libs.json._
 import processing.JsonProcessorActor
 import userUI.UIAppActor
-import utils.{InitialJsonProcessorActor, MainActor, InitialRunActor, PeriodicFunctionActor}
+import utils.{InitialJsonProcessorActor, InitialRunActor, MainActor, PeriodicFunctionActor}
 
 import java.awt.Robot
 import java.io.EOFException
@@ -81,29 +82,32 @@ class ThirdProcessActor extends Actor {
   }
 }
 
+
 object MainApp extends App {
 
   val system = ActorSystem("MySystem")
 
-  case class StartActors(settings: UISettings)
+  // Define case classes and objects as before
 
+  val playerClassList: List[Player] = List(new Player("Player1"))
+  case class StartActors(settings: UISettings)
   case class JsonData(json: JsValue)
-  // Create a placeholder for MouseMovementActorz
-  val mouseMovementActorRef = system.deadLetters
+
+  // Create the ActionStateManager without any parameters
+  val actionStateManagerRef = system.actorOf(Props[ActionStateManager], "actionStateManager")
+
+  // Then, create the MouseMovementActor, passing the ActionStateManager reference
+  val mouseMovementActorRef = system.actorOf(Props(new MouseMovementActor(actionStateManagerRef)), "mouseMovementActor")
+
+  // Assuming JsonProcessorActor needs access to both ActionStateManager and MouseMovementActor
+  val jsonProcessorActorRef = system.actorOf(Props(new JsonProcessorActor(mouseMovementActorRef, actionStateManagerRef)), "jsonProcessor")
+
+  // Continue with the creation of other actors as before
   val initialJsonProcessorActorRef = system.actorOf(Props[InitialJsonProcessorActor], "initialJsonProcessor")
   val initialRunActorRef = system.actorOf(Props(new InitialRunActor(initialJsonProcessorActorRef)), "initialRunActor")
-
-  // Create MainActor
   val mainActorRef = system.actorOf(Props[MainActor], "mainActor")
-
-  // Create JsonProcessorActor with the placeholder reference
-  val jsonProcessorActorRef = system.actorOf(Props(new JsonProcessorActor(mouseMovementActorRef)), "jsonProcessor")
-
   val periodicFunctionActorRef = system.actorOf(Props(classOf[PeriodicFunctionActor], jsonProcessorActorRef), "periodicFunctionActor")
   val thirdProcessActorRef = system.actorOf(Props[ThirdProcessActor], "thirdProcess")
-
-  // UI AppActor setup
-  val playerClassList: List[Player] = List(new Player("Player1"))
   val uiAppActorRef = system.actorOf(Props(new UIAppActor(playerClassList, jsonProcessorActorRef, periodicFunctionActorRef, thirdProcessActorRef, mainActorRef)), "uiAppActor")
 
   println("Press ENTER to exit...")
@@ -111,3 +115,5 @@ object MainApp extends App {
 
   system.terminate()
 }
+
+

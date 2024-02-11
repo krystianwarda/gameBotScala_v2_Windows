@@ -1136,7 +1136,7 @@ function gameStarted(event)
     local message = '{ "status": "Game started." }'
     printConsole(message)
     -- Create a repeated event
-    timerEvent = cycleEvent(function() tick(event) end, 5000) -- 500 milliseconds or 0.5 seconds
+    timerEvent = cycleEvent(function() tick(event) end, 1000) -- 500 milliseconds or 0.5 seconds
 end
 
 

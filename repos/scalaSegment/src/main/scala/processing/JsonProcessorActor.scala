@@ -3,8 +3,9 @@ package processing
 import akka.actor.{Actor, ActorRef}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
 import player.Player
-import mouse.Mouse
+import mouse.{ActionCompleted, ActionTypes, Mouse, MouseAction}
 import main.scala.MainApp
+import main.scala.MainApp.mouseMovementActorRef
 import userUI.SettingsUtils.UISettings
 
 import java.awt.event.{InputEvent, KeyEvent}
@@ -28,9 +29,11 @@ trait CommandProcessor {
 case class InitializeProcessor(player: Player, settings: UISettings)
 // Create a placeholder for MouseMovementActor
 case object ConnectToServer
+// Define action types and their priorities
 
 
-class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
+//class JsonProcessorActor(var mouseMovementActor: ActorRef) extends Actor {
+class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: ActorRef) extends Actor {
   // Mutable state
   var player: Option[Player] = None
   var settings: Option[UISettings] = None
@@ -44,7 +47,7 @@ class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
   private val maxReconnectAttempts = 5 // Maximum number of reconnection attempts
   private var lastSpellCastTime: Long = 50000
   private val spellCastInterval: Long = 10000 // 5 seconds
-
+  var mouseState: String = "free"
 
   private var reconnecting = false
   val serverAddress = InetAddress.getByName("127.0.0.1")
@@ -67,6 +70,11 @@ class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
       settings = Some(s)
       println(s"Processor initialized with player: ${p.characterName} and settings: ${s.autoHeal}")
 
+    case ActionCompleted(actionType) => handleActionCompleted(actionType)
+      // Handle action completion
+      println("Action completed.")
+    // Update any relevant state or perform follow-up actions here
+
     case _ => println("JsonProcessorActor received an unhandled message type.")
   }
 
@@ -85,6 +93,14 @@ class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
     }
   }
 
+  def handleActionCompleted(actionType: ActionTypes.Value): Unit = {
+    // Logic to handle action completion, specific to JsonProcessorActor's responsibilities
+    println(s"Action $actionType completed. JsonProcessorActor can now proceed with follow-up actions.")
+    // Example: Checking if a specific action's completion triggers another process
+    if (actionType == ActionTypes.Heal) {
+      // Trigger any specific logic that should happen after healing
+    }
+  }
 
   private def handleErrorStatus(json: JsValue): Unit = {
     println("Error in processing json.")
@@ -92,6 +108,113 @@ class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
 
   private def handleOkStatus(json: JsValue): Unit = {
     settings.foreach { currentSettings =>
+
+      if (currentSettings.runeMaker) {
+        val currentTime = System.currentTimeMillis()
+        val slot6Position = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "slot6").as[JsObject]
+        val slot6X = (slot6Position \ "x").as[Int]
+        val slot6Y = (slot6Position \ "y").as[Int]
+        (json \ "EqInfo" \ "6" \ "itemId").asOpt[Int] match {
+          case Some(3160) =>
+            println("Already made rune in hand.")
+            if (currentSettings.mouseMovements) {
+              findBackpackPosition(json).foreach { backpackSlotForBlank =>
+                val endX = (backpackSlotForBlank \ "x").as[Int]
+                val endY = (backpackSlotForBlank \ "y").as[Int]
+                println(s"Moving mouse from: x:$endX, y:$endY to x:$slot6X, y:$slot6Y")
+                val actions = Seq(
+                  MouseAction(slot6X, slot6Y, "move"),
+                  MouseAction(slot6X, slot6Y, "pressLeft"),
+                  MouseAction(endX, endY, "move"),
+                  MouseAction(endX, endY, "releaseLeft"),
+
+                )
+
+                actionStateManager ! MouseMoveCommand(actions, currentSettings.mouseMovements)
+                println(s"Rune in hand - Sent MouseMoveCommand to ActionStateManager: $actions")
+              }
+            } else {
+
+              findBackpackPosition(json).foreach { backPosition =>
+
+                val backPositionJson = Json.toJson(backPosition) // This should now work
+
+                val moveCommand = Json.obj(
+                  "__command" -> "moveBlankRuneBack",
+                  "backPosition" -> backPositionJson // Correctly inserts the JSON representation
+                )
+
+                sendJson(moveCommand)
+                println("Command to move the item back sent to TCP server.")
+              }
+
+
+
+            }
+
+          case None =>
+            println("Nothing in hand.")
+            if (!currentSettings.mouseMovements) {
+              sendJson(Json.obj("__command" -> "setBlankRune"))
+              println("Rune making command sent to TCP server.")
+            } else {
+
+              findBackpackSlotForBlank(json).foreach { backpackSlotForBlank =>
+                val endX = (backpackSlotForBlank \ "x").as[Int]
+                val endY = (backpackSlotForBlank \ "y").as[Int]
+                println(s"Moving mouse from: x:$endX, y:$endY to x:$slot6X, y:$slot6Y")
+                val actions = Seq(
+                  MouseAction(endX, endY, "move"),
+                  MouseAction(endX, endY, "pressLeft"),
+
+                  MouseAction(slot6X, slot6Y, "move"),
+                  MouseAction(slot6X, slot6Y, "releaseLeft"),
+
+                )
+
+                actionStateManager ! MouseMoveCommand(actions, currentSettings.mouseMovements)
+                println(s"Nothing in hand - Sent MouseMoveCommand to ActionStateManager: $actions")
+              }
+            }
+
+          case Some(3147) =>
+            println("Blank rune in hand.")
+            (json \ "characterInfo" \ "Mana").asOpt[Int] match {
+              case Some(mana) if mana > 300 =>
+                if (currentTime - lastSpellCastTime >= spellCastInterval) {
+                  lastSpellCastTime = currentTime
+                  if (!currentSettings.mouseMovements) {
+                    sendJson(Json.obj("__command" -> "sayText", "text" -> "adura vita"))
+                    println("Say command for 'adura gran' sent to TCP server.")
+                  } else {
+                    val robot = new Robot()
+                    val spell = "adura vita"
+                    spell.foreach { char =>
+                      val keyCode = KeyEvent.getExtendedKeyCodeForChar(char.toUpper)
+                      robot.keyPress(keyCode)
+                      robot.keyRelease(keyCode)
+                      Thread.sleep(50) // Small delay between key presses
+                    }
+                    // Press and release the 'Enter' key after typing the spell
+                    robot.keyPress(KeyEvent.VK_ENTER)
+                    robot.keyRelease(KeyEvent.VK_ENTER)
+                    println("Spell 'adura vita' typed.")
+                  }
+                } else {
+                  println("Spell cast interval not met. Waiting for the next run.")
+                }
+              case _ =>
+                println("Mana is not higher than 300. Rune making cannot proceed.")
+            }
+        }
+      } else {
+        println("RuneMaker setting is disabled.")
+      }
+
+
+
+      // TO BE EDITED
+
       if (currentSettings.caveBot) {
         // Assuming findRats is related to the Cavebot functionality
         (json \ "battleInfo").asOpt[JsValue].foreach { battleInfo =>
@@ -114,138 +237,11 @@ class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
         }
       }
 
-      if (currentSettings.runeMaker) {
-        val currentTime = System.currentTimeMillis()
-
-        // Check what's in hand
-        (json \ "EqInfo" \ "6" \ "itemId").asOpt[Int] match {
-          case Some(itemId) if itemId != 3147 => // If there's something other than a blank rune
-            if (!currentSettings.mouseMovements) {
-              // Send command to move the item back
-              findBackpackPosition(json).foreach { backPosition =>
-                val moveCommand = Json.obj("__command" -> "moveBlankRuneBack", "backPosition" -> backPosition)
-                sendJson(moveCommand)
-                println("Command to move the item back sent to TCP server.")
-              }
-            } else {
-              println("Case with actual rune in hand.")
-              // Simulate mouse movements to drag the item from the inventory to the backpack
-              val slot6Position = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "slot6").as[JsObject]
-              val robotInstance = new Robot()
-              val backpackSlotForBlankOption = findBackpackSlotForBlank(json)
-
-              backpackSlotForBlankOption.foreach { backpackSlotForBlank =>
-                val startX = (slot6Position \ "x").as[Int]
-                val startY = (slot6Position \ "y").as[Int]
-                val endX = (backpackSlotForBlank \ "x").as[Int]
-                val endY = (backpackSlotForBlank \ "y").as[Int]
-
-                // Move to slot6 and right-click to pick up the item
-                Mouse.mouseMoveSmooth(robotInstance, Some((startX, startY)))
-                Mouse.mousePress(robotInstance, InputEvent.BUTTON1_DOWN_MASK)
-
-                // Smoothly move to backpack slot and left-click to drop the item
-                Mouse.mouseMoveSmooth(robotInstance, Some((endX, endY)))
-                Mouse.mouseRelease(robotInstance, InputEvent.BUTTON1_DOWN_MASK)
-              }
-            }
-
-            return // Break the function
-
-          case None => // If slot 6 is empty
-            println("Nothing in hand.")
-            if (!currentSettings.mouseMovements) {
-              // Send command to set a blank rune
-              sendJson(Json.obj("__command" -> "setBlankRune"))
-              println("Rune making command sent to TCP server.")
-            } else {
-              // Simulate mouse movements to drag the blank rune from the backpack to the inventory
-              println("Move blank with hand.")
-              val robotInstance = new Robot()
-              val backpackSlotForBlankOption = findBackpackSlotForBlank(json)
-              val slot6Position = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "slot6").as[JsObject]
-
-              println(s"Backpack slot for blank: $backpackSlotForBlankOption")
-              println(s"Slot 6 position: $slot6Position")
-
-              backpackSlotForBlankOption.foreach { backpackSlotForBlank =>
-                val startX = (backpackSlotForBlank \ "x").as[Int]
-                val startY = (backpackSlotForBlank \ "y").as[Int]
-                val endX = (slot6Position \ "x").as[Int]
-                val endY = (slot6Position \ "y").as[Int]
-
-                // Move to the start position
-                Mouse.mouseMoveSmooth(robotInstance, Some((startX, startY)))
-
-                // Press and hold the left mouse button
-                Mouse.mousePress(robotInstance, InputEvent.BUTTON1_DOWN_MASK)
-
-                // Smoothly move to the end position while holding the left mouse button
-                Mouse.mouseMoveSmooth(robotInstance, Some((endX, endY)))
-
-                // Release the left mouse button
-                Mouse.mouseRelease(robotInstance, InputEvent.BUTTON1_DOWN_MASK)
-              }
-
-            }
-            return // Break the function
-
-          case Some(3147) => // If there's a blank rune
-            println("Blank rune in hand.")
-            (json \ "characterInfo" \ "Mana").asOpt[Int] match {
-              case Some(mana) if mana > 300 =>
-                if (currentTime - lastSpellCastTime >= spellCastInterval) {
-                  lastSpellCastTime = currentTime // Update the last spell cast time
-                  if (!currentSettings.mouseMovements) {
-                    // Send command directly when mouse movements are off
-                    val sayCommand = Json.obj("__command" -> "sayText", "text" -> "adura gran")
-                    sendJson(sayCommand)
-                    println("Say command for 'adura gran' sent to TCP server.")
-                  } else {
-                    // Use Robot to simulate typing the spell "adura gran" when mouse movements are on
-                    val robotInstance = new Robot()
-                    println("Typing spell 'adura gran' using keyboard simulation.")
-
-                    val spell = "adura gran"
-                    spell.foreach { char =>
-                      val keyCode = KeyEvent.getExtendedKeyCodeForChar(char.toUpper)
-                      if (Character.isUpperCase(char)) {
-                        robotInstance.keyPress(KeyEvent.VK_SHIFT)
-                      }
-                      robotInstance.keyPress(keyCode)
-                      robotInstance.keyRelease(keyCode)
-                      if (Character.isUpperCase(char)) {
-                        robotInstance.keyRelease(KeyEvent.VK_SHIFT)
-                      }
-                      // Add a small delay between key presses
-                      Thread.sleep(50)
-                    }
-                    // Simulate pressing Enter to send the spell
-                    robotInstance.keyPress(KeyEvent.VK_ENTER)
-                    robotInstance.keyRelease(KeyEvent.VK_ENTER)
-                  }
-                } else {
-                    println("Spell cast interval not met. Waiting for the next run.")
-                }
-              case _ =>
-                println("Mana is not higher than 300. Rune making cannot proceed.")
-            }
-        }
-      } else {
-        println("RuneMaker setting is disabled.")
-      }
-
 
       println("End off HandleOkStatus.")
     }
   }
 
-  def performMouseAction(position: JsObject, action: String): Unit = {
-    val x = (position \ "x").as[Int]
-    val y = (position \ "y").as[Int]
-
-    mouseMovementActor ! MouseMoveCommand(MouseMovementSettings(x, y, action))
-  }
 
 
   // Function to find the backpack slot for a blank rune
@@ -275,19 +271,21 @@ class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
 
 
 
+
   def findBackpackPosition(json: JsValue): Option[JsObject] = {
-    (json \ "containersInfo").asOpt[JsObject].flatMap { containersInfo =>
-      containersInfo.value.headOption.flatMap { case (_, containerInfo) =>
-        val posX = (containerInfo \ "items" \ "slot1" \ "posX").asOpt[Int]
-        val posY = (containerInfo \ "items" \ "slot1" \ "posY").asOpt[Int]
-        val posZ = (containerInfo \ "items" \ "slot1" \ "posZ").asOpt[Int]
-        (posX, posY, posZ) match {
-          case (Some(x), Some(y), Some(z)) => Some(Json.obj("x" -> x, "y" -> y, "z" -> z))
-          case _ => None
-        }
+    println(json \ "screenInfo" \ "inventoryPanelLoc" \ "container0" \ "contentsPanel" \ "slot1") // Check this specific part of the JSON
+    (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject].flatMap { inventoryPanelLoc =>
+      // Assuming "slot1" is your target slot in the first container and you're interested in its screen position
+      (inventoryPanelLoc \ "container0" \ "contentsPanel" \ "slot1").asOpt[JsObject].flatMap { slot1 =>
+        for {
+          posX <- (slot1 \ "x").asOpt[Int]
+          posY <- (slot1 \ "y").asOpt[Int]
+        } yield Json.obj("x" -> posX, "y" -> posY)
       }
     }
   }
+
+
 
   private def makeRune(json: JsValue): Unit = {
     settings.foreach { currentSettings =>
@@ -359,7 +357,6 @@ class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
                       sendFishingCommand(waterTileId)
                       lastFishingCommandSent = currentTime
                     } else {
-                      val robotInstance = new Robot()
 
                       val arrowsLoc = (json \ "screenInfo" \ "inventoryPanelLoc" \ "arrows").asOpt[JsObject]
                       val arrowsX = arrowsLoc.flatMap(loc => (loc \ "x").asOpt[Int]).getOrElse(0)
@@ -372,10 +369,10 @@ class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
 
                       println(s"Target Tile Screen X: $targetTileScreenX, Y: $targetTileScreenY") // Print the target tile screen coordinates
 
-                      Mouse.mouseMoveSmooth(robotInstance, Some((arrowsX, arrowsY)))
+/*                      Mouse.mouseMoveSmooth(robotInstance, Some((arrowsX, arrowsY)))
                       Mouse.rightClick(robotInstance, Some((arrowsX, arrowsY)))
                       Mouse.mouseMoveSmooth(robotInstance, Some((targetTileScreenX, targetTileScreenY)))
-                      Mouse.leftClick(robotInstance, Some((targetTileScreenX, targetTileScreenY)))
+                      Mouse.leftClick(robotInstance, Some((targetTileScreenX, targetTileScreenY)))*/
                       lastFishingCommandSent = currentTime
                     }
                   }
@@ -466,7 +463,7 @@ class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
         case e: IOException =>
           println(s"Failed to connect to server: $e")
           reconnectAttempts += 1
-          scheduleReconnection()
+//          scheduleReconnection()
       }
     } else {
       println("Maximum reconnection attempts reached. Stopping reconnection attempts.")
@@ -475,10 +472,10 @@ class JsonProcessorActor(mouseMovementActor: ActorRef) extends Actor {
 
 
 
-  def scheduleReconnection(): Unit = {
+/*  def scheduleReconnection(): Unit = {
     val delay = Random.nextInt(10000) + 5000 // Random delay between 5 to 10 seconds
     context.system.scheduler.scheduleOnce(Duration(delay, TimeUnit.MILLISECONDS))(connectToServer())
-  }
+  }*/
 
 }
 

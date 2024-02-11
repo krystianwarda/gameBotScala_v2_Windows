@@ -8,9 +8,10 @@ class MainActor extends Actor {
 
   def receive: Receive = {
     case StartMouseMovementActor =>
-      if (mouseMovementActorRef.isEmpty) {
-        mouseMovementActorRef = Some(context.system.actorOf(Props[MouseMovementActor], "mouseMovementActor"))
-      }
+//      if (mouseMovementActorRef.isEmpty) {
+//        mouseMovementActorRef = Some(context.system.actorOf(Props[MouseMovementActor], "mouseMovementActor"))
+//        println("MouseMovementActor activated.")
+//      }
   }
 }
 

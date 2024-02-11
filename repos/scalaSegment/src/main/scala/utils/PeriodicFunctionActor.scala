@@ -11,7 +11,7 @@ import java.nio.{ByteBuffer, ByteOrder}
 import java.util.concurrent.TimeUnit
 import scala.concurrent.Future
 import scala.concurrent.duration.Duration
-import scala.util.Random
+import scala.util.{Random, Try}
 
 
 class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
@@ -25,14 +25,14 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
 
 
   override def preStart(): Unit = {
-    //    println("PeriodicFunctionActor starting...")
-    //    connectToServer()
-    //    initiateSendFunction("init") // Send 'init' command once on start
-    //    self ! "StartListening" // Start listening right away
+
   }
 
   override def receive: Receive = {
-
+    case "startListening" =>
+      startListening()
+    case json: JsValue =>
+      jsonProcessorActor ! MainApp.JsonData(json)
     case StartActors(settings) =>
       println("PeriodicFunctionActor received StartActors message.")
       if (socket.isEmpty || socket.exists(!_.isConnected)) {
@@ -40,7 +40,6 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
       }
       startListening()
       initiateSendFunction("init")
-
     case _ => println("PeriodicFunctionActor received an unhandled message type.")
 
   }
@@ -122,7 +121,7 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
         None
       case e: IOException =>
         println(s"Failed to receive JSON: $e")
-        reconnectToServer()
+        // reconnectToServer()
         None
     }
   }
@@ -130,15 +129,32 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
 
   def startListening(): Unit = {
     Future {
-      while (true) {
-        receiveJson() match {
-          case Some(json) => jsonProcessorActor ! MainApp.JsonData(json)
-          case None => // Keep listening
+      while (socket.exists(_.isConnected)) {
+        readJsonFromSocket() match {
+          case Some(json) => self ! json
+          case None => // Do nothing, effectively skipping this loop iteration
         }
-        Thread.sleep(300) // Add a small delay, e.g., 100 ms
       }
+    }.recover {
+      case e: Exception => println(s"Listening error: ${e.getMessage}")
     }
   }
+
+  def readJsonFromSocket(): Option[JsValue] = Try {
+    val socketInputStream = in.getOrElse(throw new IllegalStateException("Socket input stream not initialized"))
+    val lengthBytes = new Array[Byte](4)
+    if (socketInputStream.read(lengthBytes) == -1) {
+      throw new IOException("End of stream reached")
+    }
+    val length = ByteBuffer.wrap(lengthBytes).order(ByteOrder.LITTLE_ENDIAN).getInt
+    if (length > 0) {
+      val data = new Array[Byte](length)
+      socketInputStream.readFully(data)
+      Json.parse(data)
+    } else {
+      throw new IOException("Received empty message")
+    }
+  }.toOption
 
 
   def initiateSendFunction(commandName: String): Unit = {
@@ -179,4 +195,3 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
     println("PeriodicFunctionActor stopping...")
   }
 }
-
