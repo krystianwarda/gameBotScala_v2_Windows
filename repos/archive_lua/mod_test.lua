@@ -2,17 +2,90 @@ function buttonFunctions()
     local message = '{ "status": "Button functions activated." }'
     printConsole(message)
     -- register some keyboard shortcuts
-    g_keyboard.bindKeyDown('Ctrl+D', whatIsInEq)
-    g_keyboard.bindKeyDown('Ctrl+E', whatIsinMyRightHand)
-    g_keyboard.bindKeyDown('Ctrl+C', setBlankRune)
-    g_keyboard.bindKeyDown('Ctrl+A', getContainerLoc)
-    g_keyboard.bindKeyDown('Ctrl+1', containerTest1)
-    g_keyboard.bindKeyDown('Ctrl+2', containerTest2)
-    g_keyboard.bindKeyDown('Ctrl+3', containerTest3)
-    g_keyboard.bindKeyDown('Ctrl+4', containerTest4)
+    g_keyboard.bindKeyDown('Alt+P', spyfloor_up)
+    g_keyboard.bindKeyDown('Alt+L', spyfloor_down)
+    g_keyboard.bindKeyDown('Alt+O', spyfloor_reset)
+    g_keyboard.bindKeyDown('Alt+T', tileUnderCursor)
+    g_keyboard.bindKeyDown('Ctrl+1', checkPlayers1)
+    g_keyboard.bindKeyDown('Ctrl+2', checkPlayers2)
+    g_keyboard.bindKeyDown('Ctrl+3', checkPlayers3)
+    g_keyboard.bindKeyDown('Ctrl+4', checkPlayers4)
+
+    -- g_keyboard.bindKeyDown('Ctrl+2', whatIsinMyRightHand)
+    -- g_keyboard.bindKeyDown('Ctrl+3', setBlankRune)
+    -- g_keyboard.bindKeyDown('Ctrl+4', getContainerLoc)
 end
 
--- [unknown source]: Container Panel: 4
+
+
+function checkPlayers()        
+    local player = g_game.getLocalPlayer()
+    local dimension = modules.game_interface.getMapPanel():getVisibleDimension()
+    printConsole("Map dimension: width=" .. tostring(dimension.width) .. ", height=" .. tostring(dimension.height))
+    local spectators = g_map.getSpectatorsInRangeEx(player:getPosition(), true, math.floor(dimension.width / 2 + 2), math.floor(dimension.width / 2 + 2), math.floor(dimension.height / 2 + 2), math.floor(dimension.height / 2 + 2))
+    for _, creature in ipairs(spectators) do
+        -- Collecting creature details
+        local Name = creature:getName()
+        local Id = creature:getId()
+        local HealthPercent = creature:getHealthPercent()
+        local PositionX = creature:getPosition().x
+        local PositionY = creature:getPosition().y
+        local PositionZ = creature:getPosition().z
+        local IsNpc = creature:isNpc()
+        local IsPlayer = creature:isPlayer()
+        local IsMonster = creature:isMonster()
+        
+        -- Printing creature details in a single line
+        printConsole(string.format("Name: %s, ID: %s, HealthPercent: %s%%, Position: [%s, %s, %s], NPC: %s, Player: %s, Monster: %s",
+            Name, Id, HealthPercent, PositionX, PositionY, PositionZ, tostring(IsNpc), tostring(IsPlayer), tostring(IsMonster)))
+    end
+end
+
+
+function tileUnderCursor()
+    local tempTile = modules.game_interface.gameMapPanel:getTile(modules.game_interface.gameMapPanel.mousePos)
+
+    -- Assuming there's a function to get the position
+    local position = tempTile:getPosition()
+
+    -- Extracting the x and y coordinates
+    local x = position.x
+    local y = position.y
+
+    -- Getting the list of items on the tile
+    local topThingList = tempTile:getItems()
+    if topThingList and #topThingList > 0 then
+        for j, topThing in ipairs(topThingList) do
+            local itemId = topThing:getId()
+            local itemName = topThing:getName() -- Assuming there's a getName function to get the name of the item
+
+            -- Print all details in a single line
+            printConsole(string.format("Tile position x = %s, y = %s, Item ID = %s", x, y, itemId))
+        end
+    else
+        -- If no items are found on the tile, print tile position only
+        printConsole("Tile position x = " .. x .. " y = " .. y .. " - No items found on this tile.")
+    end
+end
+
+
+function spyfloor_up()
+    local player = g_game.getLocalPlayer()
+    local levelUp = player:getPosition().z - 1
+    modules.game_interface.getMapPanel():lockVisibleFloor(levelUp)
+end
+
+function spyfloor_down()
+    local player = g_game.getLocalPlayer()
+    local levelDown = player:getPosition().z + 1  
+    modules.game_interface.getMapPanel():lockVisibleFloor(levelDown)
+end
+
+function spyfloor_reset()
+    modules.game_interface.getMapPanel():unlockVisibleFloor()
+end
+
+
 function containerTest1()
     local containerPanel = g_settings.getNumber("containerPanel")
     printConsole('Container Panel: ' .. containerPanel)
@@ -758,21 +831,6 @@ function testUInotWorking()
     -- Output or use the x, y coordinates as needed
     printConsole("Map position x = " .. x .. " y " .. y)
     printConsole('testUI function closed')
-end
-
--- function location a tile, but in game terms not in px
-function tileUnderCursor()
-    local tempTile = modules.game_interface.gameMapPanel:getTile(modules.game_interface.gameMapPanel.mousePos)
-
-    -- Assuming there's a function to get the position
-    local position = tempTile:getPosition()
-
-    -- Extracting the x and y coordinates
-    local x = position.x
-    local y = position.y
-
-    -- Output or use the x, y coordinates as needed
-    printConsole("Tile position x = " .. x .. " y " .. y)
 end
 
 
