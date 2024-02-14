@@ -1,22 +1,56 @@
 package userUI
 
-
 object SettingsUtils {
-  import play.api.libs.json.Json
+  import play.api.libs.json.{Format, Json}
 
-  // Define the UISettings case class here if it's not already defined elsewhere
-  case class UISettings(autoHeal: Boolean,
-                        runeMaker: Boolean,
-                        fishing: Boolean,
-                        mouseMovements: Boolean,
-                        caveBot: Boolean,
-                        protectionZone: Boolean,
-                        playerOnScreenAlert: Boolean,
-                        selectedSpell: String,
-                        requiredMana: Int/*, other settings */)
+  // Define the nested case classes
+  case class HealingSettings(
+                              autoHeal: Boolean,
+                              lightHealSpell: String,
+                              lightHealHealth: Int,
+                              lightHealMana: Int,
+                              strongHealSpell: String,
+                              strongHealHealth: Int,
+                              strongHealMana: Int,
+                              ihHealHealth: Int,
+                              ihHealMana: Int,
+                              uhHealHealth: Int,
+                              uhHealMana: Int,
+                              hPotionHealHealth: Int,
+                              hPotionHealMana: Int,
+                              mPotionHealManaMin: Int,
+                            )
 
-  // Implicit Json format for UISettings
-  implicit val format = Json.format[UISettings]
+  case class RuneMakingSettings(
+                                 enabled: Boolean,
+                                 selectedSpell: String,
+                                 requiredMana: Int
+                               )
+
+  case class ProtectionZoneSettings(
+                                     enabled: Boolean,
+                                     playerOnScreenAlert: Boolean,
+                                     escapeToProtectionZone: Boolean
+                                   )
+
+  // Define implicit Format instances for the nested case classes
+  implicit val healingSettingsFormat: Format[HealingSettings] = Json.format[HealingSettings]
+  implicit val runeMakingSettingsFormat: Format[RuneMakingSettings] = Json.format[RuneMakingSettings]
+  implicit val protectionZoneSettingsFormat: Format[ProtectionZoneSettings] = Json.format[ProtectionZoneSettings]
+
+  // Now define the UISettings case class
+  case class UISettings(
+                         healingSettings: HealingSettings,
+                         runeMakingSettings: RuneMakingSettings,
+                         protectionZoneSettings: ProtectionZoneSettings,
+                         fishing: Boolean,
+                         mouseMovements: Boolean,
+                         caveBot: Boolean
+                         // Add other settings or groups of settings as needed
+                       )
+
+  // Finally, define the implicit Format instance for UISettings
+  implicit val uISettingsFormat: Format[UISettings] = Json.format[UISettings]
 
   def saveSettingsToFile(settings: UISettings, filePath: String): Unit = {
     val jsonString = Json.toJson(settings).toString()
@@ -36,5 +70,4 @@ object SettingsUtils {
     }
   }
 }
-
 

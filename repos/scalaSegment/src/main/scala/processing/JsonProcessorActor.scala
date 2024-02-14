@@ -68,7 +68,7 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     case InitializeProcessor(p, s) =>
       player = Some(p)
       settings = Some(s)
-      println(s"Processor initialized with player: ${p.characterName} and settings: ${s.autoHeal}")
+      println(s"Processor initialized with player: ${p.characterName} and settings: TO BE MODIFIED")
 
     case ActionCompleted(actionType) => handleActionCompleted(actionType)
       // Handle action completion
@@ -109,7 +109,23 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
   private def handleOkStatus(json: JsValue): Unit = {
     settings.foreach { currentSettings =>
 
-      if (currentSettings.runeMaker) {
+
+      // Use the function to make decisions
+      if (currentSettings.protectionZoneSettings.escapeToProtectionZone) {
+        if (detectPlayersAndMonsters(json)) {
+          // Logic for when another player or monster is detected
+          if (currentSettings.mouseMovements) {
+            println("Player dected, move with keyboard.")
+          } else {
+            println("Player dected, move function.")
+          }
+        } else {
+          // Logic for when no other players or monsters are detected
+          // Placeholder to exit or skip the escapeToProtectionZone logic
+        }
+      }
+
+      if (currentSettings.runeMakingSettings.enabled) {
         val currentTime = System.currentTimeMillis()
         val slot6Position = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "slot6").as[JsObject]
         val slot6X = (slot6Position \ "x").as[Int]
@@ -208,7 +224,7 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
             }
         }
       } else {
-        println("RuneMaker setting is disabled.")
+//        println("RuneMaker setting is disabled.")
       }
 
 
@@ -226,7 +242,7 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
         activateFishing(json, currentSettings.mouseMovements)
       }
       // New logic for player detection and sound alert
-      if (currentSettings.protectionZone && currentSettings.playerOnScreenAlert) {
+      if (currentSettings.protectionZoneSettings.enabled && currentSettings.protectionZoneSettings.playerOnScreenAlert) {
         (json \ "battleInfo").asOpt[JsObject].foreach { battleInfo =>
           if (isPlayerDetected(battleInfo)) {
             // Trigger a beep sound as an alert
@@ -238,11 +254,22 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
       }
 
 
-      println("End off HandleOkStatus.")
+//      println("End off HandleOkStatus.")
     }
   }
 
+  def detectPlayersAndMonsters(json: JsValue): Boolean = {
+    val currentCharName = (json \ "characterInfo" \ "Name").as[String]
+    val spyLevelInfo = (json \ "spyLevelInfo").as[JsObject]
 
+    spyLevelInfo.values.exists { entity =>
+      val isPlayer = (entity \ "IsPlayer").as[Boolean]
+      val isMonster = (entity \ "IsMonster").as[Boolean]
+      val name = (entity \ "Name").as[String]
+
+      (isPlayer || isMonster) && name != currentCharName
+    }
+  }
 
   // Function to find the backpack slot for a blank rune
   def findBackpackSlotForBlank(json: JsValue): Option[JsObject] = {
@@ -289,7 +316,7 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
 
   private def makeRune(json: JsValue): Unit = {
     settings.foreach { currentSettings =>
-      if (currentSettings.runeMaker && System.currentTimeMillis() - lastSpellCastTime >= spellCastInterval) {
+      if (currentSettings.runeMakingSettings.enabled && System.currentTimeMillis() - lastSpellCastTime >= spellCastInterval) {
         lastSpellCastTime = System.currentTimeMillis()
 
         if (!currentSettings.mouseMovements) {

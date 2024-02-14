@@ -1,15 +1,14 @@
 package userUI
-
+import java.awt.GridBagLayout
+import java.awt.GridBagConstraints
 import processing.{ConnectToServer, InitializeProcessor}
 import main.scala.MainApp.{jsonProcessorActorRef, periodicFunctionActorRef}
-import userUI.SettingsUtils.UISettings
-
-import java.awt.{GridBagConstraints, GridBagLayout}
+//import userUI.SettingsUtils.{HealingSettings, ProtectionZoneSettings, RuneMakingSettings, UISettings, saveSettingsToFile}
+import userUI.SettingsUtils._
 import scala.swing.{Component, Dialog, FileChooser, Insets}
 import akka.actor.ActorRef
 import main.scala.MainApp
 import player.Player
-import userUI.SettingsUtils.UISettings
 import utils.StartMouseMovementActor
 
 import java.awt.Dimension
@@ -43,33 +42,58 @@ class SwingApp(playerClassList: List[Player],
 
   // Update the collectSettingsFromUI method to return UISettings
   def collectSettingsFromUI(): UISettings = {
-    // Collect settings from various UI components and return them
-    val selectedSpell = runeMaker.spellComboBox.selection.item
-    // Attempt to parse manaTextField's text to an Int, default to 0 (or another sensible default) if parsing fails
-    val requiredMana = try {
-      runeMaker.manaTextField.text.toInt
-    } catch {
-      case _: NumberFormatException => 0
-    }
+    val healingSettings = HealingSettings(
+      autoHeal = autoHealCheckbox.selected,
+      lightHealSpell = autoHealBot.lightHealSpellField.text,
+      lightHealHealth = parseTextFieldToInt(autoHealBot.lightHealHealthField.text),
+      lightHealMana = parseTextFieldToInt(autoHealBot.lightHealManaField.text),
+      strongHealSpell = autoHealBot.strongHealSpellField.text,
+      strongHealHealth = parseTextFieldToInt(autoHealBot.strongHealHealthField.text),
+      strongHealMana = parseTextFieldToInt(autoHealBot.strongHealManaField.text),
+      ihHealHealth = parseTextFieldToInt(autoHealBot.ihHealHealthField.text),
+      ihHealMana = parseTextFieldToInt(autoHealBot.ihHealManaField.text),
+      uhHealHealth = parseTextFieldToInt(autoHealBot.uhHealHealthField.text),
+      uhHealMana = parseTextFieldToInt(autoHealBot.uhHealManaField.text),
+      hPotionHealHealth = parseTextFieldToInt(autoHealBot.hPotionHealHealthField.text),
+      hPotionHealMana = parseTextFieldToInt(autoHealBot.hPotionHealManaField.text),
+      mPotionHealManaMin = parseTextFieldToInt(autoHealBot.mPotionHealManaMinField.text)
+    )
+
+    val runeMakingSettings = RuneMakingSettings(
+      enabled = runeMakerCheckbox.selected,
+      selectedSpell = "", // Replace with actual logic to capture selected spell if applicable
+      requiredMana = 0 // Replace with actual logic to capture required mana if applicable
+    )
+
+    val protectionZoneSettings = ProtectionZoneSettings(
+      enabled = protectionZoneCheckbox.selected,
+      playerOnScreenAlert = protectionZoneBot.playerOnScreenAlertCheckbox.selected,
+      escapeToProtectionZone = protectionZoneBot.escapeToProtectionZoneCheckbox.selected
+    )
 
     UISettings(
-      autoHeal = autoHealCheckbox.selected,
-      runeMaker = runeMakerCheckbox.selected,
+      healingSettings = healingSettings,
+      runeMakingSettings = runeMakingSettings,
+      protectionZoneSettings = protectionZoneSettings,
       fishing = fishingCheckbox.selected,
       mouseMovements = mouseMovementsCheckbox.selected,
-      caveBot = caveBotCheckbox.selected,
-      protectionZone = protectionZoneCheckbox.selected,
-      playerOnScreenAlert = protectionZoneBot.playerOnScreenAlertCheckbox.selected,
-      selectedSpell = selectedSpell,
-      requiredMana = requiredMana,
-      // ...other settings
+      caveBot = caveBotCheckbox.selected
     )
   }
+
+  // Helper function to safely parse integer values from text fields
+  def parseTextFieldToInt(text: String): Int = {
+    text match {
+      case s if s.trim.isEmpty => 0 // Handle empty fields
+      case s => s.toIntOption.getOrElse(0) // Handle non-numeric input
+    }
+  }
+
 
   val saveButton = new Button("Save Settings") {
     reactions += {
       case ButtonClicked(_) =>
-        val settings = collectSettingsFromUI()
+        val settings = collectSettingsFromUI() // This collects current UI values
         val chooser = new FileChooser(new java.io.File("C:\\MyLibraries\\botSettings"))
         chooser.title = "Save Settings"
         val result = chooser.showSaveDialog(null)
@@ -83,22 +107,71 @@ class SwingApp(playerClassList: List[Player],
   val loadButton = new Button("Load Settings") {
     reactions += {
       case ButtonClicked(_) =>
-        SettingsUtils.loadSettingsFromFile("settings.json").foreach { settings =>
-          applySettingsToUI(settings)
+        val chooser = new FileChooser(new java.io.File("C:\\MyLibraries\\botSettings"))
+        chooser.title = "Load Settings"
+        val result = chooser.showOpenDialog(null)
+        if (result == FileChooser.Result.Approve) {
+          SettingsUtils.loadSettingsFromFile(chooser.selectedFile.getAbsolutePath).foreach { settings =>
+            applySettingsToUI(settings)
+          }
         }
     }
   }
 
+
   def applySettingsToUI(settings: UISettings): Unit = {
-    autoHealCheckbox.selected = settings.autoHeal
-    runeMakerCheckbox.selected = settings.runeMaker
+    // CheckBox settings
+    autoHealCheckbox.selected = settings.healingSettings.autoHeal
+    runeMakerCheckbox.selected = settings.runeMakingSettings.enabled
+    protectionZoneCheckbox.selected = settings.protectionZoneSettings.enabled
+    protectionZoneBot.playerOnScreenAlertCheckbox.selected = settings.protectionZoneSettings.playerOnScreenAlert
+    protectionZoneBot.escapeToProtectionZoneCheckbox.selected = settings.protectionZoneSettings.escapeToProtectionZone
     fishingCheckbox.selected = settings.fishing
     mouseMovementsCheckbox.selected = settings.mouseMovements
     caveBotCheckbox.selected = settings.caveBot
-    protectionZoneCheckbox.selected = settings.protectionZone
-    protectionZoneBot.playerOnScreenAlertCheckbox.selected = settings.playerOnScreenAlert
-    // Update other UI components as needed
+
+    // TextField settings for HealingSettings
+    autoHealBot.lightHealSpellField.text = settings.healingSettings.lightHealSpell
+    autoHealBot.lightHealHealthField.text = settings.healingSettings.lightHealHealth.toString
+    autoHealBot.lightHealManaField.text = settings.healingSettings.lightHealMana.toString
+    autoHealBot.strongHealSpellField.text = settings.healingSettings.strongHealSpell
+    autoHealBot.strongHealHealthField.text = settings.healingSettings.strongHealHealth.toString
+    autoHealBot.strongHealManaField.text = settings.healingSettings.strongHealMana.toString
+    autoHealBot.ihHealHealthField.text = settings.healingSettings.ihHealHealth.toString
+    autoHealBot.ihHealManaField.text = settings.healingSettings.ihHealMana.toString
+    autoHealBot.uhHealHealthField.text = settings.healingSettings.uhHealHealth.toString
+    autoHealBot.uhHealManaField.text = settings.healingSettings.uhHealMana.toString
+    autoHealBot.hPotionHealHealthField.text = settings.healingSettings.hPotionHealHealth.toString
+    autoHealBot.hPotionHealManaField.text = settings.healingSettings.hPotionHealMana.toString
+    autoHealBot.mPotionHealManaMinField.text = settings.healingSettings.mPotionHealManaMin.toString
+
+    // Apply other settings fields if necessary
   }
+
+  def applyHealingSettings(healingSettings: HealingSettings): Unit = {
+    autoHealCheckbox.selected = healingSettings.autoHeal
+    // Assume there are methods or logic here to apply the rest of the healing settings
+  }
+
+  def applyRuneMakingSettings(runeMakingSettings: RuneMakingSettings): Unit = {
+    runeMakerCheckbox.selected = runeMakingSettings.enabled
+    // Similarly, apply rune making specific settings here
+  }
+
+  def applyProtectionZoneSettings(protectionZoneSettings: ProtectionZoneSettings): Unit = {
+    protectionZoneCheckbox.selected = protectionZoneSettings.enabled
+    protectionZoneBot.playerOnScreenAlertCheckbox.selected = protectionZoneSettings.playerOnScreenAlert
+    protectionZoneBot.escapeToProtectionZoneCheckbox.selected = protectionZoneSettings.escapeToProtectionZone
+    // Apply any additional protection zone settings
+  }
+
+  def applyGeneralSettings(settings: UISettings): Unit = {
+    fishingCheckbox.selected = settings.fishing
+    mouseMovementsCheckbox.selected = settings.mouseMovements
+    caveBotCheckbox.selected = settings.caveBot
+    // Apply any other top-level settings
+  }
+
 
   val currentPlayer: Player = playerClassList.head
   val runButton = new Button("RUN") {

@@ -25,6 +25,7 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
   val hPotionHealManaField = new TextField()
   val mPotionHealManaMinField = new TextField()
 
+
   // The AutoHeal tab component
   val autoHealTab: Component = Component.wrap(new JPanel(new GridBagLayout) {
     val c = new GridBagConstraints()
