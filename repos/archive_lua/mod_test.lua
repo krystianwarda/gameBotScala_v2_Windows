@@ -6,19 +6,145 @@ function buttonFunctions()
     g_keyboard.bindKeyDown('Alt+L', spyfloor_down)
     g_keyboard.bindKeyDown('Alt+O', spyfloor_reset)
     g_keyboard.bindKeyDown('Alt+T', tileUnderCursor)
-    g_keyboard.bindKeyDown('Ctrl+1', checkPlayers1)
-    g_keyboard.bindKeyDown('Ctrl+2', checkPlayers2)
-    g_keyboard.bindKeyDown('Ctrl+3', checkPlayers3)
-    g_keyboard.bindKeyDown('Ctrl+4', checkPlayers4)
+    g_keyboard.bindKeyDown('Alt+H', whatIsinMyRightHand)
+    g_keyboard.bindKeyDown('Ctrl+1', testHotkey1)
+    g_keyboard.bindKeyDown('Ctrl+2', testHotkey2)
+    g_keyboard.bindKeyDown('Ctrl+2', testHotkey3)
+    g_keyboard.bindKeyDown('Ctrl+2', testHotkey4)
+end
 
-    -- g_keyboard.bindKeyDown('Ctrl+2', whatIsinMyRightHand)
-    -- g_keyboard.bindKeyDown('Ctrl+3', setBlankRune)
-    -- g_keyboard.bindKeyDown('Ctrl+4', getContainerLoc)
+
+function useOnYourself(arg)
+    local player = g_game.getLocalPlayer()
+    local itemId = arg.data.itemInfo.itemId
+    local itemSubType
+    
+    -- Check if itemSubType exists in the JSON
+    if arg.data.itemInfo.itemSubType ~= nil then
+        itemSubType = arg.data.itemInfo.itemSubType
+    else
+        itemSubType = -1 -- Default value if itemSubType doesn't exist
+    end
+    
+    local foundItem = g_game.findPlayerItem(itemId, itemSubType) 
+
+    if foundItem then
+        -- Use the found item on the player
+        g_game.useWith(foundItem, player, itemSubType)
+        printConsole("Used item with ID " .. itemId .. " on player")
+    else
+        printConsole("Could not obtain item with ID " .. itemId) 
+    end
 end
 
 
 
-function checkPlayers()        
+
+-- HOTKEYS
+function testHotkey1()
+    local tempHotkey = modules.game_hotkeys.onHotkeyTextChange(self:getText())
+    printConsole("Hotkeys: " .. tostring(tempHotkey))
+end
+
+function getHotkeysForF1ToF5()
+  -- Assuming that 'hotkeyList' is the table where all hotkeys are stored
+  local hotkeys = hotkeyList or {}
+  local f1ToF5Hotkeys = {}
+
+  -- Key combinations for F1 to F5
+  local functionKeys = {"F1", "F2", "F3", "F4", "F5"}
+  for _, fKey in pairs(functionKeys) do
+    local hotkey = hotkeys[fKey]
+    if hotkey then
+      -- Add the hotkey settings for F1 to F5 to the table
+      f1ToF5Hotkeys[fKey] = hotkey
+    end
+  end
+
+  return f1ToF5Hotkeys
+end
+
+-- To test and print the hotkeys for F1 to F5
+function testHotkey2()
+  local f1ToF5Hotkeys = getHotkeysForF1ToF5()
+  for fKey, settings in pairs(f1ToF5Hotkeys) do
+    printConsole(fKey .. ": " .. tostring(settings))
+  end
+end
+
+
+function testHotkey3()
+  unload() -- Unbinds all current hotkeys and clears UI
+  load()   -- Loads hotkeys from the configuration file again
+end
+
+
+function testHotkey4()
+  if not configValueChanged then
+    return
+  end
+  
+  -- Your existing save logic here
+  hotkeyConfigs[currentConfig]:save()
+  g_settings.save()
+  
+  -- Add a call to reload hotkeys after saving
+  reload()
+end
+
+
+-- MAGIC WALL
+-- "326833169007":{"isClickable":true,"isPathable":true,"isWalkable":false,"items":{"1":102,"2":2128}},
+-- "326833169007":{"isClickable":true,"isPathable":true,"isWalkable":true,"items":{"1":102}},
+
+-- depo [unknown source]: Tile position x = 32678, y = 31687, Item ID = 3498
+-- LADER [unknown source]: Tile position x = 32682, y = 31687, Item ID = 1948
+-- LADER DOWN [unknown source]: Tile position x = 32682, y = 31685, Item ID = 433
+
+function checkPZ1()
+    local tempTile = modules.game_interface.gameMapPanel:getTile(modules.game_interface.gameMapPanel.mousePos)
+    if tempTile then
+        -- Assuming getFlags is available and returns the raw flag value for debugging
+        local tileFlags = tempTile:getFlags()
+        printConsole("Tile flags: " .. tostring(tileFlags))
+
+        local TILESTATE_PROTECTIONZONE = 1 -- Update this with the correct value from C++
+        local isProtectionZone = tempTile:hasFlag(TILESTATE_PROTECTIONZONE)
+        printConsole("Tile is in protection zone: " .. tostring(isProtectionZone))
+    else
+        printConsole("No tile found at mouse position.")
+    end
+end
+
+
+function checkPZ2()
+    local tempTile = modules.game_interface.gameMapPanel:getTile(modules.game_interface.gameMapPanel.mousePos)
+    if tempTile then
+        local tileFlags = tempTile:getFlags()
+        printConsole("Tile flags: " .. tileFlags) -- Print all flags for debugging
+        local TILESTATE_PROTECTIONZONE = 1 -- Ensure this matches the C++ definition
+        local isProtectionZone = tempTile:hasFlag(TILESTATE_PROTECTIONZONE)
+        printConsole("Tile is in protection zone: " .. tostring(isProtectionZone))
+    else
+        printConsole("No tile found at mouse position.")
+    end
+end
+
+function checkPZ3()
+    local tempTile = modules.game_interface.gameMapPanel:getTile(modules.game_interface.gameMapPanel.mousePos)
+    if tempTile then
+        local tileFlags = tempTile:getFlags()
+        printConsole("Tile flags: " .. tileFlags) -- This will print the flags as a number
+        local TILESTATE_PROTECTIONZONE = 1 -- Double-check this value!
+        local isProtectionZone = tempTile:hasFlag(TILESTATE_PROTECTIONZONE)
+        printConsole("Tile is in protection zone: " .. tostring(isProtectionZone))
+    else
+        printConsole("No tile found at mouse position.")
+    end
+end
+
+
+function spyLevelsOld()        
     local player = g_game.getLocalPlayer()
     local dimension = modules.game_interface.getMapPanel():getVisibleDimension()
     printConsole("Map dimension: width=" .. tostring(dimension.width) .. ", height=" .. tostring(dimension.height))
@@ -83,12 +209,6 @@ end
 
 function spyfloor_reset()
     modules.game_interface.getMapPanel():unlockVisibleFloor()
-end
-
-
-function containerTest1()
-    local containerPanel = g_settings.getNumber("containerPanel")
-    printConsole('Container Panel: ' .. containerPanel)
 end
 
 
@@ -954,6 +1074,37 @@ function screenInfo()
     printConsole('ParentRect top ' .. tostring(modules.game_interface.gameMapPanel:getMarginTop()) .. ' bottom ' .. tostring(modules.game_interface.gameMapPanel:getMarginBottom()))
 end
 
+function spyLevels()        
+    local player = g_game.getLocalPlayer()
+    if not player then
+        printConsole('Couldn\'t get player, are you in game?')
+        return
+    end
+
+    local dimension = modules.game_interface.getMapPanel():getVisibleDimension()
+    local spectators = g_map.getSpectatorsInRangeEx(player:getPosition(), true, math.floor(dimension.width / 2 + 2), math.floor(dimension.width / 2 + 2), math.floor(dimension.height / 2 + 2), math.floor(dimension.height / 2 + 2))
+
+    local creaturesInfo = {}
+    for _, creature in ipairs(spectators) do
+        -- Collecting creature details
+        local creatureData = {
+            Name = creature:getName(),
+            Id = creature:getId(),
+            HealthPercent = creature:getHealthPercent(),
+            PositionX = creature:getPosition().x,
+            PositionY = creature:getPosition().y,
+            PositionZ = creature:getPosition().z,
+            IsNpc = creature:isNpc(),
+            IsPlayer = creature:isPlayer(),
+            IsMonster = creature:isMonster()
+        }
+        
+        table.insert(creaturesInfo, creatureData)
+    end
+    
+    return creaturesInfo
+end
+
 
 function getEqData()
     local inventoryData = {}
@@ -1299,11 +1450,13 @@ function getGameData(event)
         containersInfo = {},
         battleInfo = {},
 	areaInfo = {},
-        screenInfo = {}
+        screenInfo = {},
+        spyLevelInfo = {},
     }
-     
-    gameData.containersInfo = getOpenContainersData()
+
     gameData.EqInfo = getEqData()
+    gameData.containersInfo = getOpenContainersData()
+    gameData.spyLevelInfo = spyLevels()
  
     -- Populate characterInfo
     gameData.characterInfo = {
@@ -1326,7 +1479,6 @@ function getGameData(event)
     gameData.areaInfo = {
         tiles = {}
     }
-
     local targetPosition = player:getPosition()
     local tiles = g_map.getTiles(targetPosition.z)
 
@@ -1336,23 +1488,32 @@ function getGameData(event)
         local z = tile:getPosition().z
         local key = formatKey(x, y, z)
 
-        gameData.areaInfo.tiles[key] = {}
+--        local tileFlags = tile:getFlags()
+        local isWalkable = tile:isWalkable()
+        local isPathable = tile:isPathable()
+        local isClickable = tile:isClickable()
+        -- local groundSpeed = tile:getGroundSpeed()
+
+        gameData.areaInfo.tiles[key] = {
+            isWalkable = isWalkable,
+            isPathable = isPathable,
+            isClickable = isClickable,
+--            groundSpeed = groundSpeed,
+--            tileFlags = tileFlags,
+            items = {}
+        }
 
         local topThingList = tile:getItems()
         if topThingList and #topThingList > 0 then
             for j, topThing in ipairs(topThingList) do
                 local itemInfo = {
                     id = topThing:getId()
-                    -- Include additional properties of topThing if needed
+                    -- Remember to add a comma after id = topThing:getId()
                 }
-                gameData.areaInfo.tiles[key][tostring(j)] = itemInfo.id
+                gameData.areaInfo.tiles[key].items[tostring(j)] = itemInfo.id
             end
         end
     end
-
-    -- Optionally, convert gameData.areaInfo to a JSON string if needed
-    -- local jsonString = toJSON(gameData.areaInfo)
-
 
     -- Collect data of creatures in range for battle information
     for _, creature in pairs(spectators) do

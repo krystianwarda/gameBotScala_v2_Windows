@@ -25,6 +25,8 @@ class MouseMovementActor(actionStateManager: ActorRef) extends Actor {
       case "move" => Mouse.mouseMoveSmooth(robotInstance, Some((mouseAction.x, mouseAction.y)))
       case "pressLeft" => robotInstance.mousePress(InputEvent.BUTTON1_DOWN_MASK)
       case "releaseLeft" => robotInstance.mouseRelease(InputEvent.BUTTON1_DOWN_MASK)
+      case "pressRight" => robotInstance.mousePress(InputEvent.BUTTON3_DOWN_MASK) // Add this line for right-click press
+      case "releaseRight" => robotInstance.mouseRelease(InputEvent.BUTTON3_DOWN_MASK) // Add this line for right-click release
       case _ => println(s"Invalid mouse action: ${mouseAction.action}")
     }
   }
