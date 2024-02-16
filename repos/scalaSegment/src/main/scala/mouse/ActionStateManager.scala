@@ -5,6 +5,7 @@ import main.scala.MainApp.mouseMovementActorRef
 import scala.collection.mutable
 import mouse.{ActionCompleted, MouseMoveCommand}
 // Define action types and their priorities
+// Within your mouse package or an appropriate location
 
 case class ActionCompleted(actionType: ActionTypes.Value) // Redefined to include actionType
 
@@ -29,6 +30,7 @@ class ActionStateManager extends Actor {
   val actionStates: mutable.Map[ActionTypes.Value, (String, Long)] = mutable.Map().withDefaultValue(("free", 0L))
 
   def receive: Receive = {
+
     case MouseMoveCommand(actions, mouseMovementsEnabled) =>
       println(s"ActionStateManager received MouseMoveCommand: $actions, mouseMovementsEnabled: $mouseMovementsEnabled")
       val actionType = extractActionType(actions) // Implement this based on your logic
@@ -47,7 +49,6 @@ class ActionStateManager extends Actor {
       val currentTime = System.currentTimeMillis()
       println(s"Action $actionType completed at $currentTime.")
 
-    // Additional logic for action completion...
   }
 
   def extractActionType(actions: Seq[MouseAction]): ActionTypes.Value = {
@@ -66,7 +67,7 @@ class ActionStateManager extends Actor {
     // checkForQueuedActions(actionType)
   }
 
-  // Check if the current action meets priority requirements
+
   def isPriorityMet(actionType: ActionTypes.Value): Boolean = {
     // Implement your logic to check if the action's priority allows it to proceed
     true

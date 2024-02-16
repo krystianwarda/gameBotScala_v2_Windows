@@ -1,9 +1,10 @@
 package processing
 
 import akka.actor.{Actor, ActorRef}
-import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
+import play.api.libs.json.{JsNumber, JsObject, JsValue, Json, Writes}
 import player.Player
-import mouse.{ActionCompleted, ActionTypes, Mouse, MouseAction}
+import mouse.{ActionCompleted, ActionDetail, ActionTypes, FakeAction, ItemInfo, Mouse, MouseAction, MouseActions, TextCommand}
+import keyboard.{KeyboardText, TypeText}
 import main.scala.MainApp
 import main.scala.MainApp.mouseMovementActorRef
 import userUI.SettingsUtils
@@ -33,11 +34,18 @@ case object ConnectToServer
 // Define action types and their priorities
 
 
+// Define a sum type for action details
+
+// Adjust the Action class to include the new field
+
+case class Log(message: String)
+
 //class JsonProcessorActor(var mouseMovementActor: ActorRef) extends Actor {
-class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: ActorRef) extends Actor {
+class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: ActorRef, actionKeyboardManager: ActorRef) extends Actor {
   // Mutable state
   var player: Option[Player] = None
   var settings: Option[UISettings] = None
+
 
   import context.dispatcher
 
@@ -129,7 +137,150 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
       }
 
 
+//      def performAutoHeal(json: JsValue, settings: SettingsUtils.UISettings): Unit = {
+//        val health = (json \ "characterInfo" \ "Health").as[Int]
+//        val mana = (json \ "characterInfo" \ "Mana").as[Int]
+//
+//        if (settings.healingSettings.autoHeal) {
+//          if (settings.healingSettings.uhHealHealth > 0 && health <= settings.healingSettings.uhHealHealth && mana <= settings.healingSettings.uhHealMana) {
+//            // uh rune  3160
+//            println("I need to use UH!")
+//            if (settings.mouseMovements) {
+//              println("use UH with mouse")
+//              findItemInContainerSlot14(json, 3160, 1).foreach { runePosition =>
+//                val runeX = (runePosition \ "x").as[Int]
+//                val runeY = (runePosition \ "y").as[Int]
+//
+//                val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
+//                val targetX = (mapTarget \ "x").as[Int]
+//                val targetY = (mapTarget \ "y").as[Int]
+//
+//                val actions = Seq(
+//                  MouseAction(runeX, runeY, "move"),
+//                  MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
+//                  MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
+//                  MouseAction(targetX, targetY, "move"), // Move to target position
+//                  MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
+//                  MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
+//                )
+//                actionStateManager ! MouseMoveCommand(actions, settings.mouseMovements)
+//                println(s"Using item 3160 on map - Sent MouseMoveCommand to ActionStateManager: $actions")
+//              }
+//            }
+//            else {
+//              println("use UH with function")
+//              sendJson(Json.obj("__command" -> "useOnYourself", "itemInfo" -> Json.obj("itemId" -> 3160)))
+//            }
+//          } else if (settings.healingSettings.ihHealHealth > 0 && health <= settings.healingSettings.ihHealHealth && mana <= settings.healingSettings.ihHealMana) {
+//            // uh rune  3152
+//            println("I need to use IH!")
+//            if (settings.mouseMovements) {
+//              println("use IH with mouse")
+//              findItemInContainerSlot14(json, 3152, 1).foreach { runePosition =>
+//                val runeX = (runePosition \ "x").as[Int]
+//                val runeY = (runePosition \ "y").as[Int]
+//
+//                val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
+//                val targetX = (mapTarget \ "x").as[Int]
+//                val targetY = (mapTarget \ "y").as[Int]
+//
+//                val actions = Seq(
+//                  MouseAction(runeX, runeY, "move"),
+//                  MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
+//                  MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
+//                  MouseAction(targetX, targetY, "move"), // Move to target position
+//                  MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
+//                  MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
+//                )
+//                actionStateManager ! MouseMoveCommand(actions, settings.mouseMovements)
+//                println(s"Using item 3160 on map - Sent MouseMoveCommand to ActionStateManager: $actions")
+//              }
+//            }
+//            else {
+//              println("use IH with function")
+//              sendJson(Json.obj("__command" -> "useOnYourself", "itemInfo" -> Json.obj("itemId" -> 3152)))
+//            }
+//          } else if (settings.healingSettings.hPotionHealHealth > 0 && health <= settings.healingSettings.hPotionHealHealth && mana >= settings.healingSettings.hPotionHealMana) {
+//            // health potion 2874 sub type 10
+//            println("I need to use HP!")
+//            if (settings.mouseMovements) {
+//              println("use HP with mouse")
+//              findItemInContainerSlot14(json, 2874, 10).foreach { runePosition =>
+//                val runeX = (runePosition \ "x").as[Int]
+//                val runeY = (runePosition \ "y").as[Int]
+//
+//                val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
+//                val targetX = (mapTarget \ "x").as[Int]
+//                val targetY = (mapTarget \ "y").as[Int]
+//
+//                val actions = Seq(
+//                  MouseAction(runeX, runeY, "move"),
+//                  MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
+//                  MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
+//                  MouseAction(targetX, targetY, "move"), // Move to target position
+//                  MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
+//                  MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
+//                )
+//                actionStateManager ! MouseMoveCommand(actions, settings.mouseMovements)
+//                println(s"Using item 3160 on map - Sent MouseMoveCommand to ActionStateManager: $actions")
+//              }
+//            }
+//            else {
+//              println("use HP with function")
+//              sendJson(Json.obj("__command" -> "useOnYourself", "itemInfo" -> Json.obj("itemId" -> 2874, "itemSubType" -> 10)))
+//            }
+//          } else if (settings.healingSettings.mPotionHealManaMin > 0 && mana <= settings.healingSettings.mPotionHealManaMin) {
+//            // mana potion 2874 sub type 7
+//            println("I need to use MP!")
+//            if (settings.mouseMovements) {
+//              println("use MP with mouse")
+//              findItemInContainerSlot14(json, 2874, 7).foreach { runePosition =>
+//                val runeX = (runePosition \ "x").as[Int]
+//                val runeY = (runePosition \ "y").as[Int]
+//
+//                val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
+//                val targetX = (mapTarget \ "x").as[Int]
+//                val targetY = (mapTarget \ "y").as[Int]
+//
+//                val actions = Seq(
+//                  MouseAction(runeX, runeY, "move"),
+//                  MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
+//                  MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
+//                  MouseAction(targetX, targetY, "move"), // Move to target position
+//                  MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
+//                  MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
+//                )
+//                actionStateManager ! MouseMoveCommand(actions, settings.mouseMovements)
+//                println(s"Using item 3160 on map - Sent MouseMoveCommand to ActionStateManager: $actions")
+//              }
+//            }
+//            else {
+//              println("use MP with function")
+//              sendJson(Json.obj("__command" -> "useOnYourself", "itemInfo" -> Json.obj("itemId" -> 2874, "itemSubType" -> 7)))
+//            }
+//          } else if (settings.healingSettings.strongHealHealth > 0 && health <= settings.healingSettings.strongHealHealth && mana >= settings.healingSettings.strongHealMana) {
+//            println("I need to use strong spell!")
+//            if (settings.mouseMovements) {
+//              println("use strong spell with keyboard")
+//            }
+//            else {
+//              println("use strong spell with function")
+//              sendJson(Json.obj("__command" -> "sayText", "text" -> settings.healingSettings.strongHealSpell))
+//            }
+//          } else if (settings.healingSettings.lightHealHealth > 0 && health <= settings.healingSettings.lightHealHealth && mana >= settings.healingSettings.lightHealMana) {
+//            println("I need to use light spell!")
+//            if (settings.mouseMovements) {
+//              println("use light spell with keyboard")
+//            }
+//            else {
+//              println("use light spell with function")
+//              sendJson(Json.obj("__command" -> "sayText", "text" -> settings.healingSettings.lightHealSpell))
+//            }
+//          }
+//        }
+//      }
 
+      performAutoHeal(json, currentSettings)
 
       if (currentSettings.runeMakingSettings.enabled) {
         val currentTime = System.currentTimeMillis()
@@ -264,149 +415,260 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     }
   }
 
-
   def performAutoHeal(json: JsValue, settings: SettingsUtils.UISettings): Unit = {
+    val (actions, logs) = computeHealingActions(json, settings)
+    // Wrap settings in Some() to match the expected Option type for the settingsOption parameter
+    executeActionsAndLogs(actions, logs, Some(settings))
+  }
+
+
+  def computeHealingActions(json: JsValue, settings: SettingsUtils.UISettings): (Seq[FakeAction], Seq[Log]) = {
     val health = (json \ "characterInfo" \ "Health").as[Int]
     val mana = (json \ "characterInfo" \ "Mana").as[Int]
+    var actions: Seq[FakeAction] = Seq()
+    var logs: Seq[Log] = Seq()
+
+
 
     if (settings.healingSettings.autoHeal) {
+      // UH RUNE 3160
       if (settings.healingSettings.uhHealHealth > 0 && health <= settings.healingSettings.uhHealHealth && mana <= settings.healingSettings.uhHealMana) {
-        // uh rune  3160
-        println("I need to use UH!")
+        logs = logs :+ Log("I need to use UH!")
         if (settings.mouseMovements) {
-          println("use UH with mouse")
+          logs = logs :+ Log("use UH with mouse")
           findItemInContainerSlot14(json, 3160, 1).foreach { runePosition =>
             val runeX = (runePosition \ "x").as[Int]
             val runeY = (runePosition \ "y").as[Int]
 
+            // Extracting target position from the mapPanelLoc in the JSON
             val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
             val targetX = (mapTarget \ "x").as[Int]
             val targetY = (mapTarget \ "y").as[Int]
 
-            val actions = Seq(
+            val actionsSeq = Seq(
               MouseAction(runeX, runeY, "move"),
-              MouseAction(runeX, runeY, "pressRight"),   // Right-click on the rune
+              MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
               MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
-              MouseAction(targetX, targetY, "move"),     // Move to target position
-              MouseAction(targetX, targetY, "pressLeft"),    // Press left at target position
-              MouseAction(targetX, targetY, "releaseLeft")   // Release left at target position
+              MouseAction(targetX, targetY, "move"), // Move to target position
+              MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
+              MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
             )
-            actionStateManager ! MouseMoveCommand(actions, settings.mouseMovements)
-            println(s"Using item 3160 on map - Sent MouseMoveCommand to ActionStateManager: $actions")
+
+            actions = actions :+ FakeAction("mouseAction", Some(ItemInfo(3160, None)), Some(MouseActions(actionsSeq)))
+            logs = logs :+ Log(s"Using item 3160 at position ($runeX, $runeY) - Actions: $actionsSeq")
           }
+        } else {
+          logs = logs :+ Log("use UH with function")
+          actions = actions :+ FakeAction("__command", Some(ItemInfo(3160, None)), None)
         }
-        else {
-          println("use UH with function")
-          sendJson(Json.obj("__command" -> "useOnYourself", "itemInfo" -> Json.obj("itemId" -> 3160)))
-        }
-      } else if (settings.healingSettings.ihHealHealth > 0 && health <= settings.healingSettings.ihHealHealth && mana <= settings.healingSettings.ihHealMana) {
-        // uh rune  3152
-        println("I need to use IH!")
+      }
+
+      // IH RUNE 3152
+      else if (settings.healingSettings.ihHealHealth > 0 && health <= settings.healingSettings.ihHealHealth && mana <= settings.healingSettings.ihHealMana) {
+        logs = logs :+ Log("I need to use IH!")
         if (settings.mouseMovements) {
-          println("use IH with mouse")
+          logs = logs :+ Log("use IH with mouse")
           findItemInContainerSlot14(json, 3152, 1).foreach { runePosition =>
             val runeX = (runePosition \ "x").as[Int]
             val runeY = (runePosition \ "y").as[Int]
 
+            // Extracting target position from the mapPanelLoc in the JSON
             val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
             val targetX = (mapTarget \ "x").as[Int]
             val targetY = (mapTarget \ "y").as[Int]
 
-            val actions = Seq(
+            val actionsSeq = Seq(
               MouseAction(runeX, runeY, "move"),
-              MouseAction(runeX, runeY, "pressRight"),   // Right-click on the rune
+              MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
               MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
-              MouseAction(targetX, targetY, "move"),     // Move to target position
-              MouseAction(targetX, targetY, "pressLeft"),    // Press left at target position
-              MouseAction(targetX, targetY, "releaseLeft")   // Release left at target position
+              MouseAction(targetX, targetY, "move"), // Move to target position
+              MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
+              MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
             )
-            actionStateManager ! MouseMoveCommand(actions, settings.mouseMovements)
-            println(s"Using item 3160 on map - Sent MouseMoveCommand to ActionStateManager: $actions")
+            actions = actions :+ FakeAction("mouseAction", Some(ItemInfo(3152, None)), Some(MouseActions(actionsSeq)))
+            logs = logs :+ Log(s"Using item 3152 at position ($runeX, $runeY) - Actions: $actionsSeq")
+
           }
+        } else {
+          logs = logs :+ Log("use IH with function")
+          actions = actions :+ FakeAction("__command", Some(ItemInfo(3152, None)), None)
         }
-        else {
-          println("use IH with function")
-          sendJson(Json.obj("__command" -> "useOnYourself", "itemInfo" -> Json.obj("itemId" -> 3152)))
-        }
-      } else if (settings.healingSettings.hPotionHealHealth > 0 && health <= settings.healingSettings.hPotionHealHealth && mana >= settings.healingSettings.hPotionHealMana) {
-        // health potion 2874 sub type 10
-        println("I need to use HP!")
+      }
+
+      // HP Potion 2874, 10
+      else if (settings.healingSettings.hPotionHealHealth > 0 && health <= settings.healingSettings.hPotionHealHealth && mana >= settings.healingSettings.hPotionHealMana) {
+        logs = logs :+ Log("I need to use HP!")
         if (settings.mouseMovements) {
-          println("use HP with mouse")
+          logs = logs :+ Log("use HP with mouse")
           findItemInContainerSlot14(json, 2874, 10).foreach { runePosition =>
             val runeX = (runePosition \ "x").as[Int]
             val runeY = (runePosition \ "y").as[Int]
 
+            // Extracting target position from the mapPanelLoc in the JSON
             val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
             val targetX = (mapTarget \ "x").as[Int]
             val targetY = (mapTarget \ "y").as[Int]
 
-            val actions = Seq(
+            val actionsSeq = Seq(
               MouseAction(runeX, runeY, "move"),
-              MouseAction(runeX, runeY, "pressRight"),   // Right-click on the rune
+              MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
               MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
-              MouseAction(targetX, targetY, "move"),     // Move to target position
-              MouseAction(targetX, targetY, "pressLeft"),    // Press left at target position
-              MouseAction(targetX, targetY, "releaseLeft")   // Release left at target position
+              MouseAction(targetX, targetY, "move"), // Move to target position
+              MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
+              MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
             )
-            actionStateManager ! MouseMoveCommand(actions, settings.mouseMovements)
-            println(s"Using item 3160 on map - Sent MouseMoveCommand to ActionStateManager: $actions")
+            // Assuming ActionDetail can wrap mouse actions
+            actions = actions :+ FakeAction("useMouse", Some(ItemInfo(2874, Option(10))), Some(MouseActions(actionsSeq)))
+            logs = logs :+ Log(s"Using item 2874, Option(10) at position ($runeX, $runeY) - Actions: $actionsSeq")
           }
+        } else {
+          logs = logs :+ Log("use HP with function")
+          actions = actions :+ FakeAction("useFunction", Some(ItemInfo(2874, Option(10))), None)
         }
-        else {
-          println("use HP with function")
-          sendJson(Json.obj("__command" -> "useOnYourself", "itemInfo" -> Json.obj("itemId" -> 2874, "itemSubType" -> 10)))
-        }
-      } else if (settings.healingSettings.mPotionHealManaMin > 0 && mana <= settings.healingSettings.mPotionHealManaMin) {
-        // mana potion 2874 sub type 7
-        println("I need to use MP!")
+      }
+
+      // MP Potion 2874, 7
+      else if (settings.healingSettings.mPotionHealManaMin > 0 && mana <= settings.healingSettings.mPotionHealManaMin) {
+        logs = logs :+ Log("I need to use MP!")
         if (settings.mouseMovements) {
-          println("use MP with mouse")
+          logs = logs :+ Log("use MP with mouse")
           findItemInContainerSlot14(json, 2874, 7).foreach { runePosition =>
             val runeX = (runePosition \ "x").as[Int]
             val runeY = (runePosition \ "y").as[Int]
 
+            // Extracting target position from the mapPanelLoc in the JSON
             val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
             val targetX = (mapTarget \ "x").as[Int]
             val targetY = (mapTarget \ "y").as[Int]
 
-            val actions = Seq(
+            val actionsSeq = Seq(
               MouseAction(runeX, runeY, "move"),
-              MouseAction(runeX, runeY, "pressRight"),   // Right-click on the rune
+              MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
               MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
-              MouseAction(targetX, targetY, "move"),     // Move to target position
-              MouseAction(targetX, targetY, "pressLeft"),    // Press left at target position
-              MouseAction(targetX, targetY, "releaseLeft")   // Release left at target position
+              MouseAction(targetX, targetY, "move"), // Move to target position
+              MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
+              MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
             )
-            actionStateManager ! MouseMoveCommand(actions, settings.mouseMovements)
-            println(s"Using item 3160 on map - Sent MouseMoveCommand to ActionStateManager: $actions")
+
+            actions = actions :+ FakeAction("useMouse", Some(ItemInfo(2874, Option(7))), Some(MouseActions(actionsSeq)))
+            logs = logs :+ Log(s"Using item 2874, Option(7) at position ($runeX, $runeY) - Actions: $actionsSeq")
           }
+        } else {
+          logs = logs :+ Log("use MP with function")
+          actions = actions :+ FakeAction("useFunction", Some(ItemInfo(2874, Option(7))), None)
         }
-        else {
-          println("use MP with function")
-          sendJson(Json.obj("__command" -> "useOnYourself", "itemInfo" -> Json.obj("itemId" -> 2874, "itemSubType" -> 7)))
-        }
-      } else if (settings.healingSettings.strongHealHealth > 0 && health <= settings.healingSettings.strongHealHealth && mana >= settings.healingSettings.strongHealMana) {
-        println("I need to use strong spell!")
+      }
+
+
+      else if (settings.healingSettings.strongHealHealth > 0 && health <= settings.healingSettings.strongHealHealth && mana >= settings.healingSettings.strongHealMana) {
+        val spellText = settings.healingSettings.strongHealSpell
         if (settings.mouseMovements) {
-          println("use strong spell with keyboard")
+          actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(spellText)))
+        } else {
+          actions = actions :+ FakeAction("sayText", None, Some(KeyboardText(spellText)))
         }
-        else {
-          println("use strong spell with function")
-          sendJson(Json.obj("__command" -> "sayText", "text" -> settings.healingSettings.strongHealSpell))
-        }
-      } else if (settings.healingSettings.lightHealHealth > 0 && health <= settings.healingSettings.lightHealHealth && mana >= settings.healingSettings.lightHealMana) {
-        println("I need to use light spell!")
+      }
+
+      else if (settings.healingSettings.lightHealHealth > 0 && health <= settings.healingSettings.lightHealHealth && mana >= settings.healingSettings.lightHealMana) {
+        val spellText = settings.healingSettings.lightHealSpell
         if (settings.mouseMovements) {
-          println("use light spell with keyboard")
-        }
-        else {
-          println("use light spell with function")
-          sendJson(Json.obj("__command" -> "sayText", "text" -> settings.healingSettings.lightHealSpell))
+          actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(spellText)))
+        } else {
+          actions = actions :+ FakeAction("sayText", None, Some(KeyboardText(spellText)))
         }
       }
     }
+
+
+
+    (actions, logs)
   }
+
+
+  def executeActionsAndLogs(actions: Seq[FakeAction], logs: Seq[Log], settingsOption: Option[SettingsUtils.UISettings]): Unit = {
+    logs.foreach(log => println(log.message))
+
+    settingsOption.foreach { settings =>
+      actions.foreach {
+
+        case FakeAction("useFunction", Some(itemInfo), None) =>
+          // Handle function-based actions: sendJson with itemInfo for specific use
+          sendJson(Json.obj("__command" -> "useOnYourself", "itemInfo" -> Json.toJson(itemInfo)))
+
+        case FakeAction("useMouse", _, Some(actionDetail: MouseActions)) =>
+          // Handle mouse sequence actions: mouse movement to ActionStateManager
+          actionStateManager ! MouseMoveCommand(actionDetail.actions, settings.mouseMovements)
+
+        case FakeAction("typeText", _, Some(actionDetail: KeyboardText)) =>
+          // Direct the text to ActionKeyboardManager for typing
+          actionKeyboardManager ! TypeText(actionDetail.text)
+
+        case FakeAction("sayText", _, Some(actionDetail: KeyboardText)) =>
+          // Function sayText for spells to TCP
+          sendJson(Json.obj("__command" -> "sayText", "text" -> actionDetail.text))
+
+        case _ =>
+          println("Unhandled action or log error")
+      }
+    }
+  }
+
+
+//  case FakeAction("castSpellKeyboard", None, Some(spellText))
+//  if settings.mouseMovements
+//  =>
+//  // Type the spell using the keyboard
+//  actionStateManager ! TypeText(spellText, settings.mouseMovements)
+//
+//  case FakeAction("castSpellFunction", None, Some(spellText))
+//  if !settings.mouseMovements
+//  =>
+//  // Send the spell command via TCP
+//  sendJson(Json.obj("__command" -> "sayText", "text" -> spellText))
+
+
+
+  //  def executeActionsAndLogs(actions: Seq[Action], logs: Seq[Log], settingsOption: Option[SettingsUtils.UISettings]): Unit = {
+//    logs.foreach(log => println(log.message)) // Print all logs
+//
+//    settingsOption.foreach { settings => // Handling Option[UISettings]
+//      actions.foreach {
+//
+//        case Action(command, _, Some(mouseActions)) =>
+//          // Use MouseMoveCommand for both mouse actions and keyboard spells when mouseMovements is enabled
+//          actionStateManager ! MouseMoveCommand(mouseActions, settings.mouseMovements)
+//          println("Routing actions (mouse or keyboard) to ActionStateManager.")
+//
+//        case Action("sayText", None, Some(text)) if !settings.mouseMovements =>
+//          // Direct handling for text commands
+//          sendJson(Json.obj("__command" -> "sayText", "text" -> text.head.action)) // Assuming the action is the spell command
+//
+//        case action@Action(command, Some(itemInfo), None) if !settings.mouseMovements =>
+//          sendJson(Json.obj("__command" -> command, "itemInfo" -> Json.toJson(itemInfo)))
+//
+//        case Action(command, None, Some(text)) if !settings.mouseMovements =>
+//          // Send JSON for spell commands when mouseMovements is disabled
+//          sendJson(Json.obj("__command" -> command, "text" -> text))
+//
+//
+//
+//        case Action(_, _, Some(mouseActions)) if settings.mouseMovements =>
+//          actionStateManager ! MouseMoveCommand(mouseActions, settings.mouseMovements)
+//          println("Routing mouse actions to ActionStateManager.")
+//
+//        case _ => println("Unhandled action or log error")
+//      }
+//    }
+//  }
+
+/*  implicit val itemInfoWrites: Writes[ItemInfo] = new Writes[ItemInfo] {
+    def writes(itemInfo: ItemInfo): JsValue = Json.obj(
+      "itemId" -> JsNumber(BigDecimal(itemInfo.itemId)),
+      // Ensure that the default value is also a BigDecimal
+      "itemSubType" -> JsNumber(BigDecimal(itemInfo.itemSubType.getOrElse(0)))
+    )
+  }*/
+
 
   // Function to find the screen position of an item in container slots 1-4
 

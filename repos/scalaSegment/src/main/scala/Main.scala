@@ -6,6 +6,7 @@ import akka.actor.{Actor, ActorRef, ActorSystem, Cancellable, Props}
 import play.api.libs.json.Json.JsValueWrapper
 import player.Player
 import mouse.{ActionStateManager, Mouse, MouseMovementActor}
+import keyboard.{ActionKeyboardManager, KeyboardActor}
 import play.api.libs.json._
 import processing.JsonProcessorActor
 import userUI.UIAppActor
@@ -96,11 +97,17 @@ object MainApp extends App {
   // Create the ActionStateManager without any parameters
   val actionStateManagerRef = system.actorOf(Props[ActionStateManager], "actionStateManager")
 
-  // Then, create the MouseMovementActor, passing the ActionStateManager reference
+  // Create the MouseMovementActor, passing the ActionStateManager reference
   val mouseMovementActorRef = system.actorOf(Props(new MouseMovementActor(actionStateManagerRef)), "mouseMovementActor")
 
-  // Assuming JsonProcessorActor needs access to both ActionStateManager and MouseMovementActor
-  val jsonProcessorActorRef = system.actorOf(Props(new JsonProcessorActor(mouseMovementActorRef, actionStateManagerRef)), "jsonProcessor")
+  // Create the KeyboardActor
+  val keyboardActorRef = system.actorOf(Props[KeyboardActor], "keyboardActor")
+
+  // Create the ActionKeyboardManager, passing the KeyboardActor reference
+  val actionKeyboardManagerRef = system.actorOf(Props(new ActionKeyboardManager(keyboardActorRef)), "actionKeyboardManager")
+
+  // Update JsonProcessorActor creation to include the ActionKeyboardManager reference
+  val jsonProcessorActorRef = system.actorOf(Props(new JsonProcessorActor(mouseMovementActorRef, actionStateManagerRef, actionKeyboardManagerRef)), "jsonProcessor")
 
   // Continue with the creation of other actors as before
   val initialJsonProcessorActorRef = system.actorOf(Props[InitialJsonProcessorActor], "initialJsonProcessor")
@@ -115,5 +122,6 @@ object MainApp extends App {
 
   system.terminate()
 }
+
 
 
