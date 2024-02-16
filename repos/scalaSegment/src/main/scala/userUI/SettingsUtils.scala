@@ -5,7 +5,7 @@ object SettingsUtils {
 
   // Define the nested case classes
   case class HealingSettings(
-                              autoHeal: Boolean,
+                              enabled: Boolean,
                               lightHealSpell: String,
                               lightHealHealth: Int,
                               lightHealMana: Int,

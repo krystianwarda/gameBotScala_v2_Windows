@@ -43,7 +43,7 @@ class SwingApp(playerClassList: List[Player],
   // Update the collectSettingsFromUI method to return UISettings
   def collectSettingsFromUI(): UISettings = {
     val healingSettings = HealingSettings(
-      autoHeal = autoHealCheckbox.selected,
+      enabled = autoHealCheckbox.selected,
       lightHealSpell = autoHealBot.lightHealSpellField.text,
       lightHealHealth = parseTextFieldToInt(autoHealBot.lightHealHealthField.text),
       lightHealMana = parseTextFieldToInt(autoHealBot.lightHealManaField.text),
@@ -121,7 +121,7 @@ class SwingApp(playerClassList: List[Player],
 
   def applySettingsToUI(settings: UISettings): Unit = {
     // CheckBox settings
-    autoHealCheckbox.selected = settings.healingSettings.autoHeal
+    autoHealCheckbox.selected = settings.healingSettings.enabled
     runeMakerCheckbox.selected = settings.runeMakingSettings.enabled
     protectionZoneCheckbox.selected = settings.protectionZoneSettings.enabled
     protectionZoneBot.playerOnScreenAlertCheckbox.selected = settings.protectionZoneSettings.playerOnScreenAlert
@@ -149,7 +149,7 @@ class SwingApp(playerClassList: List[Player],
   }
 
   def applyHealingSettings(healingSettings: HealingSettings): Unit = {
-    autoHealCheckbox.selected = healingSettings.autoHeal
+    autoHealCheckbox.selected = healingSettings.enabled
     // Assume there are methods or logic here to apply the rest of the healing settings
   }
 

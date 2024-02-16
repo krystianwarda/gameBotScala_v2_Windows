@@ -1,13 +1,12 @@
 package mouse
 
 import akka.actor.{Actor, ActorRef}
-import play.api.libs.json.{Json, Writes}
+import play.api.libs.json.{JsValue, Json, Writes}
 import mouse.ActionTypes
+import processing.{ActionDetail, JsonActionDetails, KeyboardText, MouseAction, MouseActions}
 
 import java.awt.Robot
 import java.awt.event.{InputEvent, KeyEvent}
-
-
 
 case class TextCommand(text: String)
 
@@ -15,26 +14,6 @@ case class TextCommand(text: String)
 
 object TextCommand {
   implicit val writes: Writes[TextCommand] = Json.writes[TextCommand]
-}
-
-case class MouseAction(x: Int, y: Int, action: String)
-// Represents a single mouse action, such as moving to coordinates (x, y) and performing an action (click, press, etc.)
-
-trait ActionDetail
-// A trait to represent details of an action, allowing for different types of actions to extend this trait.
-
-case class MouseActions(actions: Seq[MouseAction]) extends ActionDetail
-// Represents a sequence of mouse actions, extending ActionDetail to encapsulate mouse-related actions.
-
-case class KeyboardText(text: String) extends ActionDetail
-// Represents keyboard text input as an action detail, allowing for text to be sent as an action.
-
-// Optionally, if you need to serialize ActionDetail objects to JSON (for example, when sending over a network or saving to a file),
-// you'll need to define an implicit Writes or Format within the companion objects of MouseActions and KeyboardText,
-// or more generically for ActionDetail if your serialization library supports polymorphic types.
-
-object MouseActions {
-  // Define implicit Writes or Format here if necessary for JSON serialization
 }
 
 
@@ -47,9 +26,9 @@ object ItemInfo {
 }
 
 // Action class that can include either mouse actions, keyboard text, or other command types
+//case class FakeAction(command: String, itemInfo: Option[ItemInfo], actionDetail: Option[ActionDetail])
+//case class FakeAction(command: String, itemInfo: Option[ItemInfo], actionDetail: Option[JsValue])
 case class FakeAction(command: String, itemInfo: Option[ItemInfo], actionDetail: Option[ActionDetail])
-
-
 
 case class MouseMoveCommand(actions: Seq[MouseAction], mouseMovementsEnabled: Boolean)
 

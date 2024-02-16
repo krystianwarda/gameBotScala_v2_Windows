@@ -4,11 +4,11 @@ import main.scala.MainApp.mouseMovementActorRef
 
 import scala.collection.mutable
 import mouse.{ActionCompleted, MouseMoveCommand}
+import processing.MouseAction
 // Define action types and their priorities
 // Within your mouse package or an appropriate location
 
 case class ActionCompleted(actionType: ActionTypes.Value) // Redefined to include actionType
-
 
 // A map to hold action priorities (lower number = higher priority)
 object ActionTypes extends Enumeration {

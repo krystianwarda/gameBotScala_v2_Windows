@@ -1,30 +1,26 @@
 package keyboard
 
 import akka.actor.{Actor, Props}
-
 import java.awt.Robot
 import java.awt.event.KeyEvent
-// Assuming ActionDetail is declared somewhere accessible
-import mouse.{ActionDetail}
-
-// Adjust KeyboardText to extend ActionDetail
-case class KeyboardText(text: String) extends ActionDetail
-
-
 
 class KeyboardActor extends Actor {
   val robot = new Robot()
 
   // Helper method to press and release a key
   private def pressKey(keyCode: Int): Unit = {
+    println(s"KeyboardActor: Pressing key with keyCode: $keyCode") // Debug print
     robot.keyPress(keyCode)
     robot.keyRelease(keyCode)
+    println(s"KeyboardActor: Released key with keyCode: $keyCode") // Debug print
   }
 
-  // Simulate typing a string
+  // Simulate typing a string and press Enter after typing
   private def typeText(text: String): Unit = {
+    println(s"KeyboardActor: Typing text: $text") // Debug print
     text.foreach { char =>
       val keyCode = KeyEvent.getExtendedKeyCodeForChar(char)
+      println(s"KeyboardActor: Typing char: $char with keyCode: $keyCode") // Debug print for each character
       if (Character.isUpperCase(char) || char.isDigit || "`~!@#$%^&*()_+{}|:\"<>?".indexOf(char) > -1) {
         robot.keyPress(KeyEvent.VK_SHIFT)
       }
@@ -33,6 +29,9 @@ class KeyboardActor extends Actor {
         robot.keyRelease(KeyEvent.VK_SHIFT)
       }
     }
+    // Press Enter after typing the text
+    pressKey(KeyEvent.VK_ENTER)
+    println("KeyboardActor: Pressed Enter after typing") // Debug print
   }
 
   // Handle function keys
@@ -43,13 +42,16 @@ class KeyboardActor extends Actor {
       // Add more cases as needed
       case _ => 0 // Default or error handling
     }
+    println(s"KeyboardActor: Handling function key: $key with keyCode: $keyCode") // Debug print
     if (keyCode != 0) pressKey(keyCode)
   }
 
   // In KeyboardActor
   def receive: Receive = {
-    case TypeText(text) => typeText(text)
-    case _ => println("Unhandled text type action")
+    case TypeText(text) =>
+      println(s"KeyboardActor: Received TypeText with text: $text") // Debug print
+      typeText(text)
+    case _ => println("KeyboardActor: Unhandled text type action")
   }
 }
 
