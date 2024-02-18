@@ -3,6 +3,7 @@ import java.awt.GridBagLayout
 import java.awt.GridBagConstraints
 import processing.{ConnectToServer, InitializeProcessor}
 import main.scala.MainApp.{jsonProcessorActorRef, periodicFunctionActorRef}
+import play.api.libs.json.{Format, Json}
 //import userUI.SettingsUtils.{HealingSettings, ProtectionZoneSettings, RuneMakingSettings, UISettings, saveSettingsToFile}
 import userUI.SettingsUtils._
 import scala.swing.{Component, Dialog, FileChooser, Insets}
@@ -74,7 +75,9 @@ class SwingApp(playerClassList: List[Player],
 
     val fishingSettings = FishingSettings(
       enabled = fishingCheckbox.selected,
+      selectedRectangles = fishingBot.selectedRectangles
     )
+
 
     UISettings(
       healingSettings = healingSettings,

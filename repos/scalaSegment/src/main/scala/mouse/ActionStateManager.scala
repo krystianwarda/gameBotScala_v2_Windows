@@ -9,6 +9,7 @@ import processing.MouseAction
 // Within your mouse package or an appropriate location
 
 case class ActionCompleted(actionType: ActionTypes.Value) // Redefined to include actionType
+case class MouseMovementStatusUpdate(activeTaskCount: Int, mouseMovementsEnabled: Boolean)
 
 // A map to hold action priorities (lower number = higher priority)
 object ActionTypes extends Enumeration {
@@ -29,24 +30,35 @@ object ActionTypes extends Enumeration {
 class ActionStateManager extends Actor {
   // Map to track action states and their last execution time
   val actionStates: mutable.Map[ActionTypes.Value, (String, Long, Option[Long])] = mutable.Map().withDefaultValue(("free", 0L, None))
+  // Initialize with mouse movements enabled status
+  var mouseMovementsEnabled: Boolean = true // Assume default as true, adjust based on your application logic
 
-  def receive: Receive = {
+  // Method to call when changing the state
+  def updateMouseMovementStatus(): Unit = {
+    // Assuming you have a way to count active tasks, replace `activeTaskCount` with your actual logic
+    val activeTaskCount = actionStates.count(_._2._1 == "in progress")
+    mouseMovementActorRef ! MouseMovementStatusUpdate(activeTaskCount, mouseMovementsEnabled)
+  }
 
+  override def receive: Receive = {
     case MouseMoveCommand(actions, mouseMovementsEnabled) =>
+//      println(s"Received MouseMoveCommand with actions: ${actions.length} and mouseMovementsEnabled: $mouseMovementsEnabled")
       val actionType = extractActionType(actions)
       val currentTime = System.currentTimeMillis()
-      val (state, _, nextExecutionTimeOpt) = actionStates(actionType) // Fixed tuple unpacking
+      val (state, lastExecutionTime, _) = actionStates(actionType)
+//      println(s"Current state for actionType $actionType: $state")
 
-      if (state == "free" && nextExecutionTimeOpt.forall(_ <= currentTime) && isPriorityMet(actionType)) {
+      if (state == "free" && isPriorityMet(actionType)) {
+//        println(s"Action $actionType is set to 'in progress'")
         actionStates(actionType) = ("in progress", currentTime, calculateNextExecutionTime(actionType, currentTime))
-        mouseMovementActorRef ! MouseMoveCommand(actions, true)
+        mouseMovementActorRef ! MouseMoveCommand(actions, mouseMovementsEnabled)
       }
 
     case ActionCompleted(actionType) =>
+//      println(s"ActionCompleted received for actionType: $actionType")
       val currentTime = System.currentTimeMillis()
-      val (_, _, nextExecutionTimeOpt) = actionStates(actionType)
-      actionStates(actionType) = ("free", currentTime, nextExecutionTimeOpt) // Maintain throttling info
-
+      actionStates(actionType) = ("free", currentTime, None)
+//      println(s"Action $actionType is now free")
   }
 
   def extractActionType(actions: Seq[MouseAction]): ActionTypes.Value = {
@@ -66,7 +78,7 @@ class ActionStateManager extends Actor {
     // If you want to keep the throttle as it was, just leave `existingThrottleInfo` as it is.
     actionStates(actionType) = ("free", currentTime, existingThrottleInfo)
 
-    println(s"Action $actionType completed and is now free.")
+//    println(s"Action $actionType completed and is now free.")
     // Additional logic for post-action completion...
   }
 
