@@ -34,10 +34,9 @@ object SettingsUtils {
                                    )
 
   case class FishingSettings(
-                              enabled: Boolean,
-                              selectedRectangles: String = "" // Now a comma-separated string
-                            )
-
+                                     enabled: Boolean,
+                                     selectedRectangles: Seq[String] = Seq.empty
+                                   )
 
   // Define implicit Format instances for the nested case classes
   implicit val healingSettingsFormat: Format[HealingSettings] = Json.format[HealingSettings]
@@ -60,23 +59,13 @@ object SettingsUtils {
   // Finally, define the implicit Format instance for UISettings
   implicit val uISettingsFormat: Format[UISettings] = Json.format[UISettings]
 
-
   def saveSettingsToFile(settings: UISettings, filePath: String): Unit = {
-    // Assuming settings.fishingSettings.selectedRectangles is already a comma-separated string
     val jsonString = Json.toJson(settings).toString()
     val file = new java.io.File(filePath)
     val pw = new java.io.PrintWriter(file)
     try pw.write(jsonString)
     finally pw.close()
   }
-
-//  def saveSettingsToFile(settings: UISettings, filePath: String): Unit = {
-//    val jsonString = Json.toJson(settings).toString()
-//    val file = new java.io.File(filePath)
-//    val pw = new java.io.PrintWriter(file)
-//    try pw.write(jsonString)
-//    finally pw.close()
-//  }
 
   def loadSettingsFromFile(filePath: String): Option[UISettings] = {
     try {

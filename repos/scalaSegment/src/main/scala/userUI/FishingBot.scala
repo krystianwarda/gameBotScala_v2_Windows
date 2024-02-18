@@ -17,13 +17,8 @@ object RectangleSettings {
   // Ensure there's an implicit Format instance for RectangleSettings
   implicit val format: Format[RectangleSettings] = Json.format[RectangleSettings]
 }
-
-trait RectangleSelectionCallback {
-  def onRectanglesSelected(selectedRectangles: String): Unit
-}
-
 class FishingBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: ActorRef) {
-  var selectedRectangles: Seq[RectangleSettings] = Seq.empty
+  var selectedRectangles: Seq[String] = Seq.empty // Change to store strings directly
 
   private val drawingComponent = new JPanel() {
     setOpaque(false)
@@ -82,9 +77,9 @@ class FishingBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
   private val overlayFrame = new JFrame()
   overlayFrame.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE)
   overlayFrame.setUndecorated(true)
-  overlayFrame.setExtendedState(java.awt.Frame.MAXIMIZED_BOTH)
+  overlayFrame.setExtendedState(java.awt.Frame.MAXIMIZED_BOTH) // Fully qualified to avoid ambiguity
   overlayFrame.setAlwaysOnTop(true)
-  overlayFrame.setType(java.awt.Window.Type.UTILITY)
+  overlayFrame.setType(Window.Type.UTILITY)
   overlayFrame.setBackground(new Color(255, 255, 255, 128))
   overlayFrame.getContentPane.setLayout(new BorderLayout())
   overlayFrame.getContentPane.add(drawingComponent, BorderLayout.CENTER)
@@ -137,27 +132,34 @@ class FishingBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
     }
 
 
-    val closeButton = new JButton("Close") // Add a close button
+    // Separate frame for the Close button
+    val closeButtonFrame = new JFrame() {
+      setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE)
+      setSize(new Dimension(100, 50))
+      setUndecorated(true)
+      setAlwaysOnTop(true)
+      setLocationRelativeTo(gridFrame) // Position relative to gridFrame
+    }
+
+    val closeButton = new JButton("Close")
     closeButton.addActionListener(_ => {
-      // Collecting positions of selected tiles into a single string formatted as '1x1','3x4','7x8'
-      val selectedTilesString = panel.getComponents
+      val markedRectangles = panel.getComponents
         .filter(_.isInstanceOf[JButton])
         .map(_.asInstanceOf[JButton])
         .filter(button => Option(button.getClientProperty("selected")).getOrElse(false).asInstanceOf[Boolean])
-        .map(_.getText) // Assuming the button text directly represents the tile position
-        .mkString("','") // Format as '1x1','3x4','7x8'
+        .map(_.getText) // Directly use the button text
 
-      val formattedString = s"'$selectedTilesString'" // Ensure it's wrapped with single quotes at the start and end
+      // Update the selectedRectangles with string representations
+      selectedRectangles = markedRectangles
 
-      // Assuming you have access to update your FishingSettings instance here:
-      // Update the selectedRectangles to the newly formatted string
-      fishingBot.selectedRectangles = formattedString // Adjust this line based on how you can actually update the settings
+      println("Marked Rectangles: " + selectedRectangles.mkString(", "))
 
       gridFrame.dispose() // Dispose the overlay frame
+      closeButtonFrame.dispose() // Dispose the Close button frame
     })
 
-
-
+    closeButtonFrame.getContentPane.add(closeButton)
+    closeButtonFrame.setVisible(true)
 
     val contentPane = gridFrame.getContentPane
     contentPane.setLayout(new BorderLayout())
@@ -203,41 +205,4 @@ class FishingBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
 //        .map(_.getText)
 //      println("Chosen rectangles: " + markedRectangles.mkString(", "))
 //      gridFrame.dispose()
-//    })
-
-
-//    val closeButton = new JButton("Close") // Add a close button
-//    closeButton.addActionListener(_ => {
-//      val markedRectangles = panel.getComponents
-//        .filter(_.isInstanceOf[JButton])
-//        .map(_.asInstanceOf[JButton])
-//        .filter(button => Option(button.getClientProperty("selected")).getOrElse(false).asInstanceOf[Boolean])
-//        .map(button => {
-//          // Assuming button text is in the format "width x height"
-//          val parts = button.getText.split("x")
-//          if (parts.length == 2) { // Ensure there are exactly two parts: width and height
-//            try {
-//              val width = parts(0).trim.toInt
-//              val height = parts(1).trim.toInt
-//              // Assuming x and y coordinates need to be determined or are fixed
-//              // Since the format "13x6" only gives width and height, you might need additional logic to determine x and y
-//              val x = 0 // Placeholder for actual x coordinate logic
-//              val y = 0 // Placeholder for actual y coordinate logic
-//              RectangleSettings(x, y, width, height)
-//            } catch {
-//              case e: NumberFormatException =>
-//                println(s"Error parsing rectangle dimensions from '${button.getText}': ${e.getMessage}")
-//                null // Return null if parsing fails
-//            }
-//          } else {
-//            println(s"Invalid format for rectangle definition: ${button.getText}")
-//            null // Return null for invalid format
-//          }
-//        }).filter(_ != null) // Remove any null entries caused by parsing errors
-//
-//      // Update the selectedRectangles member with the new selection
-//      selectedRectangles = markedRectangles
-//
-//
-//      gridFrame.dispose() // Dispose the overlay frame
 //    })
