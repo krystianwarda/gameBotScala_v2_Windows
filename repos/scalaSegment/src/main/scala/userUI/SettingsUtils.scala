@@ -33,17 +33,22 @@ object SettingsUtils {
                                      escapeToProtectionZone: Boolean
                                    )
 
+  case class FishingSettings(
+                                     enabled: Boolean,
+                                   )
+
   // Define implicit Format instances for the nested case classes
   implicit val healingSettingsFormat: Format[HealingSettings] = Json.format[HealingSettings]
   implicit val runeMakingSettingsFormat: Format[RuneMakingSettings] = Json.format[RuneMakingSettings]
   implicit val protectionZoneSettingsFormat: Format[ProtectionZoneSettings] = Json.format[ProtectionZoneSettings]
+  implicit val fishingSettingsFormat: Format[FishingSettings] = Json.format[FishingSettings]
 
   // Now define the UISettings case class
   case class UISettings(
                          healingSettings: HealingSettings,
                          runeMakingSettings: RuneMakingSettings,
                          protectionZoneSettings: ProtectionZoneSettings,
-                         fishing: Boolean,
+                         fishingSettings: FishingSettings,
                          mouseMovements: Boolean,
                          caveBot: Boolean
                          // Add other settings or groups of settings as needed

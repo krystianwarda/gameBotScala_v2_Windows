@@ -32,6 +32,7 @@ class SwingApp(playerClassList: List[Player],
   val caveBot = new CaveBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val runeMaker = new RuneMaker(currentPlayer, uiAppActor, jsonProcessorActor)
   val trainerBot = new TrainerBot(currentPlayer, uiAppActor, jsonProcessorActor)
+  val fishingBot = new FishingBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val protectionZoneBot = new ProtectionZoneBot(currentPlayer, uiAppActor, jsonProcessorActor)
 
   val exampleNames = playerClassList.map(_.characterName)
@@ -71,11 +72,15 @@ class SwingApp(playerClassList: List[Player],
       escapeToProtectionZone = protectionZoneBot.escapeToProtectionZoneCheckbox.selected
     )
 
+    val fishingSettings = FishingSettings(
+      enabled = fishingCheckbox.selected,
+    )
+
     UISettings(
       healingSettings = healingSettings,
       runeMakingSettings = runeMakingSettings,
       protectionZoneSettings = protectionZoneSettings,
-      fishing = fishingCheckbox.selected,
+      fishingSettings = fishingSettings,
       mouseMovements = mouseMovementsCheckbox.selected,
       caveBot = caveBotCheckbox.selected
     )
@@ -126,7 +131,7 @@ class SwingApp(playerClassList: List[Player],
     protectionZoneCheckbox.selected = settings.protectionZoneSettings.enabled
     protectionZoneBot.playerOnScreenAlertCheckbox.selected = settings.protectionZoneSettings.playerOnScreenAlert
     protectionZoneBot.escapeToProtectionZoneCheckbox.selected = settings.protectionZoneSettings.escapeToProtectionZone
-    fishingCheckbox.selected = settings.fishing
+    fishingCheckbox.selected = settings.fishingSettings.enabled
     mouseMovementsCheckbox.selected = settings.mouseMovements
     caveBotCheckbox.selected = settings.caveBot
 
@@ -166,7 +171,7 @@ class SwingApp(playerClassList: List[Player],
   }
 
   def applyGeneralSettings(settings: UISettings): Unit = {
-    fishingCheckbox.selected = settings.fishing
+    fishingCheckbox.selected = settings.fishingSettings.enabled
     mouseMovementsCheckbox.selected = settings.mouseMovements
     caveBotCheckbox.selected = settings.caveBot
     // Apply any other top-level settings
@@ -297,6 +302,8 @@ class SwingApp(playerClassList: List[Player],
     pages += new TabbedPane.Page("Rune Maker", runeMaker.runeMakerTab)
 
     pages += new TabbedPane.Page("Trainer", trainerBot.trainerTab)
+
+    pages += new TabbedPane.Page("Fishing", fishingBot.fishingTab)
 
     pages += new TabbedPane.Page("Protection Zone", protectionZoneBot.protectionZoneTab)
 

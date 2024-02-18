@@ -12,14 +12,15 @@ case class ActionCompleted(actionType: ActionTypes.Value) // Redefined to includ
 
 // A map to hold action priorities (lower number = higher priority)
 object ActionTypes extends Enumeration {
-  val Heal, AttackMonster, Move, ShootRune = Value
+  val Heal, AttackMonster, Move, ShootRune, Fish = Value
 
   // A map to hold action priorities (lower number = higher priority)
   val actionPriorities: Map[Value, Int] = Map(
     Heal -> 1,
     AttackMonster -> 2,
     Move -> 3,
-    ShootRune -> 4
+    ShootRune -> 4,
+    Fish -> 5 // Assuming you want to add Fish with a priority
   )
 }
 
@@ -27,27 +28,24 @@ object ActionTypes extends Enumeration {
 // Actor to manage action states
 class ActionStateManager extends Actor {
   // Map to track action states and their last execution time
-  val actionStates: mutable.Map[ActionTypes.Value, (String, Long)] = mutable.Map().withDefaultValue(("free", 0L))
+  val actionStates: mutable.Map[ActionTypes.Value, (String, Long, Option[Long])] = mutable.Map().withDefaultValue(("free", 0L, None))
 
   def receive: Receive = {
 
     case MouseMoveCommand(actions, mouseMovementsEnabled) =>
-      println(s"ActionStateManager received MouseMoveCommand: $actions, mouseMovementsEnabled: $mouseMovementsEnabled")
-      val actionType = extractActionType(actions) // Implement this based on your logic
+      val actionType = extractActionType(actions)
       val currentTime = System.currentTimeMillis()
-      val (state, lastExecTime) = actionStates(actionType)
+      val (state, _, nextExecutionTimeOpt) = actionStates(actionType) // Fixed tuple unpacking
 
-      if (state == "free" && isPriorityMet(actionType)) {
-        actionStates(actionType) = ("in progress", currentTime)
-        mouseMovementActorRef ! MouseMoveCommand(actions, true) // Directly send to MouseMovementActor
-        println(s"ActionStateManager forwarded MouseMoveCommand to MouseMovementActor")
+      if (state == "free" && nextExecutionTimeOpt.forall(_ <= currentTime) && isPriorityMet(actionType)) {
+        actionStates(actionType) = ("in progress", currentTime, calculateNextExecutionTime(actionType, currentTime))
+        mouseMovementActorRef ! MouseMoveCommand(actions, true)
       }
-      println(s"ActionStateManager processing command for actionType: $actionType, currentState: $state")
 
     case ActionCompleted(actionType) =>
-      handleActionCompleted(actionType)
       val currentTime = System.currentTimeMillis()
-      println(s"Action $actionType completed at $currentTime.")
+      val (_, _, nextExecutionTimeOpt) = actionStates(actionType)
+      actionStates(actionType) = ("free", currentTime, nextExecutionTimeOpt) // Maintain throttling info
 
   }
 
@@ -60,13 +58,26 @@ class ActionStateManager extends Actor {
   }
 
   def handleActionCompleted(actionType: ActionTypes.Value): Unit = {
-    actionStates(actionType) = ("free", System.currentTimeMillis())
+    val currentTime = System.currentTimeMillis()
+    // Retrieve the existing throttle info to decide if it should be reset or maintained.
+    val (_, _, existingThrottleInfo) = actionStates(actionType)
+
+    // If you want to reset the throttle info after the action is completed, replace `existingThrottleInfo` with `None`.
+    // If you want to keep the throttle as it was, just leave `existingThrottleInfo` as it is.
+    actionStates(actionType) = ("free", currentTime, existingThrottleInfo)
+
     println(s"Action $actionType completed and is now free.")
-    // Here you can add any logic that should be triggered after an action is completed.
-    // For example, checking if there are queued actions that were waiting for this one to complete.
-    // checkForQueuedActions(actionType)
+    // Additional logic for post-action completion...
   }
 
+
+  def calculateNextExecutionTime(actionType: ActionTypes.Value, currentTime: Long): Option[Long] = {
+    // Define throttling logic per action type, e.g., 1 second for fishing
+    actionType match {
+      case ActionTypes.Fish => Some(currentTime + 1000) // Next execution time 1 second later
+      case _ => None // No throttling for other actions
+    }
+  }
 
   def isPriorityMet(actionType: ActionTypes.Value): Boolean = {
     // Implement your logic to check if the action's priority allows it to proceed

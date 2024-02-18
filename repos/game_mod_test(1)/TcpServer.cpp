@@ -184,71 +184,142 @@ bool TcpServer::PollRequest(SOCKET& sckFd, sockaddr_in& clientAddr, std::string&
     }
     return exitQuery;
 }
-
-bool TcpServer::SendOn(const SOCKET &sckFd, const std::string &data)
+bool TcpServer::SendOn(const SOCKET& sckFd, const std::string& data)
 {
+    EnterCriticalSection(&this->m_mutex); // Lock the critical section
+    bool result = true; // Assume success
+    std::string errorMessage; // To store error message if any
+
     try {
-        auto p = std::find_if(this->m_rvClients.begin(), this->m_rvClients.end(), [sckFd](WSAPOLLFD pfd) -> bool
-            { return pfd.fd == sckFd; });
+        auto p = std::find_if(this->m_rvClients.begin(), this->m_rvClients.end(), [sckFd](WSAPOLLFD pfd) -> bool {
+            return pfd.fd == sckFd;
+            });
 
-        if (p == this->m_rvClients.end())
-        {
-            if (this->m_verbose) std::cout << "Cannot send data on socket #" << sckFd << ": Client socket does not exist" << std::endl;
-            return false;
+        if (p == this->m_rvClients.end()) {
+            errorMessage = "Client socket does not exist";
+            result = false;
         }
-
-        if ((*p).revents & (POLLHUP | POLLERR | POLLNVAL))
-        {
-            if (this->m_verbose) std::cout << "Cannot send data on socket #" << sckFd << ": Socket is disconnected, invalid, or in error state" << std::endl;
-            return false;
+        else if ((*p).revents & (POLLHUP | POLLERR | POLLNVAL)) {
+            errorMessage = "Socket is disconnected, invalid, or in error state";
+            result = false;
         }
-
-        size_t pos = 0;
-        size_t length = data.size();
-        int sent = send(sckFd, (char*)&length, sizeof length, 0);
-        int wle = WSAGetLastError();
-
-        //sent = send(sckFd, &data[pos], length - pos, 0);
-        //wle = WSAGetLastError();
-        if (wle == 0 && sent > 0)
-        {
-            while (1)
-            {
-                sent = send(sckFd, &data[pos], length - pos, 0);
-                wle = WSAGetLastError();
-                if (wle == 0 && sent > 0)
-                {
-                    if (sent + pos < length)
-                    {
-                        pos += sent;
+        else {
+            // Send the length of the data
+            size_t lengthToSend = sizeof(size_t);
+            size_t totalSent = 0;
+            size_t length = data.size();
+            const char* lengthBuffer = reinterpret_cast<const char*>(&length);
+            while (totalSent < lengthToSend) {
+                int sent = send(sckFd, lengthBuffer + totalSent, lengthToSend - totalSent, 0);
+                if (sent == SOCKET_ERROR) {
+                    int wle = WSAGetLastError();
+                    if (wle == WSAEWOULDBLOCK) {
+                        // Handle would block or retry after a delay
+                        Sleep(1); // Sleep for a while before retrying
                         continue;
                     }
+                    else {
+                        errorMessage = "Socket error on send";
+                        result = false;
+                        break;
+                    }
+                }
+                totalSent += sent;
+            }
 
-                    return true;
-                }
-                if (sent == 0)
-                {
-                    (*p).revents |= POLLHUP;
-                    break;
-                }
-                if (wle != WSAEWOULDBLOCK)
-                {
-                    (*p).revents |= POLLERR;
-                    break;
+            // Send the actual data if length was successfully sent
+            if (result) {
+                size_t dataToSend = data.size();
+                totalSent = 0;
+                const char* dataBuffer = data.c_str();
+                while (totalSent < dataToSend) {
+                    int sent = send(sckFd, dataBuffer + totalSent, dataToSend - totalSent, 0);
+                    if (sent == SOCKET_ERROR) {
+                        int wle = WSAGetLastError();
+                        if (wle == WSAEWOULDBLOCK) {
+                            // Handle would block or retry after a delay
+                            Sleep(1); // Sleep for a while before retrying
+                            continue;
+                        }
+                        else {
+                            errorMessage = "Socket error on send";
+                            result = false;
+                            break;
+                        }
+                    }
+                    totalSent += sent;
                 }
             }
         }
-        if (sent == 0)
-            (*p).revents |= POLLHUP;
-        if (sent != sizeof length && wle != WSAEWOULDBLOCK)
-            (*p).revents |= POLLERR;
     }
     catch (const std::exception& e) {
-        std::cerr << "[TcpServer] Exception in SendOn: " << e.what() << std::endl;
-        return false;
+        errorMessage = e.what();
+        result = false;
     }
-    return true;
+
+    LeaveCriticalSection(&this->m_mutex); // Unlock the critical section
+
+    // Print the error message, if any, after releasing the lock
+    if (!errorMessage.empty()) {
+        if (this->m_verbose) std::cout << "Cannot send data on socket #" << sckFd << ": " << errorMessage << std::endl;
+    }
+
+    return result;
 }
+
+
+//if (p == this->m_rvClients.end())
+//{
+//    if (this->m_verbose) std::cout << "Cannot send data on socket #" << sckFd << ": Client socket does not exist" << std::endl;
+//    return false;
+//}
+// 
+//        size_t pos = 0;
+//        size_t length = data.size();
+//        int sent = send(sckFd, (char*)&length, sizeof length, 0);
+//        int wle = WSAGetLastError();
+//
+//        //sent = send(sckFd, &data[pos], length - pos, 0);
+//        //wle = WSAGetLastError();
+//        if (wle == 0 && sent > 0)
+//        {
+//            while (1)
+//            {
+//                sent = send(sckFd, &data[pos], length - pos, 0);
+//                wle = WSAGetLastError();
+//                if (wle == 0 && sent > 0)
+//                {
+//                    if (sent + pos < length)
+//                    {
+//                        pos += sent;
+//                        continue;
+//                    }
+//
+//                    return true;
+//                }
+//                if (sent == 0)
+//                {
+//                    (*p).revents |= POLLHUP;
+//                    break;
+//                }
+//                if (wle != WSAEWOULDBLOCK)
+//                {
+//                    (*p).revents |= POLLERR;
+//                    break;
+//                }
+//            }
+//        }
+//        if (sent == 0)
+//            (*p).revents |= POLLHUP;
+//        if (sent != sizeof length && wle != WSAEWOULDBLOCK)
+//            (*p).revents |= POLLERR;
+//    }
+//    catch (const std::exception& e) {
+//        std::cerr << "[TcpServer] Exception in SendOn: " << e.what() << std::endl;
+//        return false;
+//    }
+//    return true;
+//}
 
 bool TcpServer::Start()
 {

@@ -1,7 +1,7 @@
 package processing
 
 import play.api.libs.json.JsObject
-import mouse.{ActionCompleted, ActionTypes, Mouse, MouseAction}
+import mouse.{ActionCompleted, ActionTypes, Mouse}
 import mouse.{MouseMoveCommand, MouseMovementSettings}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
 
