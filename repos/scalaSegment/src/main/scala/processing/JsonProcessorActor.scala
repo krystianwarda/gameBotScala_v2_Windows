@@ -184,9 +184,11 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
 
         case FakeAction("useMouse", _, Some(actionDetail: MouseActions)) =>
           // Handle mouse sequence actions: mouse movement to ActionStateManager
+          println("Fake action - use mouse")
           actionStateManager ! MouseMoveCommand(actionDetail.actions, settings.mouseMovements)
 
         case FakeAction("typeText", _, Some(actionDetail: KeyboardText)) =>
+          println("Fake action - use keyboard - type text")
           // Direct the text to ActionKeyboardManager for typing
           actionKeyboardManager ! TypeText(actionDetail.text)
 

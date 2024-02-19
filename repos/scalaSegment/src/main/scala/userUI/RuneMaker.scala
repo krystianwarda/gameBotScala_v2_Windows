@@ -9,7 +9,7 @@ import javax.swing.{JLabel, JPanel}
 
 class RuneMaker(player: Player, uiAppActor: ActorRef, jsonProcessorActor: ActorRef) {
 
-  val spellComboBox = new ComboBox(List("adori vita vis", "adori vis"))
+  val spellComboBox = new ComboBox(List("adori gran flam"))
   val manaTextField = new TextField(10) // Width set to 10
 
   val runeMakerTab: Component = Component.wrap(new JPanel(new GridBagLayout) {

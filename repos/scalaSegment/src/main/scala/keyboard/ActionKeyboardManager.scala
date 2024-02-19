@@ -19,23 +19,25 @@ case class KeyboardActionCompleted(actionType: KeyboardActionTypes.Value)
 class ActionKeyboardManager(keyboardActorRef: ActorRef) extends Actor {
   val actionStates: mutable.Map[KeyboardActionTypes.Value, (String, Long)] = mutable.Map().withDefaultValue(("free", 0L))
 
-  def receive: Receive = {
+  override def receive: Receive = {
     case textCommand: TypeText =>
       val actionType = KeyboardActionTypes.TypeText
       val currentTime = System.currentTimeMillis()
       val (state, _) = actionStates(actionType)
+
+      println(s"Current state for $actionType: $state") // Debug
 
       if (state == "free" && isPriorityMet(actionType)) {
         actionStates(actionType) = ("in progress", currentTime)
         println(s"ActionKeyboardManager: Processing TypeText command")
         keyboardActorRef ! textCommand
       } else {
-        println(s"ActionKeyboardManager: Skipping TypeText command due to state or priority")
+        println(s"ActionKeyboardManager: Skipping TypeText command due to state or priority, current state: $state")
       }
 
     case KeyboardActionCompleted(actionType) =>
+      println(s"Action $actionType completed, setting state to free.") // Debug
       actionStates(actionType) = ("free", System.currentTimeMillis())
-      println(s"Action $actionType is now free.")
 
     case _ => println("ActionKeyboardManager: Unhandled keyboard action")
   }

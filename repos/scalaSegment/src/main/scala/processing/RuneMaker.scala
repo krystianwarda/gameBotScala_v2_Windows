@@ -52,6 +52,7 @@ object RuneMaker {
           println("Nothing in hand.")
           if (settings.mouseMovements) {
             findBackpackSlotForBlank(json).foreach { backpackSlotForBlank =>
+              println(backpackSlotForBlank)
               val endX = (backpackSlotForBlank \ "x").as[Int]
               val endY = (backpackSlotForBlank \ "y").as[Int]
               println(s"Moving mouse from: x:$endX, y:$endY to x:$slot6X, y:$slot6Y")

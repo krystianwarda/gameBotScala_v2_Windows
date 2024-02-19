@@ -58,10 +58,11 @@ object Process {
             case (slotName, slotInfo: JsObject) if (slotInfo \ "itemId").asOpt[Int].contains(3147) =>
               println(s"Found blank rune in $containerName at slot $slotName")
               // Attempt to retrieve the screen position using the slot name
-              (json \ "screenInfo" \ "inventoryPanelLoc" \ "container0" \ "contentsPanel" \ slotName).asOpt[JsObject].map { screenPos =>
+              (json \ "screenInfo" \ "inventoryPanelLoc" \ containerName \ "contentsPanel" \ slotName).asOpt[JsObject].map { screenPos =>
                 println(s"Screen position for blank rune: $screenPos")
                 screenPos
               }
+
           }.flatten
       }.flatten
     }

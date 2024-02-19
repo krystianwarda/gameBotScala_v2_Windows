@@ -32,9 +32,9 @@ class SwingApp(playerClassList: List[Player],
   val autoHealBot = new AutoHealBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val caveBot = new CaveBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val runeMaker = new RuneMaker(currentPlayer, uiAppActor, jsonProcessorActor)
-  val trainerBot = new TrainerBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val fishingBot = new FishingBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val protectionZoneBot = new ProtectionZoneBot(currentPlayer, uiAppActor, jsonProcessorActor)
+  val trainingBot = new TrainingBot(currentPlayer, uiAppActor, jsonProcessorActor)
 
   val exampleNames = playerClassList.map(_.characterName)
   val exampleMap = playerClassList.map(e => e.characterName -> e).toMap
@@ -78,12 +78,21 @@ class SwingApp(playerClassList: List[Player],
       selectedRectangles = fishingBot.selectedRectangles
     )
 
+    val trainingSettings = TrainingSettings(
+      enabled = trainingCheckbox.selected,
+      pickAmmunition = trainingBot.pickAmmunitionCheckbox.selected,
+      refillAmmunition = trainingBot.refillAmmunitionCheckbox.selected,
+      doNotKillTarget = trainingBot.doNotKillTargetCheckbox.selected,
+      switchWeaponToEnsureDamage = trainingBot.switchWeaponToEnsureDamageCheckbox.selected,
+    )
+
 
     UISettings(
       healingSettings = healingSettings,
       runeMakingSettings = runeMakingSettings,
       protectionZoneSettings = protectionZoneSettings,
       fishingSettings = fishingSettings,
+      trainingSettings = trainingSettings,
       mouseMovements = mouseMovementsCheckbox.selected,
       caveBot = caveBotCheckbox.selected
     )
@@ -135,6 +144,12 @@ class SwingApp(playerClassList: List[Player],
     protectionZoneBot.playerOnScreenAlertCheckbox.selected = settings.protectionZoneSettings.playerOnScreenAlert
     protectionZoneBot.escapeToProtectionZoneCheckbox.selected = settings.protectionZoneSettings.escapeToProtectionZone
     fishingCheckbox.selected = settings.fishingSettings.enabled
+    trainingCheckbox.selected = settings.trainingSettings.enabled
+    trainingBot.pickAmmunitionCheckbox.selected = settings.protectionZoneSettings.playerOnScreenAlert
+    trainingBot.refillAmmunitionCheckbox.selected = settings.protectionZoneSettings.playerOnScreenAlert
+    trainingBot.doNotKillTargetCheckbox.selected = settings.protectionZoneSettings.playerOnScreenAlert
+    trainingBot.switchWeaponToEnsureDamageCheckbox.selected = settings.protectionZoneSettings.playerOnScreenAlert
+
     mouseMovementsCheckbox.selected = settings.mouseMovements
     caveBotCheckbox.selected = settings.caveBot
 
@@ -171,6 +186,15 @@ class SwingApp(playerClassList: List[Player],
     protectionZoneBot.playerOnScreenAlertCheckbox.selected = protectionZoneSettings.playerOnScreenAlert
     protectionZoneBot.escapeToProtectionZoneCheckbox.selected = protectionZoneSettings.escapeToProtectionZone
     // Apply any additional protection zone settings
+  }
+
+  def applyTrainingSettings(trainingSettings: TrainingSettings): Unit = {
+    trainingCheckbox.selected = trainingSettings.enabled
+    trainingBot.pickAmmunitionCheckbox.selected = trainingSettings.pickAmmunition
+    trainingBot.refillAmmunitionCheckbox.selected = trainingSettings.refillAmmunition
+    trainingBot.doNotKillTargetCheckbox.selected = trainingSettings.doNotKillTarget
+    trainingBot.switchWeaponToEnsureDamageCheckbox.selected = trainingSettings.switchWeaponToEnsureDamage
+
   }
 
   def applyGeneralSettings(settings: UISettings): Unit = {
@@ -243,9 +267,6 @@ class SwingApp(playerClassList: List[Player],
       println("Protection Zone Checkbox clicked")
     // Add logic for when protectionZoneCheckbox is clicked
 
-    case ButtonClicked(`protectionZoneCheckbox`) =>
-      println("Protection Zone Checkbox clicked")
-    // Add logic for when caveBotCheckbox is clicked
 
     case ButtonClicked(`fishingCheckbox`) =>
       println("Fishing Checkbox clicked")
@@ -255,9 +276,6 @@ class SwingApp(playerClassList: List[Player],
       println("Mouse Movements Checkbox clicked")
     // Add logic for when caveBotCheckbox is clicked
 
-    case ButtonClicked(`protectionZoneCheckbox`) =>
-      println("Protection Zone Checkbox clicked")
-    // Add logic for when caveBotCheckbox is clicked
 
     case SelectionChanged(`exampleDropdown`) =>
       println("Dropdown selection changed")
@@ -304,7 +322,7 @@ class SwingApp(playerClassList: List[Player],
 
     pages += new TabbedPane.Page("Rune Maker", runeMaker.runeMakerTab)
 
-    pages += new TabbedPane.Page("Trainer", trainerBot.trainerTab)
+    pages += new TabbedPane.Page("Trainer", trainingBot.trainerTab)
 
     pages += new TabbedPane.Page("Fishing", fishingBot.fishingTab)
 

@@ -38,11 +38,20 @@ object SettingsUtils {
                                      selectedRectangles: Seq[String] = Seq.empty
                                    )
 
+  case class TrainingSettings(
+                              enabled: Boolean,
+                              pickAmmunition: Boolean,
+                              refillAmmunition: Boolean,
+                              doNotKillTarget: Boolean,
+                              switchWeaponToEnsureDamage: Boolean,
+                            )
+
   // Define implicit Format instances for the nested case classes
   implicit val healingSettingsFormat: Format[HealingSettings] = Json.format[HealingSettings]
   implicit val runeMakingSettingsFormat: Format[RuneMakingSettings] = Json.format[RuneMakingSettings]
   implicit val protectionZoneSettingsFormat: Format[ProtectionZoneSettings] = Json.format[ProtectionZoneSettings]
   implicit val fishingSettingsFormat: Format[FishingSettings] = Json.format[FishingSettings]
+  implicit val trainingSettingsFormat: Format[TrainingSettings] = Json.format[TrainingSettings]
   implicit val rectangleSettingsFormat: Format[RectangleSettings] = Json.format[RectangleSettings]
 
   // Now define the UISettings case class
@@ -51,6 +60,7 @@ object SettingsUtils {
                          runeMakingSettings: RuneMakingSettings,
                          protectionZoneSettings: ProtectionZoneSettings,
                          fishingSettings: FishingSettings,
+                         trainingSettings: TrainingSettings,
                          mouseMovements: Boolean,
                          caveBot: Boolean
                          // Add other settings or groups of settings as needed
