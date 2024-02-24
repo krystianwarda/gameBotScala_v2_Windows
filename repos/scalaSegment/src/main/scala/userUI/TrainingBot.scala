@@ -15,6 +15,7 @@ class TrainingBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
   val pickAmmunitionCheckbox = new CheckBox("Pick ammunition")
   val refillAmmunitionCheckbox = new CheckBox("Refill ammunition")
   val doNotKillTargetCheckbox = new CheckBox("Do not kill target")
+  val switchAttackModeToEnsureDamageCheckbox = new CheckBox("Switch fight mode to ensure damage")
   val switchWeaponToEnsureDamageCheckbox = new CheckBox("Switch weapon to ensure damage")
 
   val trainerTab: Component = Component.wrap(new JPanel(new GridBagLayout) {
@@ -29,6 +30,7 @@ class TrainingBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
     add(pickAmmunitionCheckbox.peer, c)
     add(refillAmmunitionCheckbox.peer, c)
     add(doNotKillTargetCheckbox.peer, c)
+    add(switchAttackModeToEnsureDamageCheckbox.peer, c)
     add(switchWeaponToEnsureDamageCheckbox.peer, c)
   })
 }

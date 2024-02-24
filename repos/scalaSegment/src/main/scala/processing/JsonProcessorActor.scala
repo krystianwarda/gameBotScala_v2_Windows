@@ -11,7 +11,9 @@ import main.scala.MainApp.mouseMovementActorRef
 import processing.AutoHeal.computeHealingActions
 import processing.Fishing.computeFishingActions
 import processing.Process.{detectPlayersAndMonsters, findBackpackPosition, findBackpackSlotForBlank, findRats, isPlayerDetected}
+import processing.ProtectionZone.computeProtectionZoneActions
 import processing.RuneMaker.computeRuneMakingActions
+import processing.Training.computeTrainingActions
 import userUI.SettingsUtils
 import userUI.SettingsUtils.UISettings
 
@@ -45,6 +47,8 @@ case class ProcessorState(
                            lastSpellCastTime: Long = 0,
                            lastRuneMakingTime: Long = 0,
                            lastMoveTime: Long = 0,
+                           lastTrainingCommandSend: Long = 0,
+                           lastProtectionZoneCommandSend: Long = 0,
                            settings: Option[UISettings]
                          )
 case class UpdateSettings(settings: UISettings)
@@ -71,7 +75,8 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
   // Initialize lastFishingCommandTime to a value ensuring the first check will always pass
   private val fishingCommandInterval: Long = 1000
   private var lastFishingCommandTime: Long = System.currentTimeMillis() - fishingCommandInterval
-
+  private val trainingCommandInterval: Long = 1000
+  private var lastTrainingCommandTime: Long = System.currentTimeMillis() - fishingCommandInterval
 
   private var reconnectAttempts = 0
   private val maxReconnectAttempts = 5 // Maximum number of reconnection attempts
@@ -92,13 +97,28 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
 
   def receive: Receive = {
     case MainApp.JsonData(json) =>
-      val startTime = System.nanoTime() // Capture start time
       println("JsonProcessorActor received JSON: " + json)
-      val newState = processJson(json, state)
-      state = newState // Critical: Ensure the state is updated here
-      val endTime = System.nanoTime() // Capture end time
-      val duration = (endTime - startTime) / 1e6d // Calculate duration in milliseconds
-      println(f"Processing JSON took $duration%.3f ms") // Print the duration
+
+      // Check if JSON contains more than just "__status":"ok"
+      if ((json \ "__status").asOpt[String].contains("ok") && json.as[JsObject].keys.size == 1) {
+        // JSON only contains the status ok, handle accordingly
+        println("Received simple status update, not processing further.")
+      } else {
+        // JSON contains additional information, process it
+        val startTime = System.nanoTime()
+        val newState = processJson(json, state)
+        state = newState
+        val endTime = System.nanoTime()
+        val duration = (endTime - startTime) / 1e6d
+        println(f"Processing JSON took $duration%.3f ms")
+      }
+//      val startTime = System.nanoTime() // Capture start time
+//      println("JsonProcessorActor received JSON: " + json)
+//      val newState = processJson(json, state)
+//      state = newState // Critical: Ensure the state is updated here
+//      val endTime = System.nanoTime() // Capture end time
+//      val duration = (endTime - startTime) / 1e6d // Calculate duration in milliseconds
+//      println(f"Processing JSON took $duration%.3f ms") // Print the duration
 
     case InitializeProcessor(p, s) =>
       // Update state with new settings
@@ -109,8 +129,9 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     case ActionCompleted(actionType) =>
       println("Action completed.")
 
-    case _ =>
-      println("JsonProcessorActor received an unhandled message type.")
+    case msg =>
+      println(s"JsonProcessorActor received an unhandled message type: $msg")
+
   }
 
   private def processJson(json: JsValue, currentState: ProcessorState): ProcessorState = {
@@ -131,9 +152,48 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     val afterFishingState = performFishing(json, initialState)
     val afterHealingState = performAutoHealing(json, afterFishingState)
     val afterRuneMakingState = performRuneMaking(json, afterHealingState)
-
+    val afterTrainingState = performTraining(json, afterRuneMakingState)
+    val afterProtectionZoneState = performProtectionZone(json, afterTrainingState)
     // The final state after all updates
-    afterRuneMakingState
+    afterProtectionZoneState
+  }
+
+  def performProtectionZone(json: JsValue, currentState: ProcessorState): ProcessorState = {
+    val currentTime = System.currentTimeMillis()
+    println("performProtectionZone activated.")
+    currentState.settings.flatMap { settings =>
+      if (settings.protectionZoneSettings.enabled) {
+        println("Performing protection zone action.")
+        val (actions, logs) = computeProtectionZoneActions(json, settings)
+        executeActionsAndLogs(actions, logs, Some(settings))
+        Some(currentState.copy(lastProtectionZoneCommandSend = currentTime))
+      } else None
+      //      if (settings.fishingSettings.enabled && currentTime - currentState.lastTrainingCommandSend >= 2000) {
+      //        println("Performing training action.")
+      //        val (actions, logs) = computeTrainingActions(json, settings)
+      //        executeActionsAndLogs(actions, logs, Some(settings))
+      //        Some(currentState.copy(lastTrainingCommandSend = currentTime))
+      //      } else None
+    }.getOrElse(currentState)
+  }
+
+  def performTraining(json: JsValue, currentState: ProcessorState): ProcessorState = {
+    val currentTime = System.currentTimeMillis()
+    println("performTraining activated.")
+    currentState.settings.flatMap { settings =>
+      if (settings.trainingSettings.enabled) {
+        println("Performing training action.")
+        val (actions, logs) = computeTrainingActions(json, settings)
+        executeActionsAndLogs(actions, logs, Some(settings))
+        Some(currentState.copy(lastTrainingCommandSend = currentTime))
+      } else None
+//      if (settings.fishingSettings.enabled && currentTime - currentState.lastTrainingCommandSend >= 2000) {
+//        println("Performing training action.")
+//        val (actions, logs) = computeTrainingActions(json, settings)
+//        executeActionsAndLogs(actions, logs, Some(settings))
+//        Some(currentState.copy(lastTrainingCommandSend = currentTime))
+//      } else None
+    }.getOrElse(currentState)
   }
 
   def performFishing(json: JsValue, currentState: ProcessorState): ProcessorState = {
@@ -206,6 +266,9 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
 
         case FakeAction("fishingFunction", None, Some(positionInfo)) =>
           sendJson(Json.obj("__command" -> "useFishingRod", "tilePosition" -> positionInfo))
+
+        case FakeAction("switchAttackModeFunction", None, Some(attackModeInfo)) =>
+          sendJson(Json.obj("__command" -> "switchAttackMode", "attackMode" -> attackModeInfo))
 
         case _ =>
           println("Unhandled action or log error")

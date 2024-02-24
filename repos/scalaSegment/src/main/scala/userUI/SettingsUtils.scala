@@ -30,7 +30,8 @@ object SettingsUtils {
   case class ProtectionZoneSettings(
                                      enabled: Boolean,
                                      playerOnScreenAlert: Boolean,
-                                     escapeToProtectionZone: Boolean
+                                     escapeToProtectionZone: Boolean,
+                                     ignoredCreatures: List[String]
                                    )
 
   case class FishingSettings(
@@ -43,6 +44,7 @@ object SettingsUtils {
                               pickAmmunition: Boolean,
                               refillAmmunition: Boolean,
                               doNotKillTarget: Boolean,
+                              switchAttackModeToEnsureDamage: Boolean,
                               switchWeaponToEnsureDamage: Boolean,
                             )
 

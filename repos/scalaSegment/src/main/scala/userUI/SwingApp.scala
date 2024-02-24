@@ -70,7 +70,8 @@ class SwingApp(playerClassList: List[Player],
     val protectionZoneSettings = ProtectionZoneSettings(
       enabled = protectionZoneCheckbox.selected,
       playerOnScreenAlert = protectionZoneBot.playerOnScreenAlertCheckbox.selected,
-      escapeToProtectionZone = protectionZoneBot.escapeToProtectionZoneCheckbox.selected
+      escapeToProtectionZone = protectionZoneBot.escapeToProtectionZoneCheckbox.selected,
+      ignoredCreatures = protectionZoneBot.getIgnoredCreatures
     )
 
     val fishingSettings = FishingSettings(
@@ -83,6 +84,7 @@ class SwingApp(playerClassList: List[Player],
       pickAmmunition = trainingBot.pickAmmunitionCheckbox.selected,
       refillAmmunition = trainingBot.refillAmmunitionCheckbox.selected,
       doNotKillTarget = trainingBot.doNotKillTargetCheckbox.selected,
+      switchAttackModeToEnsureDamage = trainingBot.switchAttackModeToEnsureDamageCheckbox.selected,
       switchWeaponToEnsureDamage = trainingBot.switchWeaponToEnsureDamageCheckbox.selected,
     )
 
@@ -143,12 +145,14 @@ class SwingApp(playerClassList: List[Player],
     protectionZoneCheckbox.selected = settings.protectionZoneSettings.enabled
     protectionZoneBot.playerOnScreenAlertCheckbox.selected = settings.protectionZoneSettings.playerOnScreenAlert
     protectionZoneBot.escapeToProtectionZoneCheckbox.selected = settings.protectionZoneSettings.escapeToProtectionZone
+    protectionZoneBot.setIgnoredCreatures(settings.protectionZoneSettings.ignoredCreatures)
     fishingCheckbox.selected = settings.fishingSettings.enabled
     trainingCheckbox.selected = settings.trainingSettings.enabled
-    trainingBot.pickAmmunitionCheckbox.selected = settings.protectionZoneSettings.playerOnScreenAlert
-    trainingBot.refillAmmunitionCheckbox.selected = settings.protectionZoneSettings.playerOnScreenAlert
-    trainingBot.doNotKillTargetCheckbox.selected = settings.protectionZoneSettings.playerOnScreenAlert
-    trainingBot.switchWeaponToEnsureDamageCheckbox.selected = settings.protectionZoneSettings.playerOnScreenAlert
+    trainingBot.pickAmmunitionCheckbox.selected = settings.trainingSettings.pickAmmunition
+    trainingBot.refillAmmunitionCheckbox.selected = settings.trainingSettings.refillAmmunition
+    trainingBot.doNotKillTargetCheckbox.selected = settings.trainingSettings.doNotKillTarget
+    trainingBot.switchAttackModeToEnsureDamageCheckbox.selected = settings.trainingSettings.switchAttackModeToEnsureDamage
+    trainingBot.switchWeaponToEnsureDamageCheckbox.selected = settings.trainingSettings.switchWeaponToEnsureDamage
 
     mouseMovementsCheckbox.selected = settings.mouseMovements
     caveBotCheckbox.selected = settings.caveBot
@@ -185,6 +189,7 @@ class SwingApp(playerClassList: List[Player],
     protectionZoneCheckbox.selected = protectionZoneSettings.enabled
     protectionZoneBot.playerOnScreenAlertCheckbox.selected = protectionZoneSettings.playerOnScreenAlert
     protectionZoneBot.escapeToProtectionZoneCheckbox.selected = protectionZoneSettings.escapeToProtectionZone
+    protectionZoneBot.setIgnoredCreatures(protectionZoneSettings.ignoredCreatures)
     // Apply any additional protection zone settings
   }
 
@@ -193,14 +198,16 @@ class SwingApp(playerClassList: List[Player],
     trainingBot.pickAmmunitionCheckbox.selected = trainingSettings.pickAmmunition
     trainingBot.refillAmmunitionCheckbox.selected = trainingSettings.refillAmmunition
     trainingBot.doNotKillTargetCheckbox.selected = trainingSettings.doNotKillTarget
+    trainingBot.switchAttackModeToEnsureDamageCheckbox.selected = trainingSettings.switchAttackModeToEnsureDamage
     trainingBot.switchWeaponToEnsureDamageCheckbox.selected = trainingSettings.switchWeaponToEnsureDamage
-
   }
 
   def applyGeneralSettings(settings: UISettings): Unit = {
-    fishingCheckbox.selected = settings.fishingSettings.enabled
+
+//    fishingCheckbox.selected = settings.fishingSettings.enabled
     mouseMovementsCheckbox.selected = settings.mouseMovements
     caveBotCheckbox.selected = settings.caveBot
+
     // Apply any other top-level settings
   }
 
@@ -220,7 +227,7 @@ class SwingApp(playerClassList: List[Player],
         }
 
         // Sending the settings to the JsonProcessorActor and PeriodicFunctionActor
-        jsonProcessorActorRef ! MainApp.StartActors(currentSettings)
+//        jsonProcessorActorRef ! MainApp.StartActors(currentSettings)
         periodicFunctionActorRef ! MainApp.StartActors(currentSettings)
 
         // Sending the initialization message to JsonProcessorActor

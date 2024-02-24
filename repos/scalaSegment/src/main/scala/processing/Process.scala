@@ -8,6 +8,15 @@ import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
 
 object Process {
   // Function to find the screen position of an item in container slots 1-4 with both itemId and itemSubType matching
+  // Function to check if JSON is empty
+  def isJsonEmpty(json: JsValue): Boolean = json match {
+    case JsObject(fields) if fields.isEmpty => true
+    case _ => false
+  }
+
+  // Function to check if JSON is not empty
+  def isJsonNotEmpty(json: JsValue): Boolean = !isJsonEmpty(json)
+
   def findItemInContainerSlot14(json: JsValue, itemId: Int, itemSubType: Int): Option[JsObject] = {
     val containersInfo = (json \ "containersInfo").as[JsObject]
     val screenInfo = (json \ "screenInfo" \ "inventoryPanelLoc").as[JsObject]

@@ -39,7 +39,12 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
         connectToServer()
       }
       startListening()
-      initiateSendFunction("init")
+      initiateSendFunction("periodicEvent")
+    case jsonStr: String =>
+      // Assuming jsonStr is a JSON string, parse it to JsValue before forwarding
+      val json: JsValue = Json.parse(jsonStr)
+      jsonProcessorActor ! MainApp.JsonData(json)
+
     case _ => println("PeriodicFunctionActor received an unhandled message type.")
 
   }
