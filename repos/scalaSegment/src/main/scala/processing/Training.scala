@@ -11,7 +11,7 @@ object Training {
   def computeTrainingActions(json: JsValue, settings: SettingsUtils.UISettings): (Seq[FakeAction], Seq[Log]) = {
     var actions: Seq[FakeAction] = Seq()
     var logs: Seq[Log] = Seq()
-    logs = logs :+ Log("computeTrainingActions activated.")
+//    logs = logs :+ Log("computeTrainingActions activated.")
 
     if (settings.trainingSettings.enabled) {
       // Safely extracting "attackInfo" as a JsObject using .asOpt

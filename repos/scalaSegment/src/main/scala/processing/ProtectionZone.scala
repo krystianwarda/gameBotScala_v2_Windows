@@ -14,10 +14,11 @@ object ProtectionZone {
     var logs: Seq[Log] = Seq()
 
     if (settings.protectionZoneSettings.enabled) {
+      val playerName = (json \ "characterInfo" \ "Name").as[String]
       if (settings.protectionZoneSettings.escapeToProtectionZone) {
         val ignoredCreaturesList = settings.protectionZoneSettings.ignoredCreatures
         // Print elements of the ignoredCreaturesList
-        println(s"Ignored Creatures List: ${ignoredCreaturesList.mkString(", ")}")
+//        println(s"Ignored Creatures List: ${ignoredCreaturesList.mkString(", ")}")
 
         // Extract the "spyLevelInfo" object from the JSON
         val creatures = (json \ "spyLevelInfo").as[JsObject]
@@ -31,18 +32,17 @@ object ProtectionZone {
           val name = (creatureInfo \ "Name").as[String]
 
           // Check if the creature is not an NPC and not in the ignored list
-          if (!isNpc && !ignoredCreaturesList.contains(name)) {
+          if (!isNpc && !ignoredCreaturesList.contains(name) && !ignoredCreaturesList.contains(playerName)) {
             detectedCreatures :+= name // Add the creature's name to the list
           }
         }
 
-        // Determine if the player is safe or needs to hide
-        val safe = detectedCreatures.isEmpty
-
         // Log all detected creatures that are not NPCs and not ignored
         if (detectedCreatures.nonEmpty) {
-          println(s"Detected Creatures: ${detectedCreatures.mkString(", ")}")
+//          println(s"Detected Creatures: ${detectedCreatures.mkString(", ")}")
           logs = logs :+ Log("I have to hide!")
+
+
         } else {
           logs = logs :+ Log("I am safe")
         }
