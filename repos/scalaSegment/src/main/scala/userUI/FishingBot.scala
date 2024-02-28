@@ -19,6 +19,7 @@ object RectangleSettings {
 }
 class FishingBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: ActorRef) {
   var selectedRectangles: Seq[String] = Seq.empty // Change to store strings directly
+//var selectedRectangles: Seq[RectangleSettings] = Seq.empty
 
   private val drawingComponent = new JPanel() {
     setOpaque(false)
@@ -92,7 +93,7 @@ class FishingBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
     val gridFrame = new JFrame()
     gridFrame.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE)
     gridFrame.setUndecorated(true)
-    gridFrame.setSize(width, height)
+    gridFrame.setSize(width, height) // Set the size exactly as the marked area
 
     // Calculate position for gridFrame based on startPoint
     val screenSize = Toolkit.getDefaultToolkit.getScreenSize
@@ -100,76 +101,86 @@ class FishingBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
     val y = Math.min(startPoint.y, screenSize.height - height)
     gridFrame.setLocation(x, y)
 
+
     // Set semi-transparent background color
     val transparentWhite = new Color(255, 255, 255, 128)
     gridFrame.setBackground(transparentWhite)
 
+    // Step 1: Define the panel
+    val panel: JPanel = new JPanel(new GridLayout(11, 15))
+    panel.setOpaque(false) // Ensure panel is not opaque to show the frame's background
 
-    val panel = new JPanel(new GridLayout(11, 15)) {
-      setOpaque(false) // Ensure panel is not opaque to show the frame's background
-      for (y <- 0 until 11; x <- 0 until 15) {
-        val rectangle = new Rectangle(x, y)
-        val button = new JButton(rectangle.toString) {
-          setOpaque(true) // Necessary for color visibility
-          setBackground(new Color(255, 255, 255, 64)) // Initial very transparent white
-          setBorder(BorderFactory.createLineBorder(Color.BLACK))
-          // Use client properties to track selection state
-          putClientProperty("selected", false)
+    // Step 2: Populate the panel with buttons
+    for (_y <- 0 until 11; _x <- 0 until 15) {
+      val rectangle = new Rectangle(_x, _y)
+      val button = new JButton(rectangle.toString) {
+        setOpaque(true) // Necessary for color visibility
+        setBackground(new Color(255, 255, 255, 21)) // Initial very transparent white
+        setBorder(BorderFactory.createLineBorder(Color.BLACK))
+        // Use client properties to track selection state
+        putClientProperty("selected", false)
 
-          addActionListener(_ => {
-            val isSelected = Option(getClientProperty("selected")).getOrElse(false).asInstanceOf[Boolean]
-            if (!isSelected) {
-              setBackground(new Color(0, 255, 0, 64)) // Semi-transparent green when selected
-              putClientProperty("selected", true)
-            } else {
-              setBackground(new Color(255, 255, 255, 32)) // Very transparent white otherwise
-              putClientProperty("selected", false)
-            }
-          })
-        }
-        add(button)
+        addActionListener(_ => {
+          val isSelected = Option(getClientProperty("selected")).getOrElse(false).asInstanceOf[Boolean]
+          if (!isSelected) {
+            setBackground(new Color(0, 255, 0, 21)) // Semi-transparent green when selected
+            putClientProperty("selected", true)
+          } else {
+            setBackground(new Color(255, 255, 255, 21)) // Back to very transparent white
+            putClientProperty("selected", false)
+          }
+        })
       }
+      panel.add(button) // Add button to panel here, after panel has been defined
     }
 
 
-    // Separate frame for the Close button
-    val closeButtonFrame = new JFrame() {
-      setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE)
-      setSize(new Dimension(100, 50))
-      setUndecorated(true)
-      setAlwaysOnTop(true)
-      setLocationRelativeTo(gridFrame) // Position relative to gridFrame
-    }
+    // Directly add panel to gridFrame without BorderLayout.SOUTH modification
+    gridFrame.getContentPane.add(panel)
+
+    // Adjustments for closeButtonFrame to be placed outside the gridFrame
+    val closeButtonFrame = new JFrame()
+    closeButtonFrame.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE)
+    closeButtonFrame.setUndecorated(true)
+    closeButtonFrame.setSize(new Dimension(100, 50))
+    closeButtonFrame.setAlwaysOnTop(true)
+    // Position closeButtonFrame directly below or to the side of gridFrame
+    closeButtonFrame.setLocation(x, y + height) // Example: Placed directly below the grid
 
     val closeButton = new JButton("Close")
     closeButton.addActionListener(_ => {
-      val markedRectangles = panel.getComponents
+      // Directly use the button text, assuming it's in the format you want (e.g., '8x6')
+      val markedRectangleIds: Seq[String] = panel.getComponents
         .filter(_.isInstanceOf[JButton])
         .map(_.asInstanceOf[JButton])
         .filter(button => Option(button.getClientProperty("selected")).getOrElse(false).asInstanceOf[Boolean])
-        .map(_.getText) // Directly use the button text
+        .map(_.getText) // Directly use the button text as the identifier
 
-      // Update the selectedRectangles with string representations
-      selectedRectangles = markedRectangles
-
-      println("Marked Rectangles: " + selectedRectangles.mkString(", "))
-
-      gridFrame.dispose() // Dispose the overlay frame
-      closeButtonFrame.dispose() // Dispose the Close button frame
+      // Update the selectedRectangles variable to hold these identifiers
+      this.selectedRectangles = markedRectangleIds
+      // Print selected tiles
+      println("Selected tiles:")
+      markedRectangleIds.foreach(println)
+      // Dispose of the frames after updating
+      gridFrame.dispose()
+      closeButtonFrame.dispose()
     })
 
-    closeButtonFrame.getContentPane.add(closeButton)
-    closeButtonFrame.setVisible(true)
 
-    val contentPane = gridFrame.getContentPane
-    contentPane.setLayout(new BorderLayout())
-    contentPane.add(panel, BorderLayout.CENTER)
-    contentPane.add(closeButton, BorderLayout.SOUTH)
+    closeButtonFrame.add(closeButton)
+    closeButtonFrame.pack() // Adjust frame size to fit the button
+    closeButtonFrame.setVisible(true)
 
     gridFrame.setVisible(true)
     gridFrame.requestFocus()
   }
 
+  // Helper method to collect marked rectangles - unchanged, assuming it's implemented in your original code
+  private def collectMarkedRectangles(panel: JPanel): Seq[String] = {
+    panel.getComponents.collect {
+      case button: JButton if Option(button.getClientProperty("selected")).contains(true) => button.getText
+    }
+  }
   def parseRectanglesFromString(rectanglesString: String): Seq[RectangleSettings] = {
     rectanglesString.split(";").toSeq.filter(_.nonEmpty).map { rectStr =>
       val parts = rectStr.split(",")
@@ -181,7 +192,6 @@ class FishingBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
   private case class Rectangle(x: Int, y: Int) {
     override def toString: String = s"${x + 1}x${y + 1}"
   }
-
   val showOverlayButton = new scala.swing.Button("Mark Area") {
     reactions += {
       case ButtonClicked(_) =>
@@ -194,15 +204,3 @@ class FishingBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
     contents += showOverlayButton
   }
 }
-
-
-//    val closeButton = new JButton("Close") // Add a close button
-//    closeButton.addActionListener(_ => {
-//      val markedRectangles = panel.getComponents
-//        .filter(_.isInstanceOf[JButton])
-//        .map(_.asInstanceOf[JButton])
-//        .filter(button => Option(button.getClientProperty("selected")).getOrElse(false).asInstanceOf[Boolean])
-//        .map(_.getText)
-//      println("Chosen rectangles: " + markedRectangles.mkString(", "))
-//      gridFrame.dispose()
-//    })

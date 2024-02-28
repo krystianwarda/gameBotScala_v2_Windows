@@ -16,9 +16,10 @@ object Fishing {
 
     if (settings.fishingSettings.enabled) {
       logs = logs :+ Log("I want a fish!")
+      println("Selected tiles: " + settings.fishingSettings.selectedRectangles.mkString(", "))
       println(settings.fishingSettings.selectedRectangles.nonEmpty)
       if (settings.fishingSettings.selectedRectangles.nonEmpty) {
-        println("Chosing the tiles from saved list - mouse move")
+
         if (settings.mouseMovements) {
           val randomTileId = scala.util.Random.shuffle(settings.fishingSettings.selectedRectangles.toList).head
 
@@ -100,6 +101,7 @@ object Fishing {
               val targetTileScreenX = (json \ "screenInfo" \ "mapPanelLoc" \ targetTileScreenKey \ "x").asOpt[Int].getOrElse(0)
               val targetTileScreenY = (json \ "screenInfo" \ "mapPanelLoc" \ targetTileScreenKey \ "y").asOpt[Int].getOrElse(0)
 
+              println(s"targetTileScreenX: $targetTileScreenX, targetTileScreenY: $targetTileScreenY, arrowsX: $arrowsX, arrowsY: $arrowsY")
 
               val actionsSeq = Seq(
                 MouseAction(arrowsX, arrowsY, "move"),

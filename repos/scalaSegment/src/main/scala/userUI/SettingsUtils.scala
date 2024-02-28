@@ -1,5 +1,7 @@
 package userUI
 
+import scala.collection.mutable
+
 object SettingsUtils {
   import play.api.libs.json.{Format, Json}
 
@@ -31,7 +33,8 @@ object SettingsUtils {
                                      enabled: Boolean,
                                      playerOnScreenAlert: Boolean,
                                      escapeToProtectionZone: Boolean,
-                                     ignoredCreatures: List[String]
+                                     ignoredCreatures: mutable.Buffer[String],
+                                     selectedRectangles: Seq[String] = Seq.empty
                                    )
 
   case class FishingSettings(

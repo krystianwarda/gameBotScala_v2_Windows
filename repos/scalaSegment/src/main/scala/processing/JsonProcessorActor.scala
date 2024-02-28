@@ -160,7 +160,6 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
 
   def performProtectionZone(json: JsValue, currentState: ProcessorState): ProcessorState = {
     val currentTime = System.currentTimeMillis()
-    println("performProtectionZone activated.")
     currentState.settings.flatMap { settings =>
       if (settings.protectionZoneSettings.enabled) {
         println("Performing protection zone action.")
@@ -179,7 +178,6 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
 
   def performTraining(json: JsValue, currentState: ProcessorState): ProcessorState = {
     val currentTime = System.currentTimeMillis()
-    println("performTraining activated.")
     currentState.settings.flatMap { settings =>
       if (settings.trainingSettings.enabled) {
         println("Performing training action.")
