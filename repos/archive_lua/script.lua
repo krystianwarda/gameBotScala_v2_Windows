@@ -49,23 +49,401 @@ function buttonFunctions()
     g_keyboard.bindKeyDown('Alt+T', tileUnderCursor)
     g_keyboard.bindKeyDown('Alt+H', whatIsinMyRightHand)
     g_keyboard.bindKeyDown('Alt+A', testGetAttackedCreature)
-    g_keyboard.bindKeyDown('Ctrl+1', tileUnderCursor1)
-    g_keyboard.bindKeyDown('Ctrl+2', tileUnderCursor2)
-    g_keyboard.bindKeyDown('Ctrl+3', tileUnderCursor3)
-    g_keyboard.bindKeyDown('Ctrl+4', tileUnderCursor4)
+    g_keyboard.bindKeyDown('Ctrl+1', textTest1)
+    g_keyboard.bindKeyDown('Ctrl+2', textTest2)
+    g_keyboard.bindKeyDown('Ctrl+3', textTest3)
+    g_keyboard.bindKeyDown('Ctrl+4', textTest4)
+    g_keyboard.bindKeyDown('Ctrl+5', textTest5)
+    g_keyboard.bindKeyDown('Ctrl+6', textTest6)
     g_keyboard.bindKeyDown('Alt+R', testTilePz)
 end
 
-function tileUnderCursor1()
-    local tempTile = modules.game_interface.gameMapPanel:getTile(modules.game_interface.gameMapPanel.mousePos)
+function textTest1old()
+    printConsole("Starting to calculate inventory positions from root panel...")
 
-    -- Assuming getFlags returns a table and we want to check the third flag
-    local flagsTable = tempTile:getFlags(0x0001)
+    local rootPanel = modules.game_interface.getRootPanel()
+    local rootPanelChildrenCount = rootPanel:getChildCount()
 
-    printConsole("Protection Zone: " .. tostring(flagsTable))
+    -- Iterate over all children of the root panel
+    for i = 1, rootPanelChildrenCount do
+        local child = rootPanel:getChildByIndex(i)
+        local childId = child:getId()
+        local childRect = child:getRect()
+        printConsole("Processing child " .. i .. ", ID = " .. childId)
+    end
 end
 
 
+
+function textTest1()
+    printConsole("Starting to calculate inventory positions from root panel...")
+
+    local rootPanel = modules.game_interface.getRootPanel()
+    local rootPanelChildrenCount = rootPanel:getChildCount()
+
+    -- Iterate over all children of the root panel
+    for i = 1, rootPanelChildrenCount do
+        local child = rootPanel:getChildByIndex(i)
+        local childId = child:getId()
+
+        -- Filter to proceed only for the gameBottomPanel
+        if childId == "gameBottomPanel" then
+            local childChildrenCount = child:getChildCount()
+            for j = 1, childChildrenCount do
+                local childChild = child:getChildByIndex(j)
+                local childChildId = childChild:getId()
+
+                -- Filter to proceed only for the consolePanel
+                if childChildId == "consolePanel" then
+                    local childChildChildrenCount = childChild:getChildCount()
+                    for k = 1, childChildChildrenCount do
+                        local childChildChild = childChild:getChildByIndex(k)
+                        local childChildChildId = childChildChild:getId()
+
+                        -- Filter to proceed only for the consoleTabBar
+                        if childChildChildId == "consoleTabBar" then
+                            local childChildChildChildrenCount = childChildChild:getChildCount()
+                            for l = 1, childChildChildChildrenCount do
+                                local childChildChildChild = childChildChild:getChildByIndex(l)
+                                local childChildChildChildId = childChildChildChild:getId()
+
+                                -- Assuming every tab is a great-grandchild under consoleTabBar
+                                if childChildChildChildId == "tab" then
+                                    -- Execute the specific logic for tabs
+                                    local panel = console.consoleTabBar:getTabPanel(childChildChildChild)
+                                    local consoleBuffer = panel:getChildById('consoleBuffer')
+                                    local message = consoleBuffer:getLastChild()
+                                    -- Assuming you want to print or process the message
+                                    printConsole("                Processing message from " .. childChildChildChildId .. ", Message: " .. tostring(message))
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+
+function textTest2()
+    printConsole("Starting to calculate inventory positions from root panel...")
+
+    local rootPanel = modules.game_interface.getRootPanel()
+    local rootPanelChildrenCount = rootPanel:getChildCount()
+
+    -- Iterate over all children of the root panel
+    for i = 1, rootPanelChildrenCount do
+        local child = rootPanel:getChildByIndex(i)
+        local childId = child:getId()
+        printConsole("Processing child " .. i .. ", ID = " .. childId)
+
+        -- Filter to proceed only for the specified child
+        if childId == "gameBottomPanel" then
+            -- Iterate over all children of the current child
+            local childChildrenCount = child:getChildCount()
+            for j = 1, childChildrenCount do
+                local childChild = child:getChildByIndex(j)
+                local childChildId = childChild:getId()
+                printConsole("    Processing child of " .. childId .. ", Child " .. j .. ", ID = " .. childChildId)
+
+                -- Iterate over all children of the current child's child (grandchild)
+                local childChildChildrenCount = childChild:getChildCount()
+                for k = 1, childChildChildrenCount do
+                    local childChildChild = childChild:getChildByIndex(k)
+                    local childChildChildId = childChildChild:getId()
+                    printConsole("        Processing grandchild of " .. childChildId .. ", Grandchild " .. k .. ", ID = " .. childChildChildId)
+
+                    -- Iterate over all children of the grandchild (great-grandchild)
+                    local childChildChildChildrenCount = childChildChild:getChildCount()
+                    for l = 1, childChildChildChildrenCount do
+                        local childChildChildChild = childChildChild:getChildByIndex(l)
+                        local childChildChildChildId = childChildChildChild:getId()
+                        printConsole("            Processing great-grandchild of " .. childChildId .. ", Great-grandchild " .. l .. ", ID = " .. childChildChildChildId)
+
+                        -- New addition: Iterate over all children of the great-grandchild (great-great-grandchild)
+                        local childChildChildChildChildrenCount = childChildChildChild:getChildCount()
+                        for m = 1, childChildChildChildChildrenCount do
+                            local childChildChildChildChild = childChildChildChild:getChildByIndex(m)
+                            local childChildChildChildChildId = childChildChildChildChild:getId()
+                            printConsole("                Processing great-great-grandchild of " .. childChildChildId .. ", Great-great-grandchild " .. m .. ", ID = " .. childChildChildChildChildId)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+function textTest3()
+    printConsole("Starting to calculate inventory positions from root panel...")
+
+    local rootPanel = modules.game_interface.getRootPanel()
+    local rootPanelChildrenCount = rootPanel:getChildCount()
+
+    -- Iterate over all children of the root panel
+    for i = 1, rootPanelChildrenCount do
+        local child = rootPanel:getChildByIndex(i)
+        local childId = child:getId()
+
+        -- Filter to proceed only for the gameBottomPanel
+        if childId == "gameBottomPanel" then
+            local childChildrenCount = child:getChildCount()
+            for j = 1, childChildrenCount do
+                local childChild = child:getChildByIndex(j)
+                local childChildId = childChild:getId()
+
+                -- Filter to proceed only for the consolePanel
+                if childChildId == "consolePanel" then
+                    local childChildChildrenCount = childChild:getChildCount()
+                    for k = 1, childChildChildrenCount do
+                        local childChildChild = childChild:getChildByIndex(k)
+                        local childChildChildId = childChildChild:getId()
+
+                        -- Filter to proceed only for the consoleContentPanel
+                        if childChildChildId == "consoleContentPanel" then
+                            local childChildChildChildrenCount = childChildChild:getChildCount()
+                            for l = 1, childChildChildChildrenCount do
+                                local childChildChildChild = childChildChild:getChildByIndex(l)
+                                local childChildChildChildId = childChildChildChild:getId()
+
+                                -- Filter to proceed only for the tabPanel
+                                if childChildChildChildId == "tabPanel" then
+                                    local childChildChildChildChildrenCount = childChildChildChild:getChildCount()
+                                    for m = 1, childChildChildChildChildrenCount do
+                                        local childChildChildChildChild = childChildChildChild:getChildByIndex(m)
+                                        local childChildChildChildChildId = childChildChildChildChild:getId()
+
+                                        -- Targeting consoleBuffer
+                                        if childChildChildChildChildId == "consoleBuffer" then
+                                            -- Execute specific logic for consoleBuffer here
+                                            -- Example: Retrieve and print more detailed information
+                                            local bufferContent = childChildChildChildChild:getText() -- Assuming getText() retrieves the content
+                                            printConsole("                    Processing consoleBuffer content: " .. bufferContent)
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+
+
+function textTest3old()
+    printConsole("Starting to calculate inventory positions from root panel...")
+
+    local rootPanel = modules.game_interface.getRootPanel()
+    local rootPanelChildrenCount = rootPanel:getChildCount()
+
+    -- Iterate over all children of the root panel
+    for i = 1, rootPanelChildrenCount do
+        local child = rootPanel:getChildByIndex(i)
+        local childId = child:getId()
+        printConsole("Processing child " .. i .. ", ID = " .. childId)
+
+        -- Check if the child is the one we're interested in
+        if childId == "gameBottomPanel" then
+            -- Iterate over all children of the current child
+            local childChildrenCount = child:getChildCount()
+            for j = 1, childChildrenCount do
+                local childChild = child:getChildByIndex(j)
+                local childChildId = childChild:getId()
+                printConsole("    Processing child of " .. childId .. ", Child " .. j .. ", ID = " .. childChildId)
+
+                -- Iterate over all children of the current child's child (grandchild)
+                local childChildChildrenCount = childChild:getChildCount()
+                for k = 1, childChildChildrenCount do
+                    local childChildChild = childChild:getChildByIndex(k)
+                    local childChildChildId = childChildChild:getId()
+                    printConsole("        Processing grandchild of " .. childChildId .. ", Grandchild " .. k .. ", ID = " .. childChildChildId)
+
+                    -- New addition: Iterate over all children of the current child's child's child (great-grandchild)
+                    local childChildChildChildrenCount = childChildChild:getChildCount()
+                    for l = 1, childChildChildChildrenCount do
+                        local childChildChildChild = childChildChild:getChildByIndex(l)
+                        local childChildChildChildId = childChildChildChild:getId()
+                        printConsole("            Processing great-grandchild of " .. childChildChildId .. ", Great-grandchild " .. l .. ", ID = " .. childChildChildChildId)
+                    end
+                end
+            end
+        end
+    end
+end
+
+
+
+
+function textTest4Old()
+    local MAX_LINES = 100 -- Example value, adjust based on your application's needs
+    printConsole("Starting to calculate inventory positions from root panel...")
+
+    local rootPanel = modules.game_interface.getRootPanel()
+    local rootPanelChildrenCount = rootPanel:getChildCount()
+
+    -- Iterate over all children of the root panel
+    for i = 1, rootPanelChildrenCount do
+        local child = rootPanel:getChildByIndex(i)
+        local childId = child:getId()
+
+        -- Filter to proceed only for the gameBottomPanel
+        if childId == "gameBottomPanel" then
+            local childChildrenCount = child:getChildCount()
+            for j = 1, childChildrenCount do
+                local childChild = child:getChildByIndex(j)
+                local childChildId = childChild:getId()
+
+                -- Filter to proceed only for the consolePanel
+                if childChildId == "consolePanel" then
+                    local childChildChildrenCount = childChild:getChildCount()
+                    for k = 1, childChildChildrenCount do
+                        local childChildChild = childChild:getChildByIndex(k)
+                        local childChildChildId = childChildChild:getId()
+
+                        -- Filter to proceed only for the consoleContentPanel
+                        if childChildChildId == "consoleContentPanel" then
+                            local childChildChildChildrenCount = childChildChild:getChildCount()
+                            for l = 1, childChildChildChildrenCount do
+                                local childChildChildChild = childChildChild:getChildByIndex(l)
+                                local childChildChildChildId = childChildChildChild:getId()
+
+                                -- Filter to proceed only for the tabPanel
+                                if childChildChildChildId == "tabPanel" then
+                                    local childChildChildChildChildrenCount = childChildChildChild:getChildCount()
+                                    for m = 1, childChildChildChildChildrenCount do
+                                        local childChildChildChildChild = childChildChildChild:getChildByIndex(m)
+                                        local childChildChildChildChildId = childChildChildChildChild:getId()
+
+                                        -- Targeting consoleBuffer
+                                        if childChildChildChildChildId == "consoleBuffer" then
+                                            -- Check and manage the buffer if it exceeds MAX_LINES
+                                            if childChildChildChildChild:getChildCount() > MAX_LINES then
+                                                local label = childChildChildChildChild:getFirstChild()
+                                                childChildChildChildChild:moveChildToIndex(label, childChildChildChildChild:getChildCount())
+                                            end
+                                            
+                                            -- Attempt to get the last message
+                                            local message = childChildChildChildChild:getLastChild()
+                                            if message then
+                                                printConsole("                    Last message in consoleBuffer: " .. tostring(message:getText()))
+                                            else
+                                                printConsole("                    No messages found in consoleBuffer.")
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+
+
+function textTest5()
+    local MAX_MESSAGES = 20 -- Define the number of last messages you want to retrieve
+    printConsole("Starting to calculate inventory positions from root panel...")
+
+    local rootPanel = modules.game_interface.getRootPanel()
+    local rootPanelChildrenCount = rootPanel:getChildCount()
+
+    -- Iterate over all children of the root panel
+    for i = 1, rootPanelChildrenCount do
+        local child = rootPanel:getChildByIndex(i)
+        local childId = child:getId()
+
+        -- Filter to proceed only for the gameBottomPanel
+        if childId == "gameBottomPanel" then
+            local childChildrenCount = child:getChildCount()
+            for j = 1, childChildrenCount do
+                local childChild = child:getChildByIndex(j)
+                local childChildId = childChild:getId()
+
+                -- Filter to proceed only for the consolePanel
+                if childChildId == "consolePanel" then
+                    local childChildChildrenCount = childChild:getChildCount()
+                    for k = 1, childChildChildrenCount do
+                        local childChildChild = childChild:getChildByIndex(k)
+                        local childChildChildId = childChildChild:getId()
+
+                        -- Filter to proceed only for the consoleContentPanel
+                        if childChildChildId == "consoleContentPanel" then
+                            local childChildChildChildrenCount = childChildChild:getChildCount()
+                            for l = 1, childChildChildChildrenCount do
+                                local childChildChildChild = childChildChild:getChildByIndex(l)
+                                local childChildChildChildId = childChildChildChild:getId()
+
+                                -- Filter to proceed only for the tabPanel
+                                if childChildChildChildId == "tabPanel" then
+                                    local childChildChildChildChildrenCount = childChildChildChild:getChildCount()
+                                    for m = 1, childChildChildChildChildrenCount do
+                                        local childChildChildChildChild = childChildChildChild:getChildByIndex(m)
+                                        local childChildChildChildChildId = childChildChildChildChild:getId()
+
+                                        -- Targeting consoleBuffer
+                                        if childChildChildChildChildId == "consoleBuffer" then
+                                            -- Retrieve the last 20 messages
+                                            local messagesCount = math.min(childChildChildChildChild:getChildCount(), MAX_MESSAGES)
+                                            for n = messagesCount, 1, -1 do
+                                                local messageIndex = childChildChildChildChild:getChildCount() - n
+                                                local message = childChildChildChildChild:getChildByIndex(messageIndex + 1) -- Lua tables are 1-indexed
+                                                if message then
+                                                    local text = message:getText()
+                                                    local color = message:getColor() -- This will return the color object.
+
+                                                    -- Check if color is a table and try to get the color name
+                                                    local colorName = "Unknown" -- Default to Unknown if not found
+                                                    if type(color) == "table" then
+                                                        -- Extract RGB values; assume a default alpha if not provided
+                                                        local r = color.r or 0
+                                                        local g = color.g or 0
+                                                        local b = color.b or 0
+                                                        -- Use the getColorName function to get the color name
+                                                        colorName = getColorName(r, g, b)
+                                                    end
+                                                    printConsole("Message " .. (messagesCount - n + 1) .. ": Text: " .. tostring(text) .. ", Color: " .. colorName)
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+
+
+
+-- quite good
+function iterateThorughRootPanel()
+
+    local inventoryData = {}
+    local offset = 30
+
+    local rootPanel = modules.game_interface.getRootPanel()
+    local rootPanelChildrenCount = rootPanel:getChildCount()
+    printConsole("Root panel children count: ", rootPanelChildrenCount)
+
+    -- Iterate over all children of the root panel
+    for i = 1, rootPanelChildrenCount do
+        local child = rootPanel:getChildByIndex(i)
+        local childId = child:getId()
+        local childRect = child:getRect()
+        printConsole("Processing child " .. i .. ", ID = " .. childId)
+    end
+end
 
 function bitAnd(a, b)
     local result = 0
@@ -104,71 +482,138 @@ function tableToJson(t)
     return table.concat(jsonParts)
 end
 
-function tileUnderCursor2()
-    local tempTile = modules.game_interface.gameMapPanel:getTile(modules.game_interface.gameMapPanel.mousePos)
-    local tileFlags = tempTile:getFlags()
+tileflags_t = {
+    TILESTATE_NONE = 0,
+    TILESTATE_PROTECTIONZONE = 1, -- 1 << 0 is 1
+    TILESTATE_TRASHED = 2, -- 1 << 1 is 2
+    TILESTATE_OPTIONALZONE = 4, -- 1 << 2 is 4
+    TILESTATE_NOLOGOUT = 8, -- 1 << 3 is 8
+    TILESTATE_HARDCOREZONE = 16, -- 1 << 4 is 16
+    TILESTATE_REFRESH = 32, -- 1 << 5 is 32
+    TILESTATE_HOUSE = 64, -- 1 << 6 is 64
+    -- Skipping to larger shifts for brevity
+    TILESTATE_TELEPORT = 131072, -- 1 << 17
+    TILESTATE_MAGICFIELD = 262144, -- 1 << 18
+    TILESTATE_MAILBOX = 524288, -- 1 << 19
+    TILESTATE_TRASHHOLDER = 1048576, -- 1 << 20
+    TILESTATE_BED = 2097152, -- 1 << 21
+    TILESTATE_DEPOT = 4194304, -- 1 << 22
+    TILESTATE_TRANSLUECENT_LIGHT = 8388608, -- 1 << 23
+    TILESTATE_LAST = 16777216 -- 1 << 24
+}
 
-    local flagsJson = {}
-    for flagName, flagValue in pairs(TileFlags) do
-        -- Skip the TILESTATE_NONE flag for the JSON output
-        if flagName ~= "TILESTATE_NONE" then
-            flagsJson[flagName] = checkFlag(tileFlags, flagValue)
-        end
+
+
+-- Function to use the simulated enum
+function tileUnderCursor1()
+    local tileObject = modules.game_interface.gameMapPanel:getTile(modules.game_interface.gameMapPanel.mousePos)
+    if not tileObject then
+        printConsole("No tile object found at cursor position.")
+        return
     end
 
-    local jsonOutput = tableToJson(flagsJson)
-    printConsole("Tile Flags: " .. jsonOutput)
+    -- Get a table of "things" (objects/items) on the tile
+    local things = tileObject:getThings()
+    if things then
+        for i, thing in ipairs(things) do
+            local id = thing:getId() -- Assuming each thing has a getId method to get its ID
+            printConsole("Thing " .. i .. " ID: " .. tostring(id))
+        end
+    else
+        printConsole("No things found on the tile.")
+    end
+
+    -- Example of using other methods as you have in your code
+    local topMultiUseThing = tileObject:getTopMultiUseThing()
+    printConsole("getTopMultiUseThing : " .. tostring(topMultiUseThing.getId()))
+
+    local effects = tileObject:getEffects()
+    printConsole("getEffects : " .. tostring(effects))
+
+    local ground = tileObject:getGround()
+    printConsole("getGround : " .. tostring(ground:getId()))
+
+    local isBlocking = tileObject:isBlocking()
+    printConsole("isBlocking : " .. tostring(isBlocking))
 end
 
 
-function tileUnderCursor3()
+
+
+function tileUnderCursor2()
+    local tileObject = modules.game_interface.gameMapPanel:getTile(modules.game_interface.gameMapPanel.mousePos)
+    -- Assuming you want to check for a specific flag, like TILESTATE_DEPOT
+    local pzInfo = tileObject:getFlags()
+    printConsole("PZ info: " .. tostring(pzInfo))  -- This will print "true" or "false"
+    
+    -- For more detailed output based on the flag check
+    if pzInfo then
+        printConsole("This tile is in a protection zone.")
+    else
+        printConsole("This tile is not in a protection zone.")
+    end
+end
+
+
+-- not working
+function tileUnderCursor2Old()
+    local protectionZoneFlag = 0
+    -- Set the protection zone color to red before showing it
+    local redColor = {r = 255, g = 0, b = 0} -- Assuming the API accepts a table with r, g, b values
+    g_map.setZoneColor(protectionZoneFlag, redColor)  
+    
+    if g_map.showZones() then
+        g_map.setShowZones(false)
+        printConsole("All zones are now hidden.")
+    else
+        g_map.setShowZones(true)
+        if g_map.showZone(protectionZoneFlag) then
+            printConsole("All zones are now visible. Protection zone color changed to red.")
+        else
+            printConsole("All zones are now visible.")
+        end
+    end
+end
+
+
+
+-- This function aims to toggle the visibility of all zones
+function tileUnderCursor3Old()
     local player = g_game.getLocalPlayer()
     if not player then
         printConsole("Player not found.")
         return
     end
 
-    local targetPosition = player:getPosition()
-    local tiles = g_map.getTiles(targetPosition.z)
+    -- Assuming the intention is to toggle visibility based on some condition
+    -- This is a placeholder action, adjust according to your game logic
+    if g_map.showZones() then
+        g_map.setShowZones(false)
+        printConsole("All zones hidden.")
+    else
+        g_map.setShowZones(true)
+        printConsole("All zones shown.")
+    end
+end
 
-    if not tiles or #tiles == 0 then
-        printConsole("No tiles found.")
+-- This function aims to toggle the visibility of a specific zone (e.g., protection zone)
+function tileUnderCursor4()
+    local player = g_game.getLocalPlayer()
+    if not player then
+        printConsole("Player not found.")
         return
     end
 
-    for _, tile in ipairs(tiles) do
-        local pos = tile:getPosition()
-        if pos.x == targetPosition.x and pos.y == targetPosition.y and pos.z == targetPosition.z then
-            printConsole("Matching tile found.")
-
-            local tileFlags = tile:getFlags()
-            printConsole("Tile Flags: " .. tostring(tileFlags))
-
-            -- Further processing...
-            break -- Assuming only one tile matches, we can break the loop after finding it
-        end
+    -- Toggle visibility of the protection zone (TILESTATE_PROTECTIONZONE)
+    local protectionZoneFlag = TILESTATE_PROTECTIONZONE
+    if g_map.showZone(protectionZoneFlag) then
+        g_map.setShowZone(protectionZoneFlag, false)
+        printConsole("Protection zone hidden.")
+    else
+        g_map.setShowZone(protectionZoneFlag, true)
+        printConsole("Protection zone shown.")
     end
 end
-
-
-
-
-function tileUnderCursor4()
-    local player = g_game.getLocalPlayer()
-    local playerStates = player:getStates()
-
-    local statesJson = {}
-    for stateName, stateValue in pairs(PlayerStates) do
-        -- Skip the None state for the JSON output
-        if stateName ~= "None" then
-            statesJson[stateName] = checkState(playerStates, stateValue)
-        end
-    end
-
-    local jsonOutput = tableToJson(statesJson)
-    printConsole("Player States: " .. jsonOutput)
-end
-
 
 
 -- parcele
@@ -1425,6 +1870,191 @@ function getPlayerStates()
 end
 
 
+function getTabsInfo()
+    local MAX_LINES = 100 -- Example value, adjust based on your application's needs
+    local tabsData = {} -- Table to hold data for all tabs
+
+    local rootPanel = modules.game_interface.getRootPanel()
+    local rootPanelChildrenCount = rootPanel:getChildCount()
+
+    -- Iterate over all children of the root panel
+    for i = 1, rootPanelChildrenCount do
+        local child = rootPanel:getChildByIndex(i)
+        local childId = child:getId()
+
+        -- Filter to proceed only for the gameBottomPanel
+        if childId == "gameBottomPanel" then
+            local childChildrenCount = child:getChildCount()
+            for j = 1, childChildrenCount do
+                local childChild = child:getChildByIndex(j)
+                local childChildId = childChild:getId()
+
+                -- Filter to proceed only for the consolePanel
+                if childChildId == "consolePanel" then
+                    local childChildChildrenCount = childChild:getChildCount()
+                    for k = 1, childChildChildrenCount do
+                        local childChildChild = childChild:getChildByIndex(k)
+                        local childChildChildId = childChildChild:getId()
+
+                        -- Targeting consoleTabBar instead of consoleContentPanel
+                        if childChildChildId == "consoleTabBar" then
+                            local childChildChildChildrenCount = childChildChild:getChildCount()
+                            for l = 1, childChildChildChildrenCount do
+                                local tab = childChildChild:getChildByIndex(l)
+                                local tabName = tab:getText() -- Assuming getText() retrieves the tab name
+                                local tabFocused = tab:isChecked() -- Assuming isChecked() returns true if the tab is focused
+                                local hasUnread = tab:isOn() -- Assuming isOn() returns true if the tab has unread messages
+
+                                -- Collect tab data into the tabsData table
+                                tabsData[tostring(l)] = {
+                                    tabName = tabName,
+                                    isFocused = tostring(tabFocused),
+                                    hasUnread = tostring(hasUnread)
+                                }
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return tabsData
+end
+
+
+function getColorName(r, g, b, a)
+    -- Define a basic set of known colors
+    local colors = {
+        {name = "Black", r = 0, g = 0, b = 0},
+        {name = "White", r = 255, g = 255, b = 255},
+        {name = "Red", r = 255, g = 0, b = 0},
+        {name = "Lime", r = 0, g = 255, b = 0},
+        {name = "Blue", r = 0, g = 0, b = 255},
+        {name = "Yellow", r = 255, g = 255, b = 0},
+        {name = "Cyan", r = 0, g = 255, b = 255},
+        {name = "Magenta", r = 255, g = 0, b = 255},
+        {name = "Silver", r = 192, g = 192, b = 192},
+        {name = "Gray", r = 128, g = 128, b = 128},
+        -- Add more colors as needed
+    }
+
+    -- Function to calculate the Euclidean distance between two colors
+    local function colorDistance(r1, g1, b1, r2, g2, b2)
+        return math.sqrt((r2 - r1)^2 + (g2 - g1)^2 + (b2 - b1)^2)
+    end
+
+    -- Find the closest color
+    local closestColorName = "Unknown"
+    local smallestDistance = math.huge
+    for _, color in ipairs(colors) do
+        local distance = colorDistance(r, g, b, color.r, color.g, color.b)
+        if distance < smallestDistance then
+            smallestDistance = distance
+            closestColorName = color.name
+        end
+    end
+
+    return closestColorName
+end
+
+
+function getFocusedTabInfo()
+    local chatData = {}
+    local MAX_MESSAGES = 20 -- Define the number of last messages you want to retrieve
+
+    local rootPanel = modules.game_interface.getRootPanel()
+    local rootPanelChildrenCount = rootPanel:getChildCount()
+
+    -- Iterate over all children of the root panel
+    for i = 1, rootPanelChildrenCount do
+        local child = rootPanel:getChildByIndex(i)
+        local childId = child:getId()
+
+        -- Filter to proceed only for the gameBottomPanel
+        if childId == "gameBottomPanel" then
+            local childChildrenCount = child:getChildCount()
+            for j = 1, childChildrenCount do
+                local childChild = child:getChildByIndex(j)
+                local childChildId = childChild:getId()
+
+                -- Filter to proceed only for the consolePanel
+                if childChildId == "consolePanel" then
+                    local childChildChildrenCount = childChild:getChildCount()
+                    for k = 1, childChildChildrenCount do
+                        local childChildChild = childChild:getChildByIndex(k)
+                        local childChildChildId = childChildChild:getId()
+
+                        -- Filter to proceed only for the consoleContentPanel
+                        if childChildChildId == "consoleContentPanel" then
+                            local childChildChildChildrenCount = childChildChild:getChildCount()
+                            for l = 1, childChildChildChildrenCount do
+                                local childChildChildChild = childChildChild:getChildByIndex(l)
+                                local childChildChildChildId = childChildChildChild:getId()
+
+                                -- Filter to proceed only for the tabPanel
+                                if childChildChildChildId == "tabPanel" then
+                                    local childChildChildChildChildrenCount = childChildChildChild:getChildCount()
+                                    for m = 1, childChildChildChildChildrenCount do
+                                        local childChildChildChildChild = childChildChildChild:getChildByIndex(m)
+                                        local childChildChildChildChildId = childChildChildChildChild:getId()
+
+                                        -- Targeting consoleBuffer
+                                        if childChildChildChildChildId == "consoleBuffer" then
+                                            -- Retrieve the last 20 messages
+                                            local messagesCount = math.min(childChildChildChildChild:getChildCount(), MAX_MESSAGES)
+                                            for n = messagesCount, 1, -1 do
+                                                local messageIndex = childChildChildChildChild:getChildCount() - n
+                                                local message = childChildChildChildChild:getChildByIndex(messageIndex + 1) -- Lua tables are 1-indexed
+                                                if message then
+                                                    local text = message:getText()
+                                                    local color = message:getColor() -- This will return the color object.
+
+                                                    -- Check if color is a table and try to get the color name
+                                                    local colorName = "Unknown" -- Default to Unknown if not found
+                                                    if type(color) == "table" then
+                                                        -- Extract RGB values; assume a default alpha if not provided
+                                                        local r = color.r or 0
+                                                        local g = color.g or 0
+                                                        local b = color.b or 0
+                                                        -- Use the getColorName function to get the color name
+                                                        colorName = getColorName(r, g, b)
+                                                    end
+                                                    
+                                                    -- Try to extract time, sender, and message text
+                                                    local time, sender, messageText = text:match("(%d+:%d+)%s+(%w+):%s+(.*)")
+                                                    if sender then
+                                                        -- Message with sender
+                                                        chatData[tostring(messagesCount - n + 1)] = {
+                                                            time = time,
+                                                            from = sender,
+                                                            text = messageText,
+                                                            mode = colorName
+                                                        }
+                                                    else
+                                                        -- Server message or message without explicit sender
+                                                        time, messageText = text:match("(%d+:%d+)%s+(.*)")
+                                                        chatData[tostring(messagesCount - n + 1)] = {
+                                                            time = time or "Unknown",
+                                                            from = "server",
+                                                            text = messageText or text, -- Use the entire text if specific parsing fails
+                                                            mode = colorName
+                                                        }
+                                                    end
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return chatData
+end
+
 
 function getEqData()
     local inventoryData = {}
@@ -1790,8 +2420,13 @@ function getGameData(event)
 	areaInfo = {},
         screenInfo = {},
         spyLevelInfo = {},
+        textChatInfo = {},
     }
-
+    
+    gameData.textChatInfo = {
+        textTabsInfo = getTabsInfo(),
+        focusedTabInfo = getFocusedTabInfo()
+    }
     gameData.EqInfo = getEqData()
     gameData.attackInfo = getAttackData()
     gameData.containersInfo = getOpenContainersData()

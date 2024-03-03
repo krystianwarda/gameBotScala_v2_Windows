@@ -29,6 +29,10 @@ object SettingsUtils {
                                  requiredMana: Int
                                )
 
+  case class AutoResponderSettings(
+                                 enabled: Boolean,
+                               )
+
   case class ProtectionZoneSettings(
                                      enabled: Boolean,
                                      playerOnScreenAlert: Boolean,
@@ -55,6 +59,7 @@ object SettingsUtils {
   implicit val healingSettingsFormat: Format[HealingSettings] = Json.format[HealingSettings]
   implicit val runeMakingSettingsFormat: Format[RuneMakingSettings] = Json.format[RuneMakingSettings]
   implicit val protectionZoneSettingsFormat: Format[ProtectionZoneSettings] = Json.format[ProtectionZoneSettings]
+  implicit val autoResponderSettingsFormat: Format[AutoResponderSettings] = Json.format[AutoResponderSettings]
   implicit val fishingSettingsFormat: Format[FishingSettings] = Json.format[FishingSettings]
   implicit val trainingSettingsFormat: Format[TrainingSettings] = Json.format[TrainingSettings]
   implicit val rectangleSettingsFormat: Format[RectangleSettings] = Json.format[RectangleSettings]
@@ -65,6 +70,7 @@ object SettingsUtils {
                          runeMakingSettings: RuneMakingSettings,
                          protectionZoneSettings: ProtectionZoneSettings,
                          fishingSettings: FishingSettings,
+                         autoResponderSettings: AutoResponderSettings,
                          trainingSettings: TrainingSettings,
                          mouseMovements: Boolean,
                          caveBot: Boolean

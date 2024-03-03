@@ -35,6 +35,7 @@ class SwingApp(playerClassList: List[Player],
   val fishingBot = new FishingBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val protectionZoneBot = new ProtectionZoneBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val trainingBot = new TrainingBot(currentPlayer, uiAppActor, jsonProcessorActor)
+  val autoResponderBot = new AutoResponderBot(currentPlayer, uiAppActor, jsonProcessorActor)
 
   val exampleNames = playerClassList.map(_.characterName)
   val exampleMap = playerClassList.map(e => e.characterName -> e).toMap
@@ -71,12 +72,16 @@ class SwingApp(playerClassList: List[Player],
       enabled = protectionZoneCheckbox.selected,
       playerOnScreenAlert = protectionZoneBot.playerOnScreenAlertCheckbox.selected,
       escapeToProtectionZone = protectionZoneBot.escapeToProtectionZoneCheckbox.selected,
-      ignoredCreatures = protectionZoneBot.getIgnoredCreatures
+      ignoredCreatures = protectionZoneBot.getIgnoredCreatures,
     )
 
     val fishingSettings = FishingSettings(
       enabled = fishingCheckbox.selected,
-      selectedRectangles = fishingBot.selectedRectangles
+      selectedRectangles = fishingBot.selectedRectangles,
+    )
+
+    val autoResponderSettings = AutoResponderSettings(
+      enabled = autoResponderCheckbox.selected,
     )
 
     val trainingSettings = TrainingSettings(
@@ -94,6 +99,7 @@ class SwingApp(playerClassList: List[Player],
       runeMakingSettings = runeMakingSettings,
       protectionZoneSettings = protectionZoneSettings,
       fishingSettings = fishingSettings,
+      autoResponderSettings = autoResponderSettings,
       trainingSettings = trainingSettings,
       mouseMovements = mouseMovementsCheckbox.selected,
       caveBot = caveBotCheckbox.selected
@@ -147,6 +153,7 @@ class SwingApp(playerClassList: List[Player],
     protectionZoneBot.escapeToProtectionZoneCheckbox.selected = settings.protectionZoneSettings.escapeToProtectionZone
     protectionZoneBot.setIgnoredCreatures(settings.protectionZoneSettings.ignoredCreatures)
     fishingCheckbox.selected = settings.fishingSettings.enabled
+    autoResponderCheckbox.selected = settings.autoResponderSettings.enabled
     trainingCheckbox.selected = settings.trainingSettings.enabled
     trainingBot.pickAmmunitionCheckbox.selected = settings.trainingSettings.pickAmmunition
     trainingBot.refillAmmunitionCheckbox.selected = settings.trainingSettings.refillAmmunition
@@ -156,6 +163,7 @@ class SwingApp(playerClassList: List[Player],
 
     mouseMovementsCheckbox.selected = settings.mouseMovements
     caveBotCheckbox.selected = settings.caveBot
+
 
     // TextField settings for HealingSettings
     autoHealBot.lightHealSpellField.text = settings.healingSettings.lightHealSpell
@@ -202,6 +210,11 @@ class SwingApp(playerClassList: List[Player],
     trainingBot.switchWeaponToEnsureDamageCheckbox.selected = trainingSettings.switchWeaponToEnsureDamage
   }
 
+  def applyAutoResponderSettings(autoResponderSettings: AutoResponderSettings): Unit = {
+    autoResponderCheckbox.selected = autoResponderSettings.enabled
+
+  }
+
   def applyGeneralSettings(settings: UISettings): Unit = {
 
 //    fishingCheckbox.selected = settings.fishingSettings.enabled
@@ -243,13 +256,15 @@ class SwingApp(playerClassList: List[Player],
   val trainingCheckbox = new CheckBox("Training")
   val caveBotCheckbox = new CheckBox("Cave Bot")
   val fishingCheckbox = new CheckBox("Fishing")
+  val autoResponderCheckbox = new CheckBox("Auto Responder")
   val mouseMovementsCheckbox = new CheckBox("Mouse Movements")
   val protectionZoneCheckbox = new CheckBox("Protection Zone")
   // ...and other fields and buttons as in the second snippet
 
   // Define UI behavior and event handling here, similar to the second snippet...
   listenTo(autoHealCheckbox, runeMakerCheckbox, trainingCheckbox, caveBotCheckbox,
-    protectionZoneCheckbox, fishingCheckbox, mouseMovementsCheckbox, protectionZoneCheckbox
+    autoResponderCheckbox, protectionZoneCheckbox, fishingCheckbox,
+    mouseMovementsCheckbox, protectionZoneCheckbox
   )
   //  exampleDropdown.selection
   reactions += {
@@ -274,6 +289,9 @@ class SwingApp(playerClassList: List[Player],
       println("Protection Zone Checkbox clicked")
     // Add logic for when protectionZoneCheckbox is clicked
 
+    case ButtonClicked(`autoResponderCheckbox`) =>
+      println("Auto Responder Checkbox clicked")
+    // Add logic for when caveBotCheckbox is clicked
 
     case ButtonClicked(`fishingCheckbox`) =>
       println("Fishing Checkbox clicked")
@@ -302,7 +320,7 @@ class SwingApp(playerClassList: List[Player],
 
       // Adding Checkboxes in the first column
       val checkBoxComponents = Seq(autoHealCheckbox, runeMakerCheckbox, trainingCheckbox,
-        caveBotCheckbox, fishingCheckbox, mouseMovementsCheckbox,
+        caveBotCheckbox, fishingCheckbox, mouseMovementsCheckbox,autoResponderCheckbox,
         protectionZoneCheckbox)
 
       for ((checkbox, idx) <- checkBoxComponents.zipWithIndex) {
@@ -330,6 +348,8 @@ class SwingApp(playerClassList: List[Player],
     pages += new TabbedPane.Page("Rune Maker", runeMaker.runeMakerTab)
 
     pages += new TabbedPane.Page("Trainer", trainingBot.trainerTab)
+
+    pages += new TabbedPane.Page("Auto Responder", autoResponderBot.autoResponderTab)
 
     pages += new TabbedPane.Page("Fishing", fishingBot.fishingTab)
 
