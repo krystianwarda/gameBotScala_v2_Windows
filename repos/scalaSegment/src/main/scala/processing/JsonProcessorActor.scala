@@ -4,11 +4,12 @@ import akka.actor.{Actor, ActorRef}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json, Writes}
 import player.Player
 import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, Mouse, TextCommand}
-import keyboard.TypeText
+import keyboard.{AutoResponderManager, TypeText}
 import processing.ActionDetail
 import main.scala.MainApp
-import main.scala.MainApp.mouseMovementActorRef
+import main.scala.MainApp.{autoResponderManagerRef, mouseMovementActorRef}
 import processing.AutoHeal.computeHealingActions
+import processing.AutoResponder.computeAutoRespondActions
 import processing.Fishing.computeFishingActions
 import processing.Process.{detectPlayersAndMonsters, findBackpackPosition, findBackpackSlotForBlank, findRats, isPlayerDetected}
 import processing.ProtectionZone.computeProtectionZoneActions
@@ -16,6 +17,7 @@ import processing.RuneMaker.computeRuneMakingActions
 import processing.Training.computeTrainingActions
 import userUI.SettingsUtils
 import userUI.SettingsUtils.UISettings
+import keyboard.AutoResponderCommand
 
 import java.awt.event.{InputEvent, KeyEvent}
 import java.awt.{Robot, Toolkit}
@@ -49,7 +51,8 @@ case class ProcessorState(
                            lastMoveTime: Long = 0,
                            lastTrainingCommandSend: Long = 0,
                            lastProtectionZoneCommandSend: Long = 0,
-                           settings: Option[UISettings]
+                           settings: Option[UISettings],
+                           lastAutoResponderCommandSend: Long = 0
                          )
 case class UpdateSettings(settings: UISettings)
 
@@ -154,8 +157,9 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     val afterRuneMakingState = performRuneMaking(json, afterHealingState)
     val afterTrainingState = performTraining(json, afterRuneMakingState)
     val afterProtectionZoneState = performProtectionZone(json, afterTrainingState)
+    val afterAutoResponderState = performAutoResponder(json, afterProtectionZoneState)
     // The final state after all updates
-    afterProtectionZoneState
+    afterAutoResponderState
   }
 
   def performProtectionZone(json: JsValue, currentState: ProcessorState): ProcessorState = {
@@ -166,6 +170,23 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
         val (actions, logs) = computeProtectionZoneActions(json, settings)
         executeActionsAndLogs(actions, logs, Some(settings))
         Some(currentState.copy(lastProtectionZoneCommandSend = currentTime))
+      } else None
+      //      if (settings.fishingSettings.enabled && currentTime - currentState.lastTrainingCommandSend >= 2000) {
+      //        println("Performing training action.")
+      //        val (actions, logs) = computeTrainingActions(json, settings)
+      //        executeActionsAndLogs(actions, logs, Some(settings))
+      //        Some(currentState.copy(lastTrainingCommandSend = currentTime))
+      //      } else None
+    }.getOrElse(currentState)
+  }
+
+  def performAutoResponder(json: JsValue, currentState: ProcessorState): ProcessorState = {
+    val currentTime = System.currentTimeMillis()
+    currentState.settings.flatMap { settings =>
+      if (settings.autoResponderSettings.enabled) {
+        val (actions, logs) = computeAutoRespondActions(json, settings)
+        executeActionsAndLogs(actions, logs, Some(settings))
+        Some(currentState.copy(lastAutoResponderCommandSend = currentTime))
       } else None
       //      if (settings.fishingSettings.enabled && currentTime - currentState.lastTrainingCommandSend >= 2000) {
       //        println("Performing training action.")
@@ -244,6 +265,13 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
           // Handle mouse sequence actions: mouse movement to ActionStateManager
           println("Fake action - use mouse")
           actionStateManager ! MouseMoveCommand(actionDetail.actions, settings.mouseMovements)
+
+
+        case FakeAction("autoResponderFunction", _, Some(ListOfJsons(jsons))) =>
+          // Example: Print each JSON to console. Modify as needed.
+          jsons.foreach(json => println(json))
+          // Correctly sending the Seq[JsValue] as a single message to the AutoResponderManager actor instance
+          autoResponderManagerRef ! AutoResponderCommand(jsons)
 
         case FakeAction("typeText", _, Some(actionDetail: KeyboardText)) =>
           println("Fake action - use keyboard - type text")
