@@ -4,7 +4,7 @@ import akka.actor.{Actor, ActorRef, Props}
 import scala.collection.mutable
 
 // Assuming TypeText is correctly defined as a case class elsewhere in your code
- case class TypeText(text: String)
+case class TypeText(text: String)
 
 object KeyboardActionTypes extends Enumeration {
   val TypeText, OtherAction = Value
