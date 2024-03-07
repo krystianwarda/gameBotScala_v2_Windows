@@ -269,7 +269,7 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
 
         case FakeAction("autoResponderFunction", _, Some(ListOfJsons(jsons))) =>
           // Example: Print each JSON to console. Modify as needed.
-          jsons.foreach(json => println(json))
+//          jsons.foreach(json => println(json))
           // Correctly sending the Seq[JsValue] as a single message to the AutoResponderManager actor instance
           autoResponderManagerRef ! AutoResponderCommand(jsons)
 

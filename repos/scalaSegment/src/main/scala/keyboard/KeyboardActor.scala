@@ -9,30 +9,42 @@ class KeyboardActor extends Actor {
 
   // Helper method to press and release a key
   private def pressKey(keyCode: Int): Unit = {
-    println(s"KeyboardActor: Pressing key with keyCode: $keyCode") // Debug print
+//    println(s"KeyboardActor: Pressing key with keyCode: $keyCode") // Debug print
     robot.keyPress(keyCode)
     robot.keyRelease(keyCode)
-    println(s"KeyboardActor: Released key with keyCode: $keyCode") // Debug print
+//    println(s"KeyboardActor: Released key with keyCode: $keyCode") // Debug print
   }
 
   // Simulate typing a string and press Enter after typing
   private def typeText(text: String): Unit = {
     println(s"KeyboardActor: Typing text: $text") // Debug print
     text.foreach { char =>
-      val keyCode = KeyEvent.getExtendedKeyCodeForChar(char)
-      println(s"KeyboardActor: Typing char: $char with keyCode: $keyCode") // Debug print for each character
-      if (Character.isUpperCase(char) || char.isDigit || "`~!@#$%^&*()_+{}|:\"<>?".indexOf(char) > -1) {
-        robot.keyPress(KeyEvent.VK_SHIFT)
-      }
-      pressKey(keyCode)
-      if (Character.isUpperCase(char) || char.isDigit || "`~!@#$%^&*()_+{}|:\"<>?".indexOf(char) > -1) {
-        robot.keyRelease(KeyEvent.VK_SHIFT)
+      char match {
+        case '?' => // Special handling for question mark
+          robot.keyPress(KeyEvent.VK_SHIFT)
+          pressKey(KeyEvent.VK_SLASH)
+          robot.keyRelease(KeyEvent.VK_SHIFT)
+        case _ =>
+          val keyCode = KeyEvent.getExtendedKeyCodeForChar(char)
+//          println(s"KeyboardActor: Typing char: $char with keyCode: $keyCode") // Debug print for each character
+          if (keyCode == KeyEvent.VK_UNDEFINED) {
+            println(s"KeyboardActor: Cannot type character: $char")
+          } else {
+            if (Character.isUpperCase(char) || char.isDigit || "`~!@#$%^&*()_+{}|:\"<>?".indexOf(char) > -1) {
+              robot.keyPress(KeyEvent.VK_SHIFT)
+            }
+            pressKey(keyCode)
+            if (Character.isUpperCase(char) || char.isDigit || "`~!@#$%^&*()_+{}|:\"<>?".indexOf(char) > -1) {
+              robot.keyRelease(KeyEvent.VK_SHIFT)
+            }
+          }
       }
     }
     // Press Enter after typing the text
     pressKey(KeyEvent.VK_ENTER)
     println("KeyboardActor: Pressed Enter after typing") // Debug print
   }
+
 
   // Handle function keys
   private def pressFunctionKey(key: String): Unit = {
@@ -49,7 +61,7 @@ class KeyboardActor extends Actor {
   // In KeyboardActor
   def receive: Receive = {
     case TypeText(text) =>
-      println(s"KeyboardActor: Received TypeText with text: $text") // Debug print
+//      println(s"KeyboardActor: Received TypeText with text: $text") // Debug print
       typeText(text)
     case _ => println("KeyboardActor: Unhandled text type action")
   }
