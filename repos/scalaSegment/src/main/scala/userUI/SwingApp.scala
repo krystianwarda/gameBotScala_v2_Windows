@@ -30,12 +30,13 @@ class SwingApp(playerClassList: List[Player],
 
   // Initialize AutoHeal class
   val autoHealBot = new AutoHealBot(currentPlayer, uiAppActor, jsonProcessorActor)
-  val caveBot = new CaveBot(currentPlayer, uiAppActor, jsonProcessorActor)
+  val caveBotBot = new CaveBotBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val runeMaker = new RuneMaker(currentPlayer, uiAppActor, jsonProcessorActor)
   val fishingBot = new FishingBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val protectionZoneBot = new ProtectionZoneBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val trainingBot = new TrainingBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val autoResponderBot = new AutoResponderBot(currentPlayer, uiAppActor, jsonProcessorActor)
+
 
   val exampleNames = playerClassList.map(_.characterName)
   val exampleMap = playerClassList.map(e => e.characterName -> e).toMap
@@ -80,6 +81,11 @@ class SwingApp(playerClassList: List[Player],
       selectedRectangles = fishingBot.selectedRectangles,
     )
 
+    val caveBotSettings = CaveBotSettings(
+      enabled = fishingCheckbox.selected,
+      waypointsList = fishingBot.selectedRectangles,
+    )
+
     val autoResponderSettings = AutoResponderSettings(
       enabled = autoResponderCheckbox.selected,
     )
@@ -102,7 +108,7 @@ class SwingApp(playerClassList: List[Player],
       autoResponderSettings = autoResponderSettings,
       trainingSettings = trainingSettings,
       mouseMovements = mouseMovementsCheckbox.selected,
-      caveBot = caveBotCheckbox.selected
+      caveBotSettings = caveBotSettings,
     )
   }
 
@@ -148,6 +154,7 @@ class SwingApp(playerClassList: List[Player],
     // CheckBox settings
     autoHealCheckbox.selected = settings.healingSettings.enabled
     runeMakerCheckbox.selected = settings.runeMakingSettings.enabled
+
     protectionZoneCheckbox.selected = settings.protectionZoneSettings.enabled
     protectionZoneBot.playerOnScreenAlertCheckbox.selected = settings.protectionZoneSettings.playerOnScreenAlert
     protectionZoneBot.escapeToProtectionZoneCheckbox.selected = settings.protectionZoneSettings.escapeToProtectionZone
@@ -160,9 +167,11 @@ class SwingApp(playerClassList: List[Player],
     trainingBot.doNotKillTargetCheckbox.selected = settings.trainingSettings.doNotKillTarget
     trainingBot.switchAttackModeToEnsureDamageCheckbox.selected = settings.trainingSettings.switchAttackModeToEnsureDamage
     trainingBot.switchWeaponToEnsureDamageCheckbox.selected = settings.trainingSettings.switchWeaponToEnsureDamage
+    caveBotCheckbox.selected = settings.caveBotSettings.enabled
+    // caveBotBot.setIgnoredCreatures(settings.protectionZoneSettings.ignoredCreatures)
 
     mouseMovementsCheckbox.selected = settings.mouseMovements
-    caveBotCheckbox.selected = settings.caveBot
+
 
 
     // TextField settings for HealingSettings
@@ -215,13 +224,14 @@ class SwingApp(playerClassList: List[Player],
 
   }
 
-  def applyGeneralSettings(settings: UISettings): Unit = {
+  def applyCaveBotSettings(caveBotSettings: CaveBotSettings): Unit = {
+    caveBotCheckbox.selected = caveBotSettings.enabled
 
+  }
+
+  def applyGeneralSettings(settings: UISettings): Unit = {
 //    fishingCheckbox.selected = settings.fishingSettings.enabled
     mouseMovementsCheckbox.selected = settings.mouseMovements
-    caveBotCheckbox.selected = settings.caveBot
-
-    // Apply any other top-level settings
   }
 
 
@@ -343,7 +353,7 @@ class SwingApp(playerClassList: List[Player],
 
     pages += new TabbedPane.Page("Auto Heal", autoHealBot.autoHealTab)
 
-    pages += new TabbedPane.Page("Cave Bot", caveBot.caveBotTab)
+    pages += new TabbedPane.Page("Cave Bot", caveBotBot.caveBotTab)
 
     pages += new TabbedPane.Page("Rune Maker", runeMaker.runeMakerTab)
 

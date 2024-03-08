@@ -46,6 +46,11 @@ object SettingsUtils {
                                      selectedRectangles: Seq[String] = Seq.empty
                                    )
 
+  case class CaveBotSettings(
+                              enabled: Boolean,
+                              waypointsList: Seq[String] = Seq.empty
+                            )
+
   case class TrainingSettings(
                               enabled: Boolean,
                               pickAmmunition: Boolean,
@@ -63,6 +68,7 @@ object SettingsUtils {
   implicit val fishingSettingsFormat: Format[FishingSettings] = Json.format[FishingSettings]
   implicit val trainingSettingsFormat: Format[TrainingSettings] = Json.format[TrainingSettings]
   implicit val rectangleSettingsFormat: Format[RectangleSettings] = Json.format[RectangleSettings]
+  implicit val caveBotSettingsFormat: Format[CaveBotSettings] = Json.format[CaveBotSettings]
 
   // Now define the UISettings case class
   case class UISettings(
@@ -73,7 +79,7 @@ object SettingsUtils {
                          autoResponderSettings: AutoResponderSettings,
                          trainingSettings: TrainingSettings,
                          mouseMovements: Boolean,
-                         caveBot: Boolean
+                         caveBotSettings: CaveBotSettings,
                          // Add other settings or groups of settings as needed
                        )
 
