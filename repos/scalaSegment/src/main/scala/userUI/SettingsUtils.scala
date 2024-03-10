@@ -1,5 +1,9 @@
 package userUI
 
+import play.api.libs.functional.syntax.toFunctionalBuilderOps
+import play.api.libs.json.{JsPath, Reads, Writes}
+
+import javax.swing.{DefaultListModel, JList}
 import scala.collection.mutable
 
 object SettingsUtils {
@@ -46,10 +50,13 @@ object SettingsUtils {
                                      selectedRectangles: Seq[String] = Seq.empty
                                    )
 
+
+
   case class CaveBotSettings(
                               enabled: Boolean,
-                              waypointsList: Seq[String] = Seq.empty
+                              waypointsList: JList[String],
                             )
+
 
   case class TrainingSettings(
                               enabled: Boolean,
@@ -68,7 +75,8 @@ object SettingsUtils {
   implicit val fishingSettingsFormat: Format[FishingSettings] = Json.format[FishingSettings]
   implicit val trainingSettingsFormat: Format[TrainingSettings] = Json.format[TrainingSettings]
   implicit val rectangleSettingsFormat: Format[RectangleSettings] = Json.format[RectangleSettings]
-  implicit val caveBotSettingsFormat: Format[CaveBotSettings] = Json.format[CaveBotSettings]
+//  implicit val caveBotSettingsFormat: Format[CaveBotSettings] = Json.format[CaveBotSettings]
+  implicit val caveBotSettingsFormat: Format[CaveBotSettings] = Format(caveBotSettingsReads, caveBotSettingsWrites)
 
   // Now define the UISettings case class
   case class UISettings(
@@ -103,5 +111,31 @@ object SettingsUtils {
       case e: Exception => None
     }
   }
+
+
+  // Helper methods to convert between JList and Seq
+  private def jListToSeq(jList: JList[String]): Seq[String] = {
+    val model = jList.getModel
+    (0 until model.getSize).map(model.getElementAt)
+  }
+
+  private def seqToJList(seq: Seq[String]): JList[String] = {
+    val model = new DefaultListModel[String]()
+    seq.foreach(model.addElement)
+    new JList[String](model)
+  }
+
+  // Custom Reads and Writes for CaveBotSettings
+  implicit val caveBotSettingsWrites: Writes[CaveBotSettings] = (
+    (JsPath \ "enabled").write[Boolean] and
+      (JsPath \ "waypointsList").write[Seq[String]]
+    )((settings: CaveBotSettings) => (settings.enabled, jListToSeq(settings.waypointsList)))
+
+  implicit val caveBotSettingsReads: Reads[CaveBotSettings] = (
+    (JsPath \ "enabled").read[Boolean] and
+      (JsPath \ "waypointsList").read[Seq[String]]
+    )((enabled, waypointsList) => CaveBotSettings(enabled, seqToJList(waypointsList)))
+
+
 }
 

@@ -82,8 +82,8 @@ class SwingApp(playerClassList: List[Player],
     )
 
     val caveBotSettings = CaveBotSettings(
-      enabled = fishingCheckbox.selected,
-      waypointsList = fishingBot.selectedRectangles,
+      enabled = caveBotCheckbox.selected,
+      waypointsList = caveBotBot.waypointsList,
     )
 
     val autoResponderSettings = AutoResponderSettings(

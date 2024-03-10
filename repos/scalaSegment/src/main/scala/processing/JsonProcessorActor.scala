@@ -18,6 +18,7 @@ import processing.Training.computeTrainingActions
 import userUI.SettingsUtils
 import userUI.SettingsUtils.UISettings
 import keyboard.AutoResponderCommand
+import processing.CaveBot.computeCaveBotActions
 
 import java.awt.event.{InputEvent, KeyEvent}
 import java.awt.{Robot, Toolkit}
@@ -52,7 +53,8 @@ case class ProcessorState(
                            lastTrainingCommandSend: Long = 0,
                            lastProtectionZoneCommandSend: Long = 0,
                            settings: Option[UISettings],
-                           lastAutoResponderCommandSend: Long = 0
+                           lastAutoResponderCommandSend: Long = 0,
+                           lastCaveBotCommandSend: Long = 0
                          )
 case class UpdateSettings(settings: UISettings)
 
@@ -141,7 +143,8 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     (json \ "__status").asOpt[String] match {
       case Some("ok") => handleOkStatus(json, currentState)
       case Some("error") => handleErrorStatus(json); currentState
-      case _ => println("Unknown status"); currentState
+      case _ => handleOkStatus(json, currentState)
+//      case _ => println("Unknown status"); currentState
     }
   }
 
@@ -158,25 +161,32 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     val afterTrainingState = performTraining(json, afterRuneMakingState)
     val afterProtectionZoneState = performProtectionZone(json, afterTrainingState)
     val afterAutoResponderState = performAutoResponder(json, afterProtectionZoneState)
+    val afterCaveBotState = performCaveBot(json, afterAutoResponderState)
     // The final state after all updates
-    afterAutoResponderState
+    afterCaveBotState
   }
+
 
   def performProtectionZone(json: JsValue, currentState: ProcessorState): ProcessorState = {
     val currentTime = System.currentTimeMillis()
     currentState.settings.flatMap { settings =>
       if (settings.protectionZoneSettings.enabled) {
-        println("Performing protection zone action.")
         val (actions, logs) = computeProtectionZoneActions(json, settings)
         executeActionsAndLogs(actions, logs, Some(settings))
         Some(currentState.copy(lastProtectionZoneCommandSend = currentTime))
       } else None
-      //      if (settings.fishingSettings.enabled && currentTime - currentState.lastTrainingCommandSend >= 2000) {
-      //        println("Performing training action.")
-      //        val (actions, logs) = computeTrainingActions(json, settings)
-      //        executeActionsAndLogs(actions, logs, Some(settings))
-      //        Some(currentState.copy(lastTrainingCommandSend = currentTime))
-      //      } else None
+    }.getOrElse(currentState)
+  }
+
+  def performCaveBot(json: JsValue, currentState: ProcessorState): ProcessorState = {
+    val currentTime = System.currentTimeMillis()
+    currentState.settings.flatMap { settings =>
+      if (settings.caveBotSettings.enabled) {
+        println("Performing cave bot action.")
+        val (actions, logs) = computeCaveBotActions(json, settings)
+        executeActionsAndLogs(actions, logs, Some(settings))
+        Some(currentState.copy(lastCaveBotCommandSend = currentTime))
+      } else None
     }.getOrElse(currentState)
   }
 

@@ -11,13 +11,12 @@ import processing.Process.findItemInContainerSlot14
 object AutoHeal {
 
   def computeHealingActions(json: JsValue, settings: SettingsUtils.UISettings): (Seq[FakeAction], Seq[Log]) = {
-    val health = (json \ "characterInfo" \ "Health").as[Int]
-    val mana = (json \ "characterInfo" \ "Mana").as[Int]
     var actions: Seq[FakeAction] = Seq()
     var logs: Seq[Log] = Seq()
 
-
     if (settings.healingSettings.enabled) {
+      val health = (json \ "characterInfo" \ "Health").as[Int]
+      val mana = (json \ "characterInfo" \ "Mana").as[Int]
       // UH RUNE 3160
       if (settings.healingSettings.uhHealHealth > 0 && health <= settings.healingSettings.uhHealHealth && mana <= settings.healingSettings.uhHealMana) {
         logs = logs :+ Log("I need to use UH!")

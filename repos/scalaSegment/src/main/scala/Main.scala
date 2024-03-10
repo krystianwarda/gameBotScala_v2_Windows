@@ -10,7 +10,7 @@ import keyboard.{ActionKeyboardManager, AutoResponderManager, KeyboardActor}
 import play.api.libs.json._
 import processing.JsonProcessorActor
 import userUI.UIAppActor
-import utils.{InitialJsonProcessorActor, InitialRunActor, MainActor, PeriodicFunctionActor}
+import utils.{FunctionExecutorActor, InitialJsonProcessorActor, InitialRunActor, MainActor, PeriodicFunctionActor}
 
 import java.awt.Robot
 import java.io.EOFException
@@ -109,6 +109,7 @@ object MainApp extends App {
 
   // Update JsonProcessorActor creation to include the ActionKeyboardManager reference
   val jsonProcessorActorRef = system.actorOf(Props(new JsonProcessorActor(mouseMovementActorRef, actionStateManagerRef, actionKeyboardManagerRef)), "jsonProcessor")
+  val functionExecutorActorRef = system.actorOf(Props[FunctionExecutorActor], "functionExecutorActor")
 
   // Continue with the creation of other actors as before
   val initialJsonProcessorActorRef = system.actorOf(Props[InitialJsonProcessorActor], "initialJsonProcessor")
