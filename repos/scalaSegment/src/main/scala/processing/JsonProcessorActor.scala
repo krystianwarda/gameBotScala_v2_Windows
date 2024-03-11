@@ -54,7 +54,8 @@ case class ProcessorState(
                            lastProtectionZoneCommandSend: Long = 0,
                            settings: Option[UISettings],
                            lastAutoResponderCommandSend: Long = 0,
-                           lastCaveBotCommandSend: Long = 0
+                           lastCaveBotCommandSend: Long = 0,
+                           currentWaypointIndex: Int = 0
                          )
 case class UpdateSettings(settings: UISettings)
 
@@ -182,13 +183,32 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     val currentTime = System.currentTimeMillis()
     currentState.settings.flatMap { settings =>
       if (settings.caveBotSettings.enabled) {
-        println("Performing cave bot action.")
-        val (actions, logs) = computeCaveBotActions(json, settings)
+//        println("Performing cave bot action.")
+
+        // Call computeCaveBotActions with currentState
+        val ((actions, logs), updatedState) = computeCaveBotActions(json, settings, currentState.copy(lastCaveBotCommandSend = currentTime))
+
+        // Execute actions and logs if necessary
         executeActionsAndLogs(actions, logs, Some(settings))
-        Some(currentState.copy(lastCaveBotCommandSend = currentTime))
-      } else None
-    }.getOrElse(currentState)
+
+        // Return the updated state from computeCaveBotActions, wrapped in an Option
+        Some(updatedState)
+      } else None // Here, None is explicitly an Option[ProcessorState], matching the expected return type
+    }.getOrElse(currentState) // If the settings flatMap results in None, return the original currentState
   }
+
+
+  //  def performCaveBot(json: JsValue, currentState: ProcessorState): ProcessorState = {
+//    val currentTime = System.currentTimeMillis()
+//    currentState.settings.flatMap { settings =>
+//      if (settings.caveBotSettings.enabled) {
+//        println("Performing cave bot action.")
+//        val (actions, logs) = computeCaveBotActions(json, settings)
+//        executeActionsAndLogs(actions, logs, Some(settings))
+//        Some(currentState.copy(lastCaveBotCommandSend = currentTime))
+//      } else None
+//    }.getOrElse(currentState)
+//  }
 
   def performAutoResponder(json: JsValue, currentState: ProcessorState): ProcessorState = {
     val currentTime = System.currentTimeMillis()
