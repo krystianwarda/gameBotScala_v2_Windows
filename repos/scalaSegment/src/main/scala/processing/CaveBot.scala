@@ -56,6 +56,7 @@ object CaveBot {
     }
     ((actions, logs), updatedState)
   }
+
   def executeWhenNoMonstersOnScreen(json: JsValue, settings: UISettings, initialState: ProcessorState, initialActions: Seq[FakeAction], initialLogs: Seq[Log]): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
     var actions = initialActions
     var logs = initialLogs
@@ -102,6 +103,12 @@ object CaveBot {
         val path = findPathAndAdjustWaypoint(charLocationGrid, waypointLocationGrid, grid, Vec(0, 0), Vec(grid(0).length - 1, grid.length - 1))
         println(path)
 
+        if (Math.abs(waypointX - presentCharLocationX) <= 2 && Math.abs(waypointY - presentCharLocationY) <= 2) {
+          // Character is near the waypoint, increment waypoint index
+          val nextWaypointIndex = (currentWaypointIndex + 1) % waypointsModel.getSize
+          updatedState = updatedState.copy(currentWaypointIndex = nextWaypointIndex)
+          logs :+= Log(s"Moving to waypoint index: $nextWaypointIndex")
+        }
 
         if (path.length >= 2) {
           // The player's current position is the last element in the path
@@ -114,26 +121,20 @@ object CaveBot {
           val deltaX = nextWaypoint.x - playerPosition.x
           val deltaY = nextWaypoint.y - playerPosition.y
 
-          val direction = (deltaX, deltaY) match {
-            case (0, -1) => "Go UP"
-            case (0, 1) => "Go DOWN"
-            case (-1, 0) => "Go LEFT"
-            case (1, 0) => "Go RIGHT"
-            case _ => s"Unexpected direction: deltaX=$deltaX, deltaY=$deltaY"
+          (deltaX, deltaY) match {
+            case (0, -1) => actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton("ArrowUp")))
+            case (0, 1) => actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton("ArrowDown")))
+            case (-1, 0) => actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton("ArrowLeft")))
+            case (1, 0) => actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton("ArrowRight")))
+            case _ => logs :+= Log("Unexpected direction")
           }
 
-          println(s"Immediate direction: $direction")
-          logs :+= Log(direction)
+
         } else {
           println("Path is too short to calculate the next step.")
         }
 
-        if (Math.abs(waypointX - presentCharLocationX) <= 1 && Math.abs(waypointY - presentCharLocationY) <= 1) {
-          // Character is near the waypoint, increment waypoint index
-          val nextWaypointIndex = (currentWaypointIndex + 1) % waypointsModel.getSize
-          updatedState = updatedState.copy(currentWaypointIndex = nextWaypointIndex)
-          logs :+= Log(s"Moving to waypoint index: $nextWaypointIndex")
-        }
+
 
 
       }

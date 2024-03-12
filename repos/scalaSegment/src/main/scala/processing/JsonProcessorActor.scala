@@ -287,6 +287,15 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     settingsOption.foreach { settings =>
       actions.foreach {
 
+        case FakeAction("pressKey", _, Some(actionDetail: PushTheButton)) =>
+          println(s"Fake action - use keyboard - press and release key: ${actionDetail.key}")
+          actionKeyboardManager ! actionDetail
+
+        case FakeAction("typeText", _, Some(actionDetail: KeyboardText)) =>
+          println("Fake action - use keyboard - type text")
+          // Direct the text to ActionKeyboardManager for typing
+          actionKeyboardManager ! TypeText(actionDetail.text)
+
         case FakeAction("useOnYourselfFunction", Some(itemInfo), None) =>
           // Handle function-based actions: sendJson with itemInfo for specific use
           sendJson(Json.obj("__command" -> "useOnYourself", "itemInfo" -> Json.toJson(itemInfo)))
@@ -303,10 +312,7 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
           // Correctly sending the Seq[JsValue] as a single message to the AutoResponderManager actor instance
           autoResponderManagerRef ! AutoResponderCommand(jsons)
 
-        case FakeAction("typeText", _, Some(actionDetail: KeyboardText)) =>
-          println("Fake action - use keyboard - type text")
-          // Direct the text to ActionKeyboardManager for typing
-          actionKeyboardManager ! TypeText(actionDetail.text)
+
 
         case FakeAction("sayText", _, Some(actionDetail: KeyboardText)) =>
           // Function sayText for spells to TCP

@@ -43,6 +43,7 @@ object MouseMovementSettings {
   implicit val writes: Writes[MouseMovementSettings] = Json.writes[MouseMovementSettings]
 }
 
+
 class MouseMovementActor(actionStateManager: ActorRef) extends Actor {
   val robotInstance = new Robot()
   val c = new Random()

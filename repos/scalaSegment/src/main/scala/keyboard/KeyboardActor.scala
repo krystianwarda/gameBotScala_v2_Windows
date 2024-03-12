@@ -4,45 +4,41 @@ import akka.actor.{Actor, Props}
 import java.awt.Robot
 import java.awt.event.KeyEvent
 
+
 class KeyboardActor extends Actor {
   val robot = new Robot()
 
   // Helper method to press and release a key
+
+  // Helper method to press and release a key
   private def pressKey(keyCode: Int): Unit = {
-//    println(s"KeyboardActor: Pressing key with keyCode: $keyCode") // Debug print
     robot.keyPress(keyCode)
     robot.keyRelease(keyCode)
-//    println(s"KeyboardActor: Released key with keyCode: $keyCode") // Debug print
+    // Debug logs can be uncommented for development or troubleshooting
+    // println(s"KeyboardActor: Pressed and released key with keyCode: $keyCode")
   }
 
   // Simulate typing a string and press Enter after typing
+  // Simulate typing a string
   private def typeText(text: String): Unit = {
-    println(s"KeyboardActor: Typing text: $text") // Debug print
     text.foreach { char =>
-      char match {
-        case '?' => // Special handling for question mark
+      val keyCode = KeyEvent.getExtendedKeyCodeForChar(char)
+      if (keyCode == KeyEvent.VK_UNDEFINED) {
+        println(s"KeyboardActor: Cannot type character: $char")
+      } else {
+        val isShiftNeeded = Character.isUpperCase(char) || "`~!@#$%^&*()_+{}|:\"<>?".indexOf(char) > -1
+        if (isShiftNeeded) {
           robot.keyPress(KeyEvent.VK_SHIFT)
-          pressKey(KeyEvent.VK_SLASH)
+        }
+        pressKey(keyCode)
+        if (isShiftNeeded) {
           robot.keyRelease(KeyEvent.VK_SHIFT)
-        case _ =>
-          val keyCode = KeyEvent.getExtendedKeyCodeForChar(char)
-//          println(s"KeyboardActor: Typing char: $char with keyCode: $keyCode") // Debug print for each character
-          if (keyCode == KeyEvent.VK_UNDEFINED) {
-            println(s"KeyboardActor: Cannot type character: $char")
-          } else {
-            if (Character.isUpperCase(char) || char.isDigit || "`~!@#$%^&*()_+{}|:\"<>?".indexOf(char) > -1) {
-              robot.keyPress(KeyEvent.VK_SHIFT)
-            }
-            pressKey(keyCode)
-            if (Character.isUpperCase(char) || char.isDigit || "`~!@#$%^&*()_+{}|:\"<>?".indexOf(char) > -1) {
-              robot.keyRelease(KeyEvent.VK_SHIFT)
-            }
-          }
+        }
       }
     }
-    // Press Enter after typing the text
+    println("KeyboardActor: Typed text: " + text)
+    // Optionally, press Enter after typing the text
     pressKey(KeyEvent.VK_ENTER)
-    println("KeyboardActor: Pressed Enter after typing") // Debug print
   }
 
 
@@ -58,12 +54,28 @@ class KeyboardActor extends Actor {
     if (keyCode != 0) pressKey(keyCode)
   }
 
-  // In KeyboardActor
-  def receive: Receive = {
+
+  override def receive: Receive = {
+    case PressArrowKey(direction) =>
+      val keyCode = direction match {
+        case "ArrowUp" => KeyEvent.VK_UP
+        case "ArrowDown" => KeyEvent.VK_DOWN
+        case "ArrowLeft" => KeyEvent.VK_LEFT
+        case "ArrowRight" => KeyEvent.VK_RIGHT
+        case _ => 0 // Invalid key, handle appropriately
+      }
+      if (keyCode != 0) {
+        pressKey(keyCode)
+        println(s"KeyboardActor: Pressed and released key for $direction")
+      }
+      sender() ! KeyboardActionCompleted(KeyboardActionTypes.PressKey) // Notify completion
+
     case TypeText(text) =>
-//      println(s"KeyboardActor: Received TypeText with text: $text") // Debug print
       typeText(text)
-    case _ => println("KeyboardActor: Unhandled text type action")
+      sender() ! KeyboardActionCompleted(KeyboardActionTypes.TypeText) // Send completion notice if required
+
+    case _ =>
+      println("KeyboardActor: Unhandled action")
   }
 }
 
