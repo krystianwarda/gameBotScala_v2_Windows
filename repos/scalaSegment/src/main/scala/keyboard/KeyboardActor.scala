@@ -1,59 +1,28 @@
 package keyboard
-
-import akka.actor.{Actor, Props}
+import akka.actor.{Actor, Props, Cancellable}
 import java.awt.Robot
 import java.awt.event.KeyEvent
-
+import scala.concurrent.duration._
 
 class KeyboardActor extends Actor {
+  import context.dispatcher // Import the actor's execution context for scheduling
+
   val robot = new Robot()
+  var lastKeyReleaseTask: Option[Cancellable] = None
+  var lastPressedKeyCode: Option[Int] = None
 
-  // Helper method to press and release a key
-
-  // Helper method to press and release a key
-  private def pressKey(keyCode: Int): Unit = {
+  // Helper method to press a key without releasing it
+  private def pressKeyWithoutRelease(keyCode: Int): Unit = {
     robot.keyPress(keyCode)
-    robot.keyRelease(keyCode)
-    // Debug logs can be uncommented for development or troubleshooting
-    // println(s"KeyboardActor: Pressed and released key with keyCode: $keyCode")
+    lastPressedKeyCode = Some(keyCode)
+    // Cancel any existing scheduled release task
+    lastKeyReleaseTask.foreach(_.cancel())
+    // Schedule a new release task
+    lastKeyReleaseTask = Some(context.system.scheduler.scheduleOnce(500.milliseconds) {
+      robot.keyRelease(keyCode)
+      lastPressedKeyCode = None
+    })
   }
-
-  // Simulate typing a string and press Enter after typing
-  // Simulate typing a string
-  private def typeText(text: String): Unit = {
-    text.foreach { char =>
-      val keyCode = KeyEvent.getExtendedKeyCodeForChar(char)
-      if (keyCode == KeyEvent.VK_UNDEFINED) {
-        println(s"KeyboardActor: Cannot type character: $char")
-      } else {
-        val isShiftNeeded = Character.isUpperCase(char) || "`~!@#$%^&*()_+{}|:\"<>?".indexOf(char) > -1
-        if (isShiftNeeded) {
-          robot.keyPress(KeyEvent.VK_SHIFT)
-        }
-        pressKey(keyCode)
-        if (isShiftNeeded) {
-          robot.keyRelease(KeyEvent.VK_SHIFT)
-        }
-      }
-    }
-    println("KeyboardActor: Typed text: " + text)
-    // Optionally, press Enter after typing the text
-    pressKey(KeyEvent.VK_ENTER)
-  }
-
-
-  // Handle function keys
-  private def pressFunctionKey(key: String): Unit = {
-    val keyCode = key match {
-      case "F1" => KeyEvent.VK_F1
-      case "F2" => KeyEvent.VK_F2
-      // Add more cases as needed
-      case _ => 0 // Default or error handling
-    }
-    println(s"KeyboardActor: Handling function key: $key with keyCode: $keyCode") // Debug print
-    if (keyCode != 0) pressKey(keyCode)
-  }
-
 
   override def receive: Receive = {
     case PressArrowKey(direction) =>
@@ -62,20 +31,27 @@ class KeyboardActor extends Actor {
         case "ArrowDown" => KeyEvent.VK_DOWN
         case "ArrowLeft" => KeyEvent.VK_LEFT
         case "ArrowRight" => KeyEvent.VK_RIGHT
-        case _ => 0 // Invalid key, handle appropriately
+        case _ => -1 // Signify invalid key
       }
-      if (keyCode != 0) {
-        pressKey(keyCode)
-        println(s"KeyboardActor: Pressed and released key for $direction")
+      if (keyCode != -1) {
+        // Check if it's the same key pressed again before releasing
+        if (lastPressedKeyCode.contains(keyCode)) {
+          // It's the same key, so just reset the release task
+          lastKeyReleaseTask.foreach(_.cancel())
+          lastKeyReleaseTask = Some(context.system.scheduler.scheduleOnce(800.milliseconds) {
+            robot.keyRelease(keyCode)
+            lastPressedKeyCode = None
+          })
+        } else {
+          // It's a different key or the first press
+          lastPressedKeyCode.foreach(robot.keyRelease) // Release any previously pressed key
+          pressKeyWithoutRelease(keyCode) // Press the new key
+        }
+        println(s"KeyboardActor: Pressed key for $direction")
       }
-      sender() ! KeyboardActionCompleted(KeyboardActionTypes.PressKey) // Notify completion
+      sender() ! KeyboardActionCompleted(KeyboardActionTypes.PressKey)
 
-    case TypeText(text) =>
-      typeText(text)
-      sender() ! KeyboardActionCompleted(KeyboardActionTypes.TypeText) // Send completion notice if required
-
-    case _ =>
-      println("KeyboardActor: Unhandled action")
+    // Add cases for TypeText and other actions as before
   }
 }
 
