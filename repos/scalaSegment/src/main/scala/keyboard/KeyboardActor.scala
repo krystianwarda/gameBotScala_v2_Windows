@@ -5,23 +5,29 @@ import java.awt.event.KeyEvent
 import scala.concurrent.duration._
 
 class KeyboardActor extends Actor {
-  import context.dispatcher // Import the actor's execution context for scheduling
+  import context.dispatcher
 
   val robot = new Robot()
-  var lastKeyReleaseTask: Option[Cancellable] = None
-  var lastPressedKeyCode: Option[Int] = None
+  var keyReleaseTasks: Map[Int, Cancellable] = Map()
 
-  // Helper method to press a key without releasing it
-  private def pressKeyWithoutRelease(keyCode: Int): Unit = {
+  // Cancel any existing release task and press the key
+  private def pressKey(keyCode: Int): Unit = {
     robot.keyPress(keyCode)
-    lastPressedKeyCode = Some(keyCode)
-    // Cancel any existing scheduled release task
-    lastKeyReleaseTask.foreach(_.cancel())
-    // Schedule a new release task
-    lastKeyReleaseTask = Some(context.system.scheduler.scheduleOnce(500.milliseconds) {
+    keyReleaseTasks.get(keyCode).foreach(_.cancel())
+    keyReleaseTasks -= keyCode
+    println(s"KeyboardActor: Key $keyCode pressed.")
+  }
+
+  // Schedule a key release with a delay
+  private def scheduleKeyRelease(keyCode: Int, delay: FiniteDuration = 700.milliseconds): Unit = {
+    keyReleaseTasks.get(keyCode).foreach(_.cancel())
+    val task = context.system.scheduler.scheduleOnce(delay) {
       robot.keyRelease(keyCode)
-      lastPressedKeyCode = None
-    })
+      keyReleaseTasks -= keyCode
+      println(s"KeyboardActor: Key $keyCode released after delay.")
+    }
+    keyReleaseTasks += (keyCode -> task)
+    println(s"KeyboardActor: Release for key $keyCode scheduled.")
   }
 
   override def receive: Receive = {
@@ -31,30 +37,26 @@ class KeyboardActor extends Actor {
         case "ArrowDown" => KeyEvent.VK_DOWN
         case "ArrowLeft" => KeyEvent.VK_LEFT
         case "ArrowRight" => KeyEvent.VK_RIGHT
-        case _ => -1 // Signify invalid key
+        case _ =>
+          println("KeyboardActor: Invalid direction received.")
+          -1
       }
+
       if (keyCode != -1) {
-        // Check if it's the same key pressed again before releasing
-        if (lastPressedKeyCode.contains(keyCode)) {
-          // It's the same key, so just reset the release task
-          lastKeyReleaseTask.foreach(_.cancel())
-          lastKeyReleaseTask = Some(context.system.scheduler.scheduleOnce(800.milliseconds) {
-            robot.keyRelease(keyCode)
-            lastPressedKeyCode = None
-          })
-        } else {
-          // It's a different key or the first press
-          lastPressedKeyCode.foreach(robot.keyRelease) // Release any previously pressed key
-          pressKeyWithoutRelease(keyCode) // Press the new key
-        }
-        println(s"KeyboardActor: Pressed key for $direction")
+        // Press the key immediately to ensure responsiveness
+        pressKey(keyCode)
+        // Schedule the release of the key allowing it to be held
+        scheduleKeyRelease(keyCode)
       }
       sender() ! KeyboardActionCompleted(KeyboardActionTypes.PressKey)
-
-    // Add cases for TypeText and other actions as before
   }
 }
 
 object KeyboardActor {
   def props: Props = Props[KeyboardActor]
+  case class PressArrowKey(direction: String)
+  case object KeyboardActionCompleted
+  object KeyboardActionTypes {
+    val PressKey = "PressKey"
+  }
 }

@@ -21,28 +21,29 @@ class ActionKeyboardManager(keyboardActorRef: ActorRef) extends Actor {
   override def receive: Receive = {
     case PushTheButton(key) =>
       // Assuming PushTheButton implies a PressKey action
-      val actionType = KeyboardActionTypes.PressKey
-      processKeyAction(actionType, key)
+      processKeyAction(KeyboardActionTypes.PressKey, key)
 
     case textCommand: TypeText =>
       processTextAction(textCommand)
 
     case KeyboardActionCompleted(actionType) =>
-      println(s"Action $actionType completed, setting state to free.")
-      actionStates.update(actionType, ("free", System.currentTimeMillis())) // This ensures the state is updated to "free"
-
+      // Do not set PressKey actions to "free" to keep them always ready
+      if (actionType != KeyboardActionTypes.PressKey) {
+        println(s"Action $actionType completed, setting state to free.")
+        actionStates.update(actionType, ("free", System.currentTimeMillis()))
+      }
 
     case _ => println("ActionKeyboardManager: Unhandled keyboard action")
   }
 
   def processKeyAction(actionType: KeyboardActionTypes.Value, key: String): Unit = {
-    val (state, _) = actionStates(actionType)
-    if (state == "free" && isPriorityMet(actionType)) {
-      println(s"ActionKeyboardManager: Processing key action for $key")
-      actionStates(actionType) = ("in progress", System.currentTimeMillis())
+    // Always treat PressKey actions as "free"
+    if (actionType == KeyboardActionTypes.PressKey || (actionStates(actionType)._1 == "free" && isPriorityMet(actionType))) {
+      println(s"ActionKeyboardManager: Processing key action for $key, treating as always free.")
       keyboardActorRef ! PressArrowKey(key)
+      // Note: We do not update the state to "in progress" for PressKey actions to keep them always ready
     } else {
-      println("Skipping key action due to state or priority")
+      println("Skipping non-PressKey action due to state or priority")
     }
   }
 

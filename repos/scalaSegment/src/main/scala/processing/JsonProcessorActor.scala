@@ -18,7 +18,7 @@ import processing.Training.computeTrainingActions
 import userUI.SettingsUtils
 import userUI.SettingsUtils.UISettings
 import keyboard.AutoResponderCommand
-import processing.CaveBot.computeCaveBotActions
+import processing.CaveBot.{Vec, computeCaveBotActions}
 
 import java.awt.event.{InputEvent, KeyEvent}
 import java.awt.{Robot, Toolkit}
@@ -26,6 +26,7 @@ import java.io.{DataInputStream, DataOutputStream, IOException}
 import java.net.{InetAddress, Socket, SocketException}
 import java.nio.{ByteBuffer, ByteOrder}
 import java.util.concurrent.TimeUnit
+import javax.swing.JList
 import scala.concurrent.duration.Duration
 import scala.util.Random
 // import userUI.UIAppActor
@@ -44,6 +45,13 @@ case object ConnectToServer
 // Define action types and their priorities
 
 
+case class WaypointInfo(
+                         waypointType: String,
+                         waypointX: Int,
+                         waypointY: Int,
+                         waypointZ: Int,
+                         waypointPlacement: String
+                       )
 
 case class ProcessorState(
                            lastFishingCommandSent: Long = 0,
@@ -55,7 +63,11 @@ case class ProcessorState(
                            settings: Option[UISettings],
                            lastAutoResponderCommandSend: Long = 0,
                            lastCaveBotCommandSend: Long = 0,
-                           currentWaypointIndex: Int = 0
+                           currentWaypointIndex: Int = 0,
+                           currentTargetIndex: Int = 0,
+                           subWaypoints: List[Vec] = List(), // Added list of subway points
+                           waypointsLoaded: Boolean = false, // Added list of subway points
+                           fixedWaypoints: List[WaypointInfo] = List(),
                          )
 case class UpdateSettings(settings: UISettings)
 
