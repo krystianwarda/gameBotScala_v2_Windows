@@ -68,6 +68,7 @@ case class ProcessorState(
                            subWaypoints: List[Vec] = List(), // Added list of subway points
                            waypointsLoaded: Boolean = false, // Added list of subway points
                            fixedWaypoints: List[WaypointInfo] = List(),
+                           lastDirection: Option[String] = None,
                          )
 case class UpdateSettings(settings: UISettings)
 

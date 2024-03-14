@@ -133,7 +133,10 @@ object CaveBot {
 
       if (updatedState.subWaypoints.nonEmpty) {
         val nextWaypoint = updatedState.subWaypoints.head
-        val direction = calculateDirection(presentCharLocation, nextWaypoint)
+        val direction = calculateDirection(presentCharLocation, nextWaypoint, updatedState.lastDirection)
+
+        // Update lastDirection in ProcessorState after moving
+        updatedState = updatedState.copy(lastDirection = direction)
 
         direction.foreach { dir =>
           actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(dir)))
@@ -154,31 +157,39 @@ object CaveBot {
   }
 
 
-  def calculateDirection(currentLocation: Vec, nextLocation: Vec): Option[String] = {
+  def calculateDirection(currentLocation: Vec, nextLocation: Vec, lastDirection: Option[String]): Option[String] = {
     val deltaX = nextLocation.x - currentLocation.x
     val deltaY = nextLocation.y - currentLocation.y
-    val random = new Random()
+    println(s"DeltaX: $deltaX, DeltaY: $deltaY, LastDirection: $lastDirection")
 
     (deltaX.sign, deltaY.sign) match {
       case (0, 0) =>
-        // Character is already at the destination, no movement needed.
+        println("Character is already at the destination.")
         None
       case (0, -1) => Some("ArrowUp")
       case (0, 1) => Some("ArrowDown")
       case (-1, 0) => Some("ArrowLeft")
       case (1, 0) => Some("ArrowRight")
       case (signX, signY) =>
-        // When both deltaX and deltaY are non-zero, choose a random direction to move
-        // based on which axis to prioritize movement.
-        if (random.nextBoolean()) {
-          // Randomly choose to prioritize horizontal movement
-          if (signX < 0) Some("ArrowLeft") else Some("ArrowRight")
+        // Random choice logic here might be too simplistic, consider enhancing or removing for more deterministic behavior
+        val decision = if (lastDirection.exists(dir => Seq("ArrowLeft", "ArrowRight").contains(dir)) && signY != 0) {
+          if (signY < 0) "ArrowUp" else "ArrowDown"
+        } else if (lastDirection.exists(dir => Seq("ArrowUp", "ArrowDown").contains(dir)) && signX != 0) {
+          if (signX < 0) "ArrowLeft" else "ArrowRight"
         } else {
-          // Randomly choose to prioritize vertical movement
-          if (signY < 0) Some("ArrowUp") else Some("ArrowDown")
+          // Fallback to random direction if no clear choice
+          val random = new Random()
+          if (random.nextBoolean()) {
+            if (signX < 0) "ArrowLeft" else "ArrowRight"
+          } else {
+            if (signY < 0) "ArrowUp" else "ArrowDown"
+          }
         }
+        println(s"Calculated Direction: $decision based on deltaX: $deltaX, deltaY: $deltaY, and lastDirection: $lastDirection")
+        Some(decision)
     }
   }
+
 
   // Helper function to check if character is close to a waypoint
   def isCloseToWaypoint(charLocation: Vec, waypoint: Vec): Boolean = {
@@ -322,58 +333,3 @@ object CaveBot {
 
 }
 
-
-//    val test0 = currentWaypointIndex < waypointsModel.getSize
-//    val testval0 = waypointsModel.getSize
-//    println(s"currentWaypointIndex < waypointsModel.getSize $test0, currentWaypointIndex: $currentWaypointIndex, $testval0")
-//    if (currentWaypointIndex < waypointsModel.getSize) {
-//      val waypointString = waypointsModel.getElementAt(currentWaypointIndex).toString.split(", ")
-//      if (waypointString(0) == "walk") {
-//        val waypointX = waypointString(2).toInt
-//        val waypointY = waypointString(3).toInt
-//        println(s"Waypoint PositionX: $waypointX, PositionY: $waypointY")
-//        val waypointLocation = Vec(waypointX, waypointY)
-//
-//        val distanceToNextWaypoint = presentCharLocation.manhattanDistance(waypointLocation)
-//
-//
-//        val test1= distanceToNextWaypoint > 1
-//        println(s"distanceToNextWaypoint > 1: $test1, distanceToNextWaypoint: $distanceToNextWaypoint")
-//        if (distanceToNextWaypoint > 1) {
-//          val directionToMove = calculateDirection(presentCharLocation, waypointLocation)
-//          directionToMove.foreach { dir =>
-//            actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(dir)))
-//            logs :+= Log(s"Character is far from subwayPoint, moving in direction: $dir")
-//          }
-//        }
-//        val test2 = updatedState.subWaypoints.isEmpty
-//        println(s"updatedState.subwayPoints.isEmpty: $test2")
-//
-//
-//        // Determine the direction based on the first subwayPoint, if available
-//        val test3 = updatedState.subWaypoints.nonEmpty
-//        println(s"updatedState.subwayPoints.nonEmpty: $test3")
-//        if (updatedState.subWaypoints.nonEmpty) {
-//          val nextStep = updatedState.subWaypoints.head
-//          val direction = calculateDirection(presentCharLocation, nextStep)
-//          direction.foreach { dir =>
-//            actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(dir)))
-//            logs :+= Log(s"Moving in direction: $dir")
-//          }
-//        }
-
-//        //     Check if we need to move to the next subWaypoint without recalculating path
-//        if (updatedState.subWaypoints.nonEmpty) {
-//          val nextPoint = updatedState.subWaypoints.head
-//          val isCloseToNextPoint = Math.abs(nextPoint.x - presentCharLocationX) <= 1 && Math.abs(nextPoint.y - presentCharLocationY) <= 1
-//          if (isCloseToNextPoint) {
-//            updatedState = updatedState.copy(subWaypoints = updatedState.subWaypoints.tail)
-//            if (updatedState.subWaypoints.isEmpty) {
-//              // Move to next waypoint if the subwayPoints is empty after removing the head
-//              currentWaypointIndex = (currentWaypointIndex + 1) % updatedState.fixedWaypoints.size
-//              updatedState = updatedState.copy(currentWaypointIndex = currentWaypointIndex)
-//            }
-//          }
-//        }
-//      }
-//    }
