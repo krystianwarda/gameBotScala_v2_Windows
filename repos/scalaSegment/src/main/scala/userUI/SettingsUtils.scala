@@ -50,13 +50,15 @@ object SettingsUtils {
                                      selectedRectangles: Seq[String] = Seq.empty
                                    )
 
-
-
   case class CaveBotSettings(
                               enabled: Boolean,
                               waypointsList: JList[String],
                             )
 
+  case class AutoTargetSettings(
+                              enabled: Boolean,
+                              targetMonstersOnBattle: Boolean,
+                            )
 
   case class TrainingSettings(
                               enabled: Boolean,
@@ -75,8 +77,8 @@ object SettingsUtils {
   implicit val fishingSettingsFormat: Format[FishingSettings] = Json.format[FishingSettings]
   implicit val trainingSettingsFormat: Format[TrainingSettings] = Json.format[TrainingSettings]
   implicit val rectangleSettingsFormat: Format[RectangleSettings] = Json.format[RectangleSettings]
-//  implicit val caveBotSettingsFormat: Format[CaveBotSettings] = Json.format[CaveBotSettings]
   implicit val caveBotSettingsFormat: Format[CaveBotSettings] = Format(caveBotSettingsReads, caveBotSettingsWrites)
+  implicit val AutoTargetSettingsFormat: Format[AutoTargetSettings] = Json.format[AutoTargetSettings]
 
   // Now define the UISettings case class
   case class UISettings(
@@ -88,6 +90,7 @@ object SettingsUtils {
                          trainingSettings: TrainingSettings,
                          mouseMovements: Boolean,
                          caveBotSettings: CaveBotSettings,
+                         autoTargetSettings: AutoTargetSettings,
                          // Add other settings or groups of settings as needed
                        )
 
@@ -135,7 +138,6 @@ object SettingsUtils {
     (JsPath \ "enabled").read[Boolean] and
       (JsPath \ "waypointsList").read[Seq[String]]
     )((enabled, waypointsList) => CaveBotSettings(enabled, seqToJList(waypointsList)))
-
 
 }
 

@@ -31,7 +31,8 @@ class SwingApp(playerClassList: List[Player],
   // Initialize AutoHeal class
   val autoHealBot = new AutoHealBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val caveBotBot = new CaveBotBot(currentPlayer, uiAppActor, jsonProcessorActor)
-  val runeMaker = new RuneMaker(currentPlayer, uiAppActor, jsonProcessorActor)
+  val autoTargetBot = new AutoTargetBot(currentPlayer, uiAppActor, jsonProcessorActor)
+  val runeMaker = new RuneMakerBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val fishingBot = new FishingBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val protectionZoneBot = new ProtectionZoneBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val trainingBot = new TrainingBot(currentPlayer, uiAppActor, jsonProcessorActor)
@@ -86,6 +87,11 @@ class SwingApp(playerClassList: List[Player],
       waypointsList = caveBotBot.waypointsList,
     )
 
+    val autoTargetSettings = AutoTargetSettings(
+      enabled = autoTargetCheckbox.selected,
+      targetMonstersOnBattle = autoTargetBot.targetMonstersOnBattleCheckbox.selected,
+    )
+
     val autoResponderSettings = AutoResponderSettings(
       enabled = autoResponderCheckbox.selected,
     )
@@ -108,6 +114,7 @@ class SwingApp(playerClassList: List[Player],
       autoResponderSettings = autoResponderSettings,
       trainingSettings = trainingSettings,
       mouseMovements = mouseMovementsCheckbox.selected,
+      autoTargetSettings = autoTargetSettings,
       caveBotSettings = caveBotSettings,
     )
   }
@@ -168,6 +175,8 @@ class SwingApp(playerClassList: List[Player],
     trainingBot.switchAttackModeToEnsureDamageCheckbox.selected = settings.trainingSettings.switchAttackModeToEnsureDamage
     trainingBot.switchWeaponToEnsureDamageCheckbox.selected = settings.trainingSettings.switchWeaponToEnsureDamage
     caveBotCheckbox.selected = settings.caveBotSettings.enabled
+    autoTargetCheckbox.selected = settings.autoTargetSettings.enabled
+    autoTargetBot.targetMonstersOnBattleCheckbox.selected = settings.autoTargetSettings.targetMonstersOnBattle
     // caveBotBot.setIgnoredCreatures(settings.protectionZoneSettings.ignoredCreatures)
 
     mouseMovementsCheckbox.selected = settings.mouseMovements
@@ -226,9 +235,12 @@ class SwingApp(playerClassList: List[Player],
 
   def applyCaveBotSettings(caveBotSettings: CaveBotSettings): Unit = {
     caveBotCheckbox.selected = caveBotSettings.enabled
-
   }
 
+  def applyAutoTargetSettings(autoTargetSettings: AutoTargetSettings): Unit = {
+    autoTargetCheckbox.selected = autoTargetSettings.enabled
+    autoTargetBot.targetMonstersOnBattleCheckbox.selected = autoTargetSettings.targetMonstersOnBattle
+  }
   def applyGeneralSettings(settings: UISettings): Unit = {
 //    fishingCheckbox.selected = settings.fishingSettings.enabled
     mouseMovementsCheckbox.selected = settings.mouseMovements
@@ -269,12 +281,13 @@ class SwingApp(playerClassList: List[Player],
   val autoResponderCheckbox = new CheckBox("Auto Responder")
   val mouseMovementsCheckbox = new CheckBox("Mouse Movements")
   val protectionZoneCheckbox = new CheckBox("Protection Zone")
+  val autoTargetCheckbox = new CheckBox("Auto Target")
   // ...and other fields and buttons as in the second snippet
 
   // Define UI behavior and event handling here, similar to the second snippet...
   listenTo(autoHealCheckbox, runeMakerCheckbox, trainingCheckbox, caveBotCheckbox,
     autoResponderCheckbox, protectionZoneCheckbox, fishingCheckbox,
-    mouseMovementsCheckbox, protectionZoneCheckbox
+    mouseMovementsCheckbox, protectionZoneCheckbox, autoTargetCheckbox,
   )
   //  exampleDropdown.selection
   reactions += {
@@ -290,9 +303,12 @@ class SwingApp(playerClassList: List[Player],
       println("Training Checkbox clicked")
     // Add logic for when trainingCheckbox is clicked
 
-
     case ButtonClicked(`caveBotCheckbox`) =>
       println("Cave Bot Checkbox clicked")
+    // Add logic for when caveBotCheckbox is clicked
+
+    case ButtonClicked(`autoTargetCheckbox`) =>
+      println("Auto Target Checkbox clicked")
     // Add logic for when caveBotCheckbox is clicked
 
     case ButtonClicked(`protectionZoneCheckbox`) =>
@@ -331,7 +347,7 @@ class SwingApp(playerClassList: List[Player],
       // Adding Checkboxes in the first column
       val checkBoxComponents = Seq(autoHealCheckbox, runeMakerCheckbox, trainingCheckbox,
         caveBotCheckbox, fishingCheckbox, mouseMovementsCheckbox,autoResponderCheckbox,
-        protectionZoneCheckbox)
+        protectionZoneCheckbox, autoTargetCheckbox)
 
       for ((checkbox, idx) <- checkBoxComponents.zipWithIndex) {
         c.gridx = 0
@@ -354,6 +370,8 @@ class SwingApp(playerClassList: List[Player],
     pages += new TabbedPane.Page("Auto Heal", autoHealBot.autoHealTab)
 
     pages += new TabbedPane.Page("Cave Bot", caveBotBot.caveBotTab)
+
+    pages += new TabbedPane.Page("Auto Target", autoTargetBot.autoTargetTab)
 
     pages += new TabbedPane.Page("Rune Maker", runeMaker.runeMakerTab)
 

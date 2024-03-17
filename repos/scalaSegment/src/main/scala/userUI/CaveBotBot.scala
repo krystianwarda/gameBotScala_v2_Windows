@@ -180,18 +180,6 @@ class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
   })
 
 
-//  loadButton.addActionListener(_ => {
-//    val userAppDataPath = System.getenv("APPDATA")
-//    val realeraWaypointsPath = new java.io.File(userAppDataPath, "Realera\\waypoints")
-//    val chooser = new JFileChooser(realeraWaypointsPath)
-//    chooser.setDialogTitle("Load")
-//
-//    val result = chooser.showOpenDialog(null)
-//    if (result == JFileChooser.APPROVE_OPTION) {
-//      loadWaypointsFromFile(chooser.getSelectedFile.getAbsolutePath)
-//    }
-//  })
-
   def resetWaypointsAndName(): Unit = {
     // Clear the list model to remove all waypoints from the UI
     waypointListModel.clear()
