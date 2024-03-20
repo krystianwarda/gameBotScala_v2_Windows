@@ -55,6 +55,7 @@ case class WaypointInfo(
 
 case class ProcessorState(
                            lastFishingCommandSent: Long = 0,
+                           lastHealingTime: Long = 0,
                            lastSpellCastTime: Long = 0,
                            lastRuneMakingTime: Long = 0,
                            lastMoveTime: Long = 0,
@@ -65,12 +66,14 @@ case class ProcessorState(
                            lastCaveBotCommandSend: Long = 0,
                            currentWaypointIndex: Int = 0,
                            currentTargetIndex: Int = 0,
-                           subWaypoints: List[Vec] = List(), // Added list of subway points
+                           subWaypoints: List[Vec] = List(),
                            waypointsLoaded: Boolean = false, // Added list of subway points
                            fixedWaypoints: List[WaypointInfo] = List(),
                            lastDirection: Option[String] = None,
                            lastAutoTargetCommandSend: Long = 0,
                            creatureTarget: Int = 0,
+                           positionStagnantCount: Int = 0,
+                           lastPosition: Option[Vec] = None,
                          )
 case class UpdateSettings(settings: UISettings)
 
@@ -157,7 +160,7 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
   }
 
   private def processJson(json: JsValue, currentState: ProcessorState): ProcessorState = {
-    println("processJson activated.")
+//    println("processJson activated.")
     (json \ "__status").asOpt[String] match {
       case Some("ok") => handleOkStatus(json, currentState)
       case Some("error") => handleErrorStatus(json); currentState
@@ -297,13 +300,18 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     val currentTime = System.currentTimeMillis()
     currentState.settings.flatMap { settings =>
       if (settings.healingSettings.enabled && currentTime - currentState.lastSpellCastTime >= 1000) {
-        println("Performing healing action.")
-        val (actions, logs) = computeHealingActions(json, settings)
+//        println("Performing healing action.")
+
+        val ((actions, logs), updatedState) = computeHealingActions(json, settings, currentState)
+        // Execute actions and logs if necessary
         executeActionsAndLogs(actions, logs, Some(settings))
-        Some(currentState.copy(lastSpellCastTime = currentTime))
-      } else None
-    }.getOrElse(currentState)
+
+        // Return the updated state from computeCaveBotActions, wrapped in an Option
+        Some(updatedState)
+      } else None // Here, None is explicitly an Option[ProcessorState], matching the expected return type
+    }.getOrElse(currentState) // If the settings flatMap results in None, return the original currentState
   }
+
 
   def performRuneMaking(json: JsValue, currentState: ProcessorState): ProcessorState = {
     val currentTime = System.currentTimeMillis()

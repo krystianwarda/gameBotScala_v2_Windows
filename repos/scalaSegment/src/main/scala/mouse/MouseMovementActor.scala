@@ -86,7 +86,7 @@ class MouseMovementActor(actionStateManager: ActorRef) extends Actor {
 
         Thread.sleep(50) // Slow down the movement for realism
       }
-      println(s"Idle movement to ($targetX, $targetY) with a curve")
+//      println(s"Idle movement to ($targetX, $targetY) with a curve")
     }
   }
 

@@ -8,13 +8,17 @@ import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, Mouse, MouseMo
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
 import processing.Process.findItemInContainerSlot14
 
+import scala.collection.immutable.Seq
+
 object AutoHeal {
 
-  def computeHealingActions(json: JsValue, settings: SettingsUtils.UISettings): (Seq[FakeAction], Seq[Log]) = {
+  def computeHealingActions(json: JsValue, settings: SettingsUtils.UISettings, currentState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
     var actions: Seq[FakeAction] = Seq()
     var logs: Seq[Log] = Seq()
+    var updatedState = currentState
+    val currentTime = System.currentTimeMillis()
 
-    if (settings.healingSettings.enabled) {
+    if (settings.healingSettings.enabled && ((currentTime - currentState.lastHealingTime) >= 1200)) {
       val health = (json \ "characterInfo" \ "Health").as[Int]
       val mana = (json \ "characterInfo" \ "Mana").as[Int]
       // UH RUNE 3160
@@ -39,7 +43,7 @@ object AutoHeal {
               MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
               MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
             )
-
+            updatedState = updatedState.copy(lastHealingTime = currentTime)
             actions = actions :+ FakeAction("useMouse", Some(ItemInfo(3160, None)), Some(MouseActions(actionsSeq)))
             logs = logs :+ Log(s"Using item 3160 at position ($runeX, $runeY) - Actions: $actionsSeq")
           }
@@ -168,7 +172,7 @@ object AutoHeal {
         }
       }
     }
-    (actions, logs)
+    ((actions, logs), updatedState)
   }
 
 

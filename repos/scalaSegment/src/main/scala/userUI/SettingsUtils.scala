@@ -4,6 +4,9 @@ import play.api.libs.functional.syntax.toFunctionalBuilderOps
 import play.api.libs.json.{JsPath, Reads, Writes}
 
 import javax.swing.{DefaultListModel, JList}
+import scala.Function.unlift
+
+
 import scala.collection.mutable
 
 object SettingsUtils {
@@ -58,6 +61,7 @@ object SettingsUtils {
   case class AutoTargetSettings(
                               enabled: Boolean,
                               targetMonstersOnBattle: Boolean,
+                              creaturePriorityList: List[String],
                             )
 
   case class TrainingSettings(
@@ -98,7 +102,9 @@ object SettingsUtils {
   implicit val uISettingsFormat: Format[UISettings] = Json.format[UISettings]
 
   def saveSettingsToFile(settings: UISettings, filePath: String): Unit = {
-    val jsonString = Json.toJson(settings).toString()
+    val explicitWrites = Json.writes[UISettings] // Or any other specific Format[Writes] instance
+    val jsonString = Json.toJson(settings)(explicitWrites).toString()
+
     val file = new java.io.File(filePath)
     val pw = new java.io.PrintWriter(file)
     try pw.write(jsonString)
@@ -138,6 +144,7 @@ object SettingsUtils {
     (JsPath \ "enabled").read[Boolean] and
       (JsPath \ "waypointsList").read[Seq[String]]
     )((enabled, waypointsList) => CaveBotSettings(enabled, seqToJList(waypointsList)))
+
 
 }
 

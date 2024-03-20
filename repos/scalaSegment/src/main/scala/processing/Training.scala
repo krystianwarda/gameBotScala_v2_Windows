@@ -56,6 +56,7 @@ object Training {
                     val slot19X = (slot19Position \ "x").as[Int]
                     val slot19Y = (slot19Position \ "y").as[Int]
                     val actionsSeq = Seq(
+
                       MouseAction(slot19X, slot19Y, "move"),
                       MouseAction(slot19X, slot19Y, "pressLeft"),
                       MouseAction(slot19X, slot19Y, "releaseLeft"),

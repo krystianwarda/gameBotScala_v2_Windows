@@ -90,6 +90,7 @@ class SwingApp(playerClassList: List[Player],
     val autoTargetSettings = AutoTargetSettings(
       enabled = autoTargetCheckbox.selected,
       targetMonstersOnBattle = autoTargetBot.targetMonstersOnBattleCheckbox.selected,
+      creaturePriorityList = autoTargetBot.creaturePriorityList.toList,
     )
 
     val autoResponderSettings = AutoResponderSettings(
@@ -177,6 +178,7 @@ class SwingApp(playerClassList: List[Player],
     caveBotCheckbox.selected = settings.caveBotSettings.enabled
     autoTargetCheckbox.selected = settings.autoTargetSettings.enabled
     autoTargetBot.targetMonstersOnBattleCheckbox.selected = settings.autoTargetSettings.targetMonstersOnBattle
+    autoTargetBot.setTargetPriority(settings.protectionZoneSettings.ignoredCreatures)
     // caveBotBot.setIgnoredCreatures(settings.protectionZoneSettings.ignoredCreatures)
 
     mouseMovementsCheckbox.selected = settings.mouseMovements
@@ -230,7 +232,6 @@ class SwingApp(playerClassList: List[Player],
 
   def applyAutoResponderSettings(autoResponderSettings: AutoResponderSettings): Unit = {
     autoResponderCheckbox.selected = autoResponderSettings.enabled
-
   }
 
   def applyCaveBotSettings(caveBotSettings: CaveBotSettings): Unit = {
@@ -240,6 +241,7 @@ class SwingApp(playerClassList: List[Player],
   def applyAutoTargetSettings(autoTargetSettings: AutoTargetSettings): Unit = {
     autoTargetCheckbox.selected = autoTargetSettings.enabled
     autoTargetBot.targetMonstersOnBattleCheckbox.selected = autoTargetSettings.targetMonstersOnBattle
+    autoTargetBot.setTargetPriority(autoTargetSettings.creaturePriorityList.toBuffer)
   }
   def applyGeneralSettings(settings: UISettings): Unit = {
 //    fishingCheckbox.selected = settings.fishingSettings.enabled
