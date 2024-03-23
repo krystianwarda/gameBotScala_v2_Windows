@@ -52,14 +52,14 @@ object Training {
                 if (ids.contains(2889) && currentFightMode == 1) {
 //                  logs = logs :+ Log("Switching to defence fight mode.")
                   if (settings.mouseMovements) {
-                    val slot19Position = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "slot19").as[JsObject]
-                    val slot19X = (slot19Position \ "x").as[Int]
-                    val slot19Y = (slot19Position \ "y").as[Int]
+                    val fightDefensiveBoxPosition = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "fightDefensiveBox").as[JsObject]
+                    val fightDefensiveBoxX = (fightDefensiveBoxPosition \ "x").as[Int]
+                    val fightDefensiveBoxY = (fightDefensiveBoxPosition \ "y").as[Int]
                     val actionsSeq = Seq(
 
-                      MouseAction(slot19X, slot19Y, "move"),
-                      MouseAction(slot19X, slot19Y, "pressLeft"),
-                      MouseAction(slot19X, slot19Y, "releaseLeft"),
+                      MouseAction(fightDefensiveBoxX, fightDefensiveBoxY, "move"),
+                      MouseAction(fightDefensiveBoxX, fightDefensiveBoxY, "pressLeft"),
+                      MouseAction(fightDefensiveBoxX, fightDefensiveBoxY, "releaseLeft"),
                     )
                     logs = logs :+ Log("Move mouse to switch to defence fight mode.")
                     actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
@@ -84,13 +84,13 @@ object Training {
 
                     if (settings.mouseMovements) {
 //                      logs = logs :+ Log("Changing attack mode with mouse.")
-                      val slot15Position = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "slot15").as[JsObject]
-                      val slot15X = (slot15Position \ "x").as[Int]
-                      val slot15Y = (slot15Position \ "y").as[Int]
+                      val fightOffensiveBoxPosition = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "fightOffensiveBox").as[JsObject]
+                      val fightOffensiveBoxX = (fightOffensiveBoxPosition \ "x").as[Int]
+                      val fightOffensiveBoxY = (fightOffensiveBoxPosition \ "y").as[Int]
                       val actionsSeq = Seq(
-                        MouseAction(slot15X, slot15Y, "move"),
-                        MouseAction(slot15X, slot15Y, "pressLeft"),
-                        MouseAction(slot15X, slot15Y, "releaseLeft"),
+                        MouseAction(fightOffensiveBoxX, fightOffensiveBoxY, "move"),
+                        MouseAction(fightOffensiveBoxX, fightOffensiveBoxY, "pressLeft"),
+                        MouseAction(fightOffensiveBoxX, fightOffensiveBoxY, "releaseLeft"),
                       )
                       logs = logs :+ Log("Move mouse to switch to offensive fight mode.")
                       actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))

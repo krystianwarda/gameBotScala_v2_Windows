@@ -129,6 +129,15 @@ object CaveBot {
 
     println(s"Character PositionX: $presentCharLocationX, PositionY: $presentCharLocationY, PositionZ: $presentCharLocationZ")
 
+    updatedState = updateCharacterPositionAndCheckStagnation(presentCharLocation, updatedState)
+
+    if (updatedState.positionStagnantCount > 5) {
+      // Reset waypointsLoaded to false to force a reload of waypoints
+      updatedState = updatedState.copy(waypointsLoaded = false, positionStagnantCount = 0)
+      // Potentially log this event or take additional recovery actions
+      println("Character has been stagnant for too long, resetting waypoints...")
+    }
+
     // Define thresholdDistance with the specified value
     val thresholdDistance = 35
 
@@ -136,19 +145,12 @@ object CaveBot {
     var currentWaypoint = updatedState.fixedWaypoints(updatedState.currentWaypointIndex)
     val distanceToCurrentWaypoint = presentCharLocation.manhattanDistance(Vec(currentWaypoint.waypointX, currentWaypoint.waypointY))
 
+
+
     // Check if the distance to the current waypoint is greater than the thresholdDistance
     // find the nearest waypoint if present is too far
     if (distanceToCurrentWaypoint > thresholdDistance) {
 
-      val presentCharLocation = Vec(presentCharLocationX, presentCharLocationY)
-      updatedState = updateCharacterPositionAndCheckStagnation(presentCharLocation, updatedState)
-
-      if (updatedState.positionStagnantCount > 5) {
-        // Reset waypointsLoaded to false to force a reload of waypoints
-        updatedState = updatedState.copy(waypointsLoaded = false, positionStagnantCount = 0)
-        // Potentially log this event or take additional recovery actions
-        println("Character has been stagnant for too long, resetting waypoints...")
-      }
 
       println(s"Distance to waypoint is $distanceToCurrentWaypoint higher than $thresholdDistance")
       // The section of code to execute when the distance condition is met

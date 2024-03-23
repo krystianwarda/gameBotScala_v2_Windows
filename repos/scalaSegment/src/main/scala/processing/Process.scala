@@ -28,7 +28,7 @@ object Process {
         for {
           id <- (slotValue \ "itemId").asOpt[Int]
           subType <- (slotValue \ "itemSubType").asOpt[Int]
-          if id == itemId && subType == itemSubType && slotKey.matches("slot[1-4]")
+          if id == itemId && subType == itemSubType && slotKey.matches("item[1-4]")
           screenPosition <- (screenInfo \ containerKey \ "contentsPanel" \ slotKey).asOpt[JsObject]
           posX <- (screenPosition \ "x").asOpt[Int]
           posY <- (screenPosition \ "y").asOpt[Int]
