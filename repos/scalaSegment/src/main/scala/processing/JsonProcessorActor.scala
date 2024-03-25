@@ -75,6 +75,10 @@ case class ProcessorState(
                            positionStagnantCount: Int = 0,
                            lastPosition: Option[Vec] = None,
                            uhRuneContainerName: String = "not_set",
+                           statusOfRuneAutoheal: String = "not_ready",
+                           caveBotLevelsList: List[Int] = List(),
+                           antiOverpassDelay: Long = 0
+
                          )
 case class UpdateSettings(settings: UISettings)
 

@@ -10,7 +10,7 @@ import userUI.SettingsUtils
 import userUI.SettingsUtils.UISettings
 import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, Mouse, MouseMoveCommand, MouseMovementSettings}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
-
+import System.currentTimeMillis
 import scala.:+
 import scala.collection.immutable.Seq
 import scala.collection.mutable
@@ -31,58 +31,148 @@ object CaveBot {
 
     if (settings.caveBotSettings.enabled) {
 
-
 //      println("caveBotSettings enabled.")
 
       // Safely attempt to parse battleInfo as a map
       val battleInfoResult = (json \ "battleInfo").validate[Map[String, JsValue]]
 
-      battleInfoResult match {
-        case JsSuccess(battleInfo, _) =>
-          val hasMonsters = battleInfo.exists { case (_, creature) =>
-            (creature \ "IsMonster").asOpt[Boolean].getOrElse(false)
+      // Modified to correctly handle mutable state update
+      if (!updatedState.waypointsLoaded) {
+        updatedState = loadingWaypointsFromSettings(settings, updatedState)
+        // Assuming waypoints are now loaded and available
+        val presentCharLocationX = (json \ "characterInfo" \ "PositionX").as[Int]
+        val presentCharLocationY = (json \ "characterInfo" \ "PositionY").as[Int]
+        val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
+        val presentCharLocation = Vec(presentCharLocationX, presentCharLocationY)
+        println(s"Initial character PositionX: $presentCharLocationX, PositionY: $presentCharLocationY, PositionZ: $presentCharLocationZ")
+
+        // Find the closest waypoint to the current character location
+        val (closestWaypointIndex, _) = updatedState.fixedWaypoints
+          .zipWithIndex
+          .map { case (waypoint, index) =>
+            (index, presentCharLocation.manhattanDistance(Vec(waypoint.waypointX, waypoint.waypointY)))
           }
-          if (!hasMonsters) {
+          .minBy(_._2) // Find the minimum by distance
+
+        // Update the currentWaypointIndex to the index of the closest waypoint
+        updatedState = updatedState.copy(currentWaypointIndex = closestWaypointIndex, subWaypoints = List.empty)
+      }
+      val currentTime = currentTimeMillis()
+      val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
+      println(s"Debug: Looking for character positionZ: $presentCharLocationZ in ${updatedState.caveBotLevelsList}")
+      if (!updatedState.caveBotLevelsList.contains(presentCharLocationZ)) {
+
+        if (currentTime - updatedState.antiOverpassDelay >= 1000) {
+          updatedState = updatedState.copy(antiOverpassDelay = currentTime)
+
+          val levelMovementEnablersIdsList: List[Int] = List(414, 1977)
+          println(s"Debug: Level movement enablers: $levelMovementEnablersIdsList")
+
+          val presentCharLocationX = (json \ "characterInfo" \ "PositionX").as[Int]
+          val presentCharLocationY = (json \ "characterInfo" \ "PositionY").as[Int]
+          val presentCharLocation = Vec(presentCharLocationX, presentCharLocationY)
+          println(s"Debug: Character position - X: $presentCharLocationX, Y: $presentCharLocationY")
+
+          val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+          println(s"Debug: Number of tiles loaded: ${tiles.size}")
+
+          val currentWaypointLocationOpt = tiles.collectFirst {
+            case (key, value) if (value \ "items").validate[Map[String, Int]].asOpt.exists(items =>
+              items.values.exists(id => levelMovementEnablersIdsList.contains(id))) =>
+              // Extracting x and y from the key considering the first 5 digits for x and the next 5 for y
+              val x = key.take(5).toInt
+              val y = key.drop(5).take(5).toInt
+              println(s"Debug: Found matching item in tile - X: $x, Y: $y, Key: $key")
+              Vec(x, y)
+          }
+
+          currentWaypointLocationOpt match {
+            case Some(currentWaypointLocation) =>
+              println(s"Found current waypoint location: $currentWaypointLocation")
+
+              val xs = tiles.keys.map(_.substring(0, 5).toInt)
+              val ys = tiles.keys.map(_.substring(5, 10).toInt)
+              val min_x = xs.min
+              val min_y = ys.min
+              val maxX = xs.max
+              val maxY = ys.max
+
+              val gridBounds = (min_x, min_y, maxX, maxY)
+              val (grid, _) = createBooleanGrid(tiles, min_x, min_y)
+
+              // Before calling findPathUsingGameCoordinates, ensure the waypoint is within bounds
+              val adjustedWaypointLocation = if (currentWaypointLocation.x < min_x || currentWaypointLocation.x > maxX ||
+                currentWaypointLocation.y < min_y || currentWaypointLocation.y > maxY) {
+
+                adjustGoalWithinBounds(currentWaypointLocation, grid, gridBounds)
+              } else {
+                currentWaypointLocation
+              }
+
+              val newPath = findPathUsingGameCoordinates(presentCharLocation, adjustedWaypointLocation, grid, gridBounds)
+              updatedState = updatedState.copy(subWaypoints = newPath, lastDirection = None)
+
+              val nextWaypoint = updatedState.subWaypoints.head
+              val direction = calculateDirection(presentCharLocation, nextWaypoint, updatedState.lastDirection)
+              updatedState = updatedState.copy(lastDirection = direction)
+              println(s"Direction ${direction}")
+              printGrid(grid, gridBounds, newPath, presentCharLocation, currentWaypointLocation)
+
+              direction.foreach { dir =>
+                actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(dir)))
+                logs :+= Log(s"Moving closer to the subWaypoint in direction: $dir")
+              }
+            case None =>
+              println("No valid waypoint found based on level movement enablers.")
+          }
+        }
+      } else {
+        battleInfoResult match {
+          case JsSuccess(battleInfo, _) =>
+            val hasMonsters = battleInfo.exists { case (_, creature) =>
+              (creature \ "IsMonster").asOpt[Boolean].getOrElse(false)
+            }
+            if (!hasMonsters) {
+              val result = executeWhenNoMonstersOnScreen(json, settings, updatedState, actions, logs)
+              actions = result._1._1
+              logs = result._1._2
+              updatedState = result._2
+            } else {
+              println("Skipping actions due to presence of monsters.")
+              val presentCharLocationX = (json \ "characterInfo" \ "PositionX").as[Int]
+              val presentCharLocationY = (json \ "characterInfo" \ "PositionY").as[Int]
+              val presentCharLocation = Vec(presentCharLocationX, presentCharLocationY)
+
+              // track if character crossed a subwaypoint
+              if (updatedState.subWaypoints.nonEmpty) {
+                // Check if character is at the current subWaypoint or needs to move towards the next
+                if (isCloseToWaypoint(presentCharLocation, updatedState.subWaypoints.head)) {
+                  // Advance to next subWaypoint, ensuring we do not exceed the list's bounds
+                  updatedState = updatedState.copy(subWaypoints = updatedState.subWaypoints.tail)
+                  // Log for debugging
+                  println(s"Character advanced to next subWaypoint. Remaining Path: ${updatedState.subWaypoints}")
+                }
+              }
+
+              // track if character crossed a waypoint
+              val currentWaypointIndex = updatedState.currentWaypointIndex
+              if (updatedState.fixedWaypoints.isDefinedAt(currentWaypointIndex)) {
+                val currentWaypoint = updatedState.fixedWaypoints(currentWaypointIndex)
+                if (Math.abs(currentWaypoint.waypointX - presentCharLocationX) <= 2 && Math.abs(currentWaypoint.waypointY - presentCharLocationY) <= 2) {
+                  // Move to the next waypoint, clear sub-waypoints, and force path recalculation
+                  val nextWaypointIndex = (currentWaypointIndex + 1) % updatedState.fixedWaypoints.size
+                  updatedState = updatedState.copy(currentWaypointIndex = nextWaypointIndex, subWaypoints = List.empty)
+                  println(s"Character advanced to next Waypoint. Advancing to next Waypoint Index: $nextWaypointIndex")
+                }
+              }
+
+            }
+          case JsError(_) =>
             val result = executeWhenNoMonstersOnScreen(json, settings, updatedState, actions, logs)
             actions = result._1._1
             logs = result._1._2
             updatedState = result._2
-          } else {
-            println("Skipping actions due to presence of monsters.")
-            val presentCharLocationX = (json \ "characterInfo" \ "PositionX").as[Int]
-            val presentCharLocationY = (json \ "characterInfo" \ "PositionY").as[Int]
-            val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
-            val presentCharLocation = Vec(presentCharLocationX, presentCharLocationY)
-
-            // track if character crossed a subwaypoint
-            if (updatedState.subWaypoints.nonEmpty) {
-              // Check if character is at the current subWaypoint or needs to move towards the next
-              if (isCloseToWaypoint(presentCharLocation, updatedState.subWaypoints.head)) {
-                // Advance to next subWaypoint, ensuring we do not exceed the list's bounds
-                updatedState = updatedState.copy(subWaypoints = updatedState.subWaypoints.tail)
-                // Log for debugging
-                println(s"Character advanced to next subWaypoint. Remaining Path: ${updatedState.subWaypoints}")
-              }
-            }
-
-            // track if character crossed a waypoint
-            val currentWaypointIndex = updatedState.currentWaypointIndex
-            if (updatedState.fixedWaypoints.isDefinedAt(currentWaypointIndex)) {
-              val currentWaypoint = updatedState.fixedWaypoints(currentWaypointIndex)
-              if (Math.abs(currentWaypoint.waypointX - presentCharLocationX) <= 2 && Math.abs(currentWaypoint.waypointY - presentCharLocationY) <= 2) {
-                // Move to the next waypoint, clear sub-waypoints, and force path recalculation
-                val nextWaypointIndex = (currentWaypointIndex + 1) % updatedState.fixedWaypoints.size
-                updatedState = updatedState.copy(currentWaypointIndex = nextWaypointIndex, subWaypoints = List.empty)
-                println(s"Character advanced to next Waypoint. Advancing to next Waypoint Index: $nextWaypointIndex")
-              }
-            }
-
-          }
-        case JsError(_) =>
-          val result = executeWhenNoMonstersOnScreen(json, settings, updatedState, actions, logs)
-          actions = result._1._1
-          logs = result._1._2
-          updatedState = result._2
+        }
       }
     }
     ((actions, logs), updatedState)
@@ -98,27 +188,6 @@ object CaveBot {
     var logs = initialLogs
     var updatedState = initialState
 
-    // Modified to correctly handle mutable state update
-    if (!updatedState.waypointsLoaded) {
-      updatedState = loadingWaypointsFromSettings(settings, updatedState)
-      // Assuming waypoints are now loaded and available
-      val presentCharLocationX = (json \ "characterInfo" \ "PositionX").as[Int]
-      val presentCharLocationY = (json \ "characterInfo" \ "PositionY").as[Int]
-      val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
-      val presentCharLocation = Vec(presentCharLocationX, presentCharLocationY)
-      println(s"Initial character PositionX: $presentCharLocationX, PositionY: $presentCharLocationY, PositionZ: $presentCharLocationZ")
-
-      // Find the closest waypoint to the current character location
-      val (closestWaypointIndex, _) = updatedState.fixedWaypoints
-        .zipWithIndex
-        .map { case (waypoint, index) =>
-          (index, presentCharLocation.manhattanDistance(Vec(waypoint.waypointX, waypoint.waypointY)))
-        }
-        .minBy(_._2) // Find the minimum by distance
-
-      // Update the currentWaypointIndex to the index of the closest waypoint
-      updatedState = updatedState.copy(currentWaypointIndex = closestWaypointIndex, subWaypoints = List.empty)
-    }
 
 
     val presentCharLocationX = (json \ "characterInfo" \ "PositionX").as[Int]
@@ -149,7 +218,7 @@ object CaveBot {
 
     // Check if the distance to the current waypoint is greater than the thresholdDistance
     // find the nearest waypoint if present is too far
-    if (distanceToCurrentWaypoint > thresholdDistance) {
+    if ((distanceToCurrentWaypoint > thresholdDistance) && (updatedState.subWaypoints.isEmpty)) {
 
 
       println(s"Distance to waypoint is $distanceToCurrentWaypoint higher than $thresholdDistance")
@@ -205,8 +274,8 @@ object CaveBot {
       val (grid, _) = createBooleanGrid(tiles, min_x, min_y)
 
       // Check if the character's current position is outside the grid bounds
-      if (currentWaypointLocation.x < min_x || currentWaypointLocation.x > maxX ||
-        currentWaypointLocation.y < min_y || currentWaypointLocation.y > maxY) {
+      if ((currentWaypointLocation.x < min_x || currentWaypointLocation.x > maxX ||
+        currentWaypointLocation.y < min_y || currentWaypointLocation.y > maxY) && (updatedState.subWaypoints.isEmpty)) {
 
         val newWaypointLocation = adjustGoalWithinBounds(currentWaypointLocation, grid, gridBounds)
         currentWaypointLocation = newWaypointLocation
@@ -269,8 +338,48 @@ object CaveBot {
     ((actions, logs), updatedState)
   }
 
-
   def calculateDirection(currentLocation: Vec, nextLocation: Vec, lastDirection: Option[String]): Option[String] = {
+    // Debugging the inputs directly to ensure they're as expected
+    println(s"Debug - Input currentLocation: $currentLocation, nextLocation: $nextLocation")
+
+    val deltaX = nextLocation.x - currentLocation.x
+    val deltaY = nextLocation.y - currentLocation.y
+    println(s"Debug - Calculated DeltaX: $deltaX, DeltaY: $deltaY based on inputs")
+
+    (deltaX.sign, deltaY.sign) match {
+      case (0, 0) =>
+        println("Debug - Matched case: Character is already at the destination.")
+        None
+      case (0, -1) =>
+        println("Debug - Matched case: ArrowUp")
+        Some("ArrowUp")
+      case (0, 1) =>
+        println("Debug - Matched case: ArrowDown")
+        Some("ArrowDown")
+      case (-1, 0) =>
+        println("Debug - Matched case: ArrowLeft")
+        Some("ArrowLeft")
+      case (1, 0) =>
+        println("Debug - Matched case: ArrowRight")
+        Some("ArrowRight")
+      case _ =>
+        println("Debug - Matched case: Diagonal or multiple options available.")
+        // This is a simplified approach to randomly choose between horizontal or vertical movement
+        val random = new Random()
+        val decision = if (random.nextBoolean()) {
+          // Choose based on deltaX if randomly selected boolean is true
+          if (deltaX < 0) "ArrowLeft" else "ArrowRight"
+        } else {
+          // Choose based on deltaY otherwise
+          if (deltaY < 0) "ArrowUp" else "ArrowDown"
+        }
+        println(s"Debug - Randomly chosen direction: $decision based on DeltaX: $deltaX, DeltaY: $deltaY")
+        Some(decision)
+    }
+  }
+
+
+  def calculateDirectionOld(currentLocation: Vec, nextLocation: Vec, lastDirection: Option[String]): Option[String] = {
     val deltaX = nextLocation.x - currentLocation.x
     val deltaY = nextLocation.y - currentLocation.y
 //    println(s"DeltaX: $deltaX, DeltaY: $deltaY, LastDirection: $lastDirection")
@@ -309,7 +418,41 @@ object CaveBot {
     charLocation.manhattanDistance(waypoint) <= 3
   }
 
+
   def loadingWaypointsFromSettings(settings: UISettings, state: ProcessorState): ProcessorState = {
+    // Assuming waypointsList is a structure containing waypoint data
+    val waypointsModel = settings.caveBotSettings.waypointsList.getModel
+
+    // Convert the waypoints list model into a Scala Seq[String]
+    val waypointsSeq: Seq[String] = (0 until waypointsModel.getSize).map(waypointsModel.getElementAt(_).toString)
+
+    // Parse the waypoints sequence to extract waypoint information, including Z values
+    val waypointsInfoList = waypointsSeq.flatMap { waypoint =>
+      val waypointComponents = waypoint.split(", ")
+      if (waypointComponents(0) == "walk") {
+        try {
+          // Assuming the format is "walk, placement, x, y, z"
+          val x = waypointComponents(2).toInt
+          val y = waypointComponents(3).toInt
+          val z = waypointComponents(4).toInt
+          Some(WaypointInfo(waypointType = waypointComponents(0), waypointX = x, waypointY = y, waypointZ = z, waypointPlacement = waypointComponents(1)))
+        } catch {
+          case e: Exception =>
+            println(s"Error parsing waypoint: $waypoint, error: ${e.getMessage}")
+            None
+        }
+      } else None
+    }.toList
+
+    // Extract Z values from waypointsInfoList and store them in caveBotLevelsList
+    val caveBotLevelsList = waypointsInfoList.map(_.waypointZ).distinct
+
+    // Return updated state with loaded waypoints and Z values
+    state.copy(fixedWaypoints = waypointsInfoList, waypointsLoaded = true, caveBotLevelsList = caveBotLevelsList)
+  }
+
+
+  def loadingWaypointsFromSettingsOld(settings: UISettings, state: ProcessorState): ProcessorState = {
     // Fetch the model from the waypointsList, which is a javax.swing.DefaultListModel
     val waypointsModel = settings.caveBotSettings.waypointsList.getModel
 
@@ -335,6 +478,28 @@ object CaveBot {
   }
 
   def findPathUsingGameCoordinates(start: Vec, goal: Vec, grid: Array[Array[Boolean]], gridBounds: (Int, Int, Int, Int)): List[Vec] = {
+    val (min_x, min_y, _, _) = gridBounds
+
+    // Adjust start and goal based on the input min_x and min_y to fit grid-relative coordinates
+    val adjustedStart = Vec(start.x - min_x, start.y - min_y)
+    val adjustedGoal = Vec(goal.x - min_x, goal.y - min_y)
+
+    // Perform A* search on the adjusted coordinates
+    val path = aStarSearch(adjustedStart, adjustedGoal, grid)
+
+    // Adjust the path back to the original coordinate system and remove the first element if it matches the start position
+    val adjustedPath = path.map(p => Vec(p.x + min_x, p.y + min_y))
+
+    // Check if the first element of the path is the start position and remove it if so
+    // This is done because the start position is the current character position
+    if (adjustedPath.headOption.contains(start)) {
+      adjustedPath.tail
+    } else {
+      adjustedPath
+    }
+  }
+
+  def findPathUsingGameCoordinatesOld(start: Vec, goal: Vec, grid: Array[Array[Boolean]], gridBounds: (Int, Int, Int, Int)): List[Vec] = {
     val (min_x, min_y, _, _) = gridBounds
 
 //    println(s"Using gridBounds for pathfinding: min_x=$min_x, min_y=$min_y")
@@ -525,7 +690,5 @@ object CaveBot {
         updatedState.copy(lastPosition = Some(currentPosition), positionStagnantCount = 0)
     }
   }
-
-
 }
 

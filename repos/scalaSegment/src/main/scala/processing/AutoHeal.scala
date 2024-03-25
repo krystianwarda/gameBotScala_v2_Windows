@@ -19,6 +19,61 @@ object AutoHeal {
     val currentTime = System.currentTimeMillis()
 
     if (settings.healingSettings.enabled) {
+      println(s"Status autoheal : ${updatedState.statusOfRuneAutoheal}")
+      println(s"Status runeContainer : ${updatedState.uhRuneContainerName}")
+
+      if (updatedState.statusOfRuneAutoheal == "open_new_backpack") {
+        val newBpPosition = (json \ "screenInfo" \ "inventoryPanelLoc" \ updatedState.uhRuneContainerName \ "contentsPanel" \ "item0").as[JsObject]
+        val newBpPositionX = (newBpPosition \ "x").as[Int]
+        val newBpPositionY = (newBpPosition \ "y").as[Int]
+        println(s"New bp x: $newBpPositionX, Y: $newBpPositionY")
+        var actionsSeq = Seq(
+          MouseAction(newBpPositionX, newBpPositionY, "move"),
+          MouseAction(newBpPositionX, newBpPositionY, "pressRight"),
+          MouseAction(newBpPositionX, newBpPositionY, "releaseRight")
+        )
+        actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+
+        // New Code: Check for UH runes in the specified container and update state if found
+        val containerInfo = (json \ "containersInfo" \ updatedState.uhRuneContainerName).as[JsObject]
+        val items = (containerInfo \ "items").as[JsObject]
+        val uhRuneItemId = 3160
+        val uhRuneItemSubType = 1
+
+        // Check if any item in the container is a UH rune
+        val containsUHRunes = items.fields.exists {
+          case (_, itemInfo) =>
+            val itemId = (itemInfo \ "itemId").asOpt[Int].getOrElse(-1)
+            val itemSubType = (itemInfo \ "itemSubType").asOpt[Int].getOrElse(-1)
+            itemId == uhRuneItemId && itemSubType == uhRuneItemSubType
+        }
+
+        if (containsUHRunes) {
+          updatedState = updatedState.copy(statusOfRuneAutoheal = "ready")
+        }
+
+      }
+
+      // remove bp remove_backpack
+      if (updatedState.statusOfRuneAutoheal == "remove_backpack") {
+        val presentCharLocation = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
+        val presentCharLocationX = (presentCharLocation \ "x").as[Int]
+        val presentCharLocationY = (presentCharLocation \ "y").as[Int]
+
+        val emptyBPPosition = (json \ "screenInfo" \ "inventoryPanelLoc" \ updatedState.uhRuneContainerName \ "contentsPanel" \ "item0").as[JsObject]
+        val emptyBPX = (emptyBPPosition \ "x").as[Int]
+        val emptyBPY = (emptyBPPosition \ "y").as[Int]
+
+        var actionsSeq = Seq(
+          MouseAction(emptyBPX, emptyBPY, "move"),
+          MouseAction(emptyBPX, emptyBPY, "pressLeft"),
+          MouseAction(presentCharLocationX, presentCharLocationY, "move"),
+          MouseAction(presentCharLocationX, presentCharLocationY, "releaseLeft")
+        )
+        actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+        logs = logs :+ Log(s"Using item 3160 at position ($presentCharLocationX, $presentCharLocationY) - Actions: $actionsSeq")
+        updatedState = updatedState.copy(statusOfRuneAutoheal = "open_new_backpack")
+      }
 
 
       if (updatedState.uhRuneContainerName == "not_set") {
@@ -34,7 +89,8 @@ object AutoHeal {
           updatedState = uhRuneContainer match {
             case Some(containerName) =>
               logs = logs :+ Log(s"Found UH Rune in $containerName.")
-              updatedState.copy(uhRuneContainerName = containerName)
+              updatedState = updatedState.copy(uhRuneContainerName = containerName, statusOfRuneAutoheal = "ready")
+              updatedState
             case None =>
               logs = logs :+ Log("UH Rune not found in any container.")
               updatedState // No change if uhRune is not found
@@ -42,36 +98,36 @@ object AutoHeal {
         }
       }
 
-
-
-      if (updatedState.uhRuneContainerName != "not_set") {
+      if (updatedState.uhRuneContainerName != "not_set" && updatedState.statusOfRuneAutoheal == "ready") {
         logs = logs :+ Log(s"UH Rune container set to ${updatedState.uhRuneContainerName}. Checking for free space and parent...")
         (json \ "containersInfo" \ updatedState.uhRuneContainerName).asOpt[JsObject].foreach { containerInfo =>
           val freeSpace = (containerInfo \ "freeSpace").asOpt[Int]
           val hasParent = (containerInfo \ "hasParent").asOpt[Boolean]
 
           if (freeSpace.contains(20) && hasParent.contains(true)) {
+
             logs = logs :+ Log(s"Container ${updatedState.uhRuneContainerName} has 20 free spaces and a parent. Finding upButton...")
             (json \ "screenInfo" \ "inventoryPanelLoc" \ updatedState.uhRuneContainerName \ "upButton").asOpt[JsObject].foreach { upButtonCoords =>
               val targetX = (upButtonCoords \ "x").asOpt[Int]
               val targetY = (upButtonCoords \ "y").asOpt[Int]
 
               logs = logs :+ Log(s"Located upButton for ${updatedState.uhRuneContainerName} at [$targetX, $targetY]. Simulating click.")
-              val actionsSeq = Seq(
+
+              var actionsSeq = Seq(
                 MouseAction(targetX.getOrElse(0), targetY.getOrElse(0), "move"),
                 MouseAction(targetX.getOrElse(0), targetY.getOrElse(0), "pressLeft"),
                 MouseAction(targetX.getOrElse(0), targetY.getOrElse(0), "releaseLeft")
               )
               actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+              logs = logs :+ Log(s"Container ${updatedState.uhRuneContainerName} is out of uh runes.")
+              updatedState = updatedState.copy(statusOfRuneAutoheal = "remove_backpack")
             }
-          } else {
-            logs = logs :+ Log(s"Container ${updatedState.uhRuneContainerName} does not meet free space or parent requirements.")
           }
         }
       }
 
 
-    if ((currentTime - currentState.lastHealingTime) >= 1200) {
+    if (((currentTime - currentState.lastHealingTime) >= 1300) && (updatedState.statusOfRuneAutoheal == "ready")) {
         val health = (json \ "characterInfo" \ "Health").as[Int]
         val mana = (json \ "characterInfo" \ "Mana").as[Int]
         // UH RUNE 3160
@@ -79,7 +135,7 @@ object AutoHeal {
           logs = logs :+ Log("I need to use UH!")
           if (settings.mouseMovements) {
             logs = logs :+ Log("use UH with mouse")
-            findItemInContainerSlot14(json, 3160, 1).foreach { runePosition =>
+            findItemInContainerSlot14(json,updatedState, 3160, 1).foreach { runePosition =>
               val runeX = (runePosition \ "x").as[Int]
               val runeY = (runePosition \ "y").as[Int]
 
@@ -111,7 +167,7 @@ object AutoHeal {
           logs = logs :+ Log("I need to use IH!")
           if (settings.mouseMovements) {
             logs = logs :+ Log("use IH with mouse")
-            findItemInContainerSlot14(json, 3152, 1).foreach { runePosition =>
+            findItemInContainerSlot14(json, updatedState, 3152, 1).foreach { runePosition =>
               val runeX = (runePosition \ "x").as[Int]
               val runeY = (runePosition \ "y").as[Int]
 
@@ -143,7 +199,7 @@ object AutoHeal {
           logs = logs :+ Log("I need to use HP!")
           if (settings.mouseMovements) {
             logs = logs :+ Log("use HP with mouse")
-            findItemInContainerSlot14(json, 2874, 10).foreach { runePosition =>
+            findItemInContainerSlot14(json, updatedState, 2874, 10).foreach { runePosition =>
               val runeX = (runePosition \ "x").as[Int]
               val runeY = (runePosition \ "y").as[Int]
 
@@ -175,7 +231,7 @@ object AutoHeal {
           logs = logs :+ Log("I need to use MP!")
           if (settings.mouseMovements) {
             logs = logs :+ Log("use MP with mouse")
-            findItemInContainerSlot14(json, 2874, 7).foreach { runePosition =>
+            findItemInContainerSlot14(json, updatedState, 2874, 7).foreach { runePosition =>
               val runeX = (runePosition \ "x").as[Int]
               val runeY = (runePosition \ "y").as[Int]
 
@@ -231,6 +287,7 @@ object AutoHeal {
 
     ((actions, logs), updatedState)
   }
+
 
 
 }

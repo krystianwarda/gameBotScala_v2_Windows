@@ -17,27 +17,45 @@ object Process {
   // Function to check if JSON is not empty
   def isJsonNotEmpty(json: JsValue): Boolean = !isJsonEmpty(json)
 
-  def findItemInContainerSlot14(json: JsValue, itemId: Int, itemSubType: Int): Option[JsObject] = {
-    val containersInfo = (json \ "containersInfo").as[JsObject]
-    val screenInfo = (json \ "screenInfo" \ "inventoryPanelLoc").as[JsObject]
 
-    // Iterate through each container in containersInfo
-    containersInfo.fields.flatMap { case (containerKey, containerValue) =>
-      (containerValue \ "items").as[JsObject].fields.flatMap { case (slotKey, slotValue) =>
-        // Extract both itemId and itemSubType and check if they match the specified values
+
+  def findItemInContainerSlot14(json: JsValue, updatedState: ProcessorState, itemId: Int, itemSubType: Int): Option[JsObject] = {
+    // Access the specific container information using updatedState
+    val containerInfo = (json \ "containersInfo" \ updatedState.uhRuneContainerName).as[JsObject]
+    println(s"Container Info: $containerInfo") // Log the container information for debugging
+
+    val screenInfoPath = (json \ "screenInfo" \ "inventoryPanelLoc" \ updatedState.uhRuneContainerName \ "contentsPanel").as[JsObject]
+    println(s"Screen Info Path: $screenInfoPath") // Log the screen info path for debugging
+
+    // Iterate over slots 1 to 4 to find the item
+    val itemInContainer = (0 until 4).flatMap { slotIndex =>
+      (containerInfo \ "items" \ s"slot$slotIndex").asOpt[JsObject].flatMap { slotValue =>
         for {
           id <- (slotValue \ "itemId").asOpt[Int]
-          subType <- (slotValue \ "itemSubType").asOpt[Int]
-          if id == itemId && subType == itemSubType && slotKey.matches("item[1-4]")
-          screenPosition <- (screenInfo \ containerKey \ "contentsPanel" \ slotKey).asOpt[JsObject]
-          posX <- (screenPosition \ "x").asOpt[Int]
-          posY <- (screenPosition \ "y").asOpt[Int]
-        } yield Json.obj("x" -> posX, "y" -> posY)
+          subType <- (slotValue \ "itemSubType").asOpt[Int] if id == itemId && subType == itemSubType
+        } yield {
+          println(s"Found in container slot $slotIndex: $slotValue") // Log for debugging
+          slotValue
+        }
       }
-    }.headOption // Return the first match found
+    }.headOption
+
+    println(s"Item in Container: $itemInContainer") // Debugging log
+
+    // If the item exists in containerInfo, then look for its screen position in screenInfo
+    val result = itemInContainer.flatMap { _ =>
+      // Direct mapping of slot index to screen position based on the assumption slot indexes directly correlate
+      (0 until 4).flatMap { slotIndex =>
+        screenInfoPath.fields.collectFirst {
+          case (itemName, itemPos) if itemName.endsWith(s"item$slotIndex") =>
+            Json.obj("x" -> (itemPos \ "x").as[Int], "y" -> (itemPos \ "y").as[Int])
+        }
+      }.headOption
+    }
+
+    println(s"Result: $result") // Debugging log
+    result
   }
-
-
   def detectPlayersAndMonsters(json: JsValue): Boolean = {
     val currentCharName = (json \ "characterInfo" \ "Name").as[String]
     val spyLevelInfo = (json \ "spyLevelInfo").as[JsObject]
