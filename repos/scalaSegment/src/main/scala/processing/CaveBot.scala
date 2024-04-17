@@ -10,7 +10,9 @@ import userUI.SettingsUtils
 import userUI.SettingsUtils.UISettings
 import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, Mouse, MouseMoveCommand, MouseMovementSettings}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
+
 import System.currentTimeMillis
+import javax.swing.JList
 import scala.:+
 import scala.collection.immutable.Seq
 import scala.collection.mutable
@@ -418,20 +420,21 @@ object CaveBot {
     charLocation.manhattanDistance(waypoint) <= 3
   }
 
+  // Utility function to convert a JList model to a Scala Seq
+  def jListModelToSeq(jList: JList[String]): Seq[String] = {
+    val model = jList.getModel
+    (0 until model.getSize).map(i => model.getElementAt(i).toString)
+  }
 
   def loadingWaypointsFromSettings(settings: UISettings, state: ProcessorState): ProcessorState = {
-    // Assuming waypointsList is a structure containing waypoint data
-    val waypointsModel = settings.caveBotSettings.waypointsList.getModel
+    // Convert the waypoints JList model into a Scala Seq[String]
+    val waypointsSeq: Seq[String] = settings.caveBotSettings.waypointsList
 
-    // Convert the waypoints list model into a Scala Seq[String]
-    val waypointsSeq: Seq[String] = (0 until waypointsModel.getSize).map(waypointsModel.getElementAt(_).toString)
-
-    // Parse the waypoints sequence to extract waypoint information, including Z values
+    // Parse the waypoints sequence to extract waypoint information
     val waypointsInfoList = waypointsSeq.flatMap { waypoint =>
       val waypointComponents = waypoint.split(", ")
       if (waypointComponents(0) == "walk") {
         try {
-          // Assuming the format is "walk, placement, x, y, z"
           val x = waypointComponents(2).toInt
           val y = waypointComponents(3).toInt
           val z = waypointComponents(4).toInt
@@ -444,38 +447,70 @@ object CaveBot {
       } else None
     }.toList
 
-    // Extract Z values from waypointsInfoList and store them in caveBotLevelsList
+    // Extract Z values from waypointsInfoList and update state
     val caveBotLevelsList = waypointsInfoList.map(_.waypointZ).distinct
-
-    // Return updated state with loaded waypoints and Z values
     state.copy(fixedWaypoints = waypointsInfoList, waypointsLoaded = true, caveBotLevelsList = caveBotLevelsList)
   }
 
 
-  def loadingWaypointsFromSettingsOld(settings: UISettings, state: ProcessorState): ProcessorState = {
-    // Fetch the model from the waypointsList, which is a javax.swing.DefaultListModel
-    val waypointsModel = settings.caveBotSettings.waypointsList.getModel
+//
+//  def loadingWaypointsFromSettingsOldOld(settings: UISettings, state: ProcessorState): ProcessorState = {
+//    // Assuming waypointsList is a structure containing waypoint data
+//    val waypointsModel = settings.caveBotSettings.waypointsList.getModel
+//
+//    // Convert the waypoints list model into a Scala Seq[String]
+//    val waypointsSeq: Seq[String] = (0 until waypointsModel.getSize).map(waypointsModel.getElementAt(_).toString)
+//
+//    // Parse the waypoints sequence to extract waypoint information, including Z values
+//    val waypointsInfoList = waypointsSeq.flatMap { waypoint =>
+//      val waypointComponents = waypoint.split(", ")
+//      if (waypointComponents(0) == "walk") {
+//        try {
+//          // Assuming the format is "walk, placement, x, y, z"
+//          val x = waypointComponents(2).toInt
+//          val y = waypointComponents(3).toInt
+//          val z = waypointComponents(4).toInt
+//          Some(WaypointInfo(waypointType = waypointComponents(0), waypointX = x, waypointY = y, waypointZ = z, waypointPlacement = waypointComponents(1)))
+//        } catch {
+//          case e: Exception =>
+//            println(s"Error parsing waypoint: $waypoint, error: ${e.getMessage}")
+//            None
+//        }
+//      } else None
+//    }.toList
+//
+//    // Extract Z values from waypointsInfoList and store them in caveBotLevelsList
+//    val caveBotLevelsList = waypointsInfoList.map(_.waypointZ).distinct
+//
+//    // Return updated state with loaded waypoints and Z values
+//    state.copy(fixedWaypoints = waypointsInfoList, waypointsLoaded = true, caveBotLevelsList = caveBotLevelsList)
+//  }
 
-    // Convert the DefaultListModel to a Scala Seq[String]
-    // This is done by creating a Scala sequence from the Java Enumeration provided by elements()
-    val waypointsSeq: Seq[String] = (0 until waypointsModel.getSize).map(waypointsModel.getElementAt(_).toString)
-
-    // The rest of your code for processing waypointsSeq remains the same
-    val waypointsInfoList = waypointsSeq.zipWithIndex.flatMap { case (waypoint, index) =>
-      val waypointString = waypoint.split(", ")
-      if (waypointString(0) == "walk") {
-        Some(WaypointInfo(
-          waypointType = waypointString(0),
-          waypointX = waypointString(2).toInt,
-          waypointY = waypointString(3).toInt,
-          waypointZ = waypointString(4).toInt,
-          waypointPlacement = waypointString(1)
-        ))
-      } else None
-    }.toList
-
-    state.copy(fixedWaypoints = waypointsInfoList, waypointsLoaded = true)
-  }
+//
+//  def loadingWaypointsFromSettingsOld(settings: UISettings, state: ProcessorState): ProcessorState = {
+//    // Fetch the model from the waypointsList, which is a javax.swing.DefaultListModel
+//    val waypointsModel = settings.caveBotSettings.waypointsList.getModel
+//
+//    // Convert the DefaultListModel to a Scala Seq[String]
+//    // This is done by creating a Scala sequence from the Java Enumeration provided by elements()
+//    val waypointsSeq: Seq[String] = (0 until waypointsModel.getSize).map(waypointsModel.getElementAt(_).toString)
+//
+//    // The rest of your code for processing waypointsSeq remains the same
+//    val waypointsInfoList = waypointsSeq.zipWithIndex.flatMap { case (waypoint, index) =>
+//      val waypointString = waypoint.split(", ")
+//      if (waypointString(0) == "walk") {
+//        Some(WaypointInfo(
+//          waypointType = waypointString(0),
+//          waypointX = waypointString(2).toInt,
+//          waypointY = waypointString(3).toInt,
+//          waypointZ = waypointString(4).toInt,
+//          waypointPlacement = waypointString(1)
+//        ))
+//      } else None
+//    }.toList
+//
+//    state.copy(fixedWaypoints = waypointsInfoList, waypointsLoaded = true)
+//  }
 
   def findPathUsingGameCoordinates(start: Vec, goal: Vec, grid: Array[Array[Boolean]], gridBounds: (Int, Int, Int, Int)): List[Vec] = {
     val (min_x, min_y, _, _) = gridBounds

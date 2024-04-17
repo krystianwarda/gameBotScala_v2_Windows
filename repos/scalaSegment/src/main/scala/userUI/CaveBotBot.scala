@@ -143,7 +143,7 @@ class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
     c.insets = new Insets(2, 2, 2, 2)
     c.fill = GridBagConstraints.HORIZONTAL // This will make components take up full width
     c.gridwidth = 1
-    
+
     // Waypoint Label and List
     c.gridy = 0 // Adjust gridy for subsequent components
     c.gridx = 0
@@ -336,6 +336,10 @@ class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
     }
   }
 
+  def jListToScalaList(waypointsList: JList[String]): List[String] = {
+    val model = waypointsList.getModel
+    (for (i <- 0 until model.getSize) yield model.getElementAt(i)).toList
+  }
 
 
 }

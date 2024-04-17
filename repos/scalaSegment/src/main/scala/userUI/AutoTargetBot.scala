@@ -234,9 +234,14 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
   }
 
   // Updates creaturePriorityList and refreshes the UI to reflect the new list
-  def setTargetPriority(creatures: mutable.Buffer[String]): Unit = {
+  def setTargetPriority(creatures: JList[String]): Unit = {
     creaturePriorityList.clear()
-    creaturePriorityList ++= creatures
+
+    // Convert JList to Scala Iterable and append all elements
+    for (i <- 0 until creatures.getModel.getSize) {
+      creaturePriorityList += creatures.getModel.getElementAt(i)
+    }
+
     updateCreatureList()
   }
 
@@ -274,7 +279,7 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
     val chooser = new javax.swing.JFileChooser(initialSavePath)
     chooser.setDialogTitle("Save Auto Targets")
     chooser.setDialogType(javax.swing.JFileChooser.SAVE_DIALOG)
-    chooser.setSelectedFile(new java.io.File("autotargets.txt")) // Suggest a default file name
+//    chooser.setSelectedFile(new java.io.File("autotargets.txt")) // Suggest a default file name
 
     val result = chooser.showSaveDialog(null)
 
@@ -327,8 +332,6 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
       }
     }
   })
-
-
 
 
 }

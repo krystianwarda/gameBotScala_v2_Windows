@@ -5,9 +5,16 @@ import play.api.libs.json.{JsPath, Reads, Writes}
 
 import javax.swing.{DefaultListModel, JList}
 import scala.Function.unlift
+import play.api.libs.json._
+import play.api.libs.functional.syntax._
 
-
+import javax.swing.{DefaultListModel, JList}
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
+import scala.io.Source
+import scala.util.{Failure, Success, Try}
+
+// Helper methods to convert between JList and Seq
 
 object SettingsUtils {
   import play.api.libs.json.{Format, Json}
@@ -55,13 +62,13 @@ object SettingsUtils {
 
   case class CaveBotSettings(
                               enabled: Boolean,
-                              waypointsList: JList[String],
+                              waypointsList: Seq[String]
                             )
 
   case class AutoTargetSettings(
                               enabled: Boolean,
+                              creatureList: Seq[String],
                               targetMonstersOnBattle: Boolean,
-                              creaturePriorityList: List[String],
                             )
 
   case class TrainingSettings(
@@ -81,8 +88,8 @@ object SettingsUtils {
   implicit val fishingSettingsFormat: Format[FishingSettings] = Json.format[FishingSettings]
   implicit val trainingSettingsFormat: Format[TrainingSettings] = Json.format[TrainingSettings]
   implicit val rectangleSettingsFormat: Format[RectangleSettings] = Json.format[RectangleSettings]
-  implicit val caveBotSettingsFormat: Format[CaveBotSettings] = Format(caveBotSettingsReads, caveBotSettingsWrites)
-  implicit val AutoTargetSettingsFormat: Format[AutoTargetSettings] = Json.format[AutoTargetSettings]
+  implicit val autoTargetSettingsFormat: Format[AutoTargetSettings] = Json.format[AutoTargetSettings]
+  implicit val caveBotSettingsFormat: Format[CaveBotSettings] = Json.format[CaveBotSettings]
 
   // Now define the UISettings case class
   case class UISettings(
@@ -111,39 +118,42 @@ object SettingsUtils {
     finally pw.close()
   }
 
+
+  // Now, ensure your load and save functions are correct
   def loadSettingsFromFile(filePath: String): Option[UISettings] = {
-    try {
-      val source = scala.io.Source.fromFile(filePath)
-      val jsonString = try source.mkString finally source.close()
-      Some(Json.parse(jsonString).as[UISettings])
-    } catch {
-      case e: Exception => None
+    Try {
+      val jsonString = Source.fromFile(filePath).mkString
+      Json.parse(jsonString).validate[UISettings] match {
+        case JsSuccess(settings, _) => Some(settings)
+        case JsError(errors) =>
+          println(s"JSON parsing errors: $errors")
+          None
+      }
+    }.recover {
+      case ex: Exception =>
+        println(s"Error reading settings from file: ${ex.getMessage}")
+        None
+    }.get
+  }
+
+  // Converts JList[String] to Seq[String]
+  def jListToSeq(jList: JList[String]): Seq[String] = {
+    val listModel = jList.getModel
+    val size = listModel.getSize
+    val buffer = ArrayBuffer[String]()
+    for (i <- 0 until size) {
+      buffer += listModel.getElementAt(i)
     }
+    buffer.toSeq
   }
 
-
-  // Helper methods to convert between JList and Seq
-  private def jListToSeq(jList: JList[String]): Seq[String] = {
-    val model = jList.getModel
-    (0 until model.getSize).map(model.getElementAt)
-  }
-
-  private def seqToJList(seq: Seq[String]): JList[String] = {
+  def seqToJList(seq: Seq[String], jList: JList[String]): Unit = {
     val model = new DefaultListModel[String]()
     seq.foreach(model.addElement)
-    new JList[String](model)
+    jList.setModel(model)
   }
 
-  // Custom Reads and Writes for CaveBotSettings
-  implicit val caveBotSettingsWrites: Writes[CaveBotSettings] = (
-    (JsPath \ "enabled").write[Boolean] and
-      (JsPath \ "waypointsList").write[Seq[String]]
-    )((settings: CaveBotSettings) => (settings.enabled, jListToSeq(settings.waypointsList)))
 
-  implicit val caveBotSettingsReads: Reads[CaveBotSettings] = (
-    (JsPath \ "enabled").read[Boolean] and
-      (JsPath \ "waypointsList").read[Seq[String]]
-    )((enabled, waypointsList) => CaveBotSettings(enabled, seqToJList(waypointsList)))
 
 
 }

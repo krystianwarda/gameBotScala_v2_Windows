@@ -194,7 +194,5 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
       add(textField.peer, c)
     }
 
-
-
   })
 }

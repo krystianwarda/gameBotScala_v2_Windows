@@ -4,6 +4,8 @@ import java.awt.GridBagConstraints
 import processing.{ConnectToServer, InitializeProcessor}
 import main.scala.MainApp.{jsonProcessorActorRef, periodicFunctionActorRef}
 import play.api.libs.json.{Format, Json}
+
+import javax.swing.{DefaultListModel, JList}
 //import userUI.SettingsUtils.{HealingSettings, ProtectionZoneSettings, RuneMakingSettings, UISettings, saveSettingsToFile}
 import userUI.SettingsUtils._
 import scala.swing.{Component, Dialog, FileChooser, Insets}
@@ -32,7 +34,7 @@ class SwingApp(playerClassList: List[Player],
   val autoHealBot = new AutoHealBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val caveBotBot = new CaveBotBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val autoTargetBot = new AutoTargetBot(currentPlayer, uiAppActor, jsonProcessorActor)
-  val runeMaker = new RuneMakerBot(currentPlayer, uiAppActor, jsonProcessorActor)
+  val runeMakerBot = new RuneMakerBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val fishingBot = new FishingBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val protectionZoneBot = new ProtectionZoneBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val trainingBot = new TrainingBot(currentPlayer, uiAppActor, jsonProcessorActor)
@@ -45,80 +47,82 @@ class SwingApp(playerClassList: List[Player],
   val exampleDropdown = new ComboBox(exampleNames)
   val exampleLabel = new Label()
 
-  // Update the collectSettingsFromUI method to return UISettings
-  def collectSettingsFromUI(): UISettings = {
-    val healingSettings = HealingSettings(
-      enabled = autoHealCheckbox.selected,
-      lightHealSpell = autoHealBot.lightHealSpellField.text,
-      lightHealHealth = parseTextFieldToInt(autoHealBot.lightHealHealthField.text),
-      lightHealMana = parseTextFieldToInt(autoHealBot.lightHealManaField.text),
-      strongHealSpell = autoHealBot.strongHealSpellField.text,
-      strongHealHealth = parseTextFieldToInt(autoHealBot.strongHealHealthField.text),
-      strongHealMana = parseTextFieldToInt(autoHealBot.strongHealManaField.text),
-      ihHealHealth = parseTextFieldToInt(autoHealBot.ihHealHealthField.text),
-      ihHealMana = parseTextFieldToInt(autoHealBot.ihHealManaField.text),
-      uhHealHealth = parseTextFieldToInt(autoHealBot.uhHealHealthField.text),
-      uhHealMana = parseTextFieldToInt(autoHealBot.uhHealManaField.text),
-      hPotionHealHealth = parseTextFieldToInt(autoHealBot.hPotionHealHealthField.text),
-      hPotionHealMana = parseTextFieldToInt(autoHealBot.hPotionHealManaField.text),
-      mPotionHealManaMin = parseTextFieldToInt(autoHealBot.mPotionHealManaMinField.text)
-    )
 
-    val runeMakingSettings = RuneMakingSettings(
-      enabled = runeMakerCheckbox.selected,
-      selectedSpell = "", // Replace with actual logic to capture selected spell if applicable
-      requiredMana = 0 // Replace with actual logic to capture required mana if applicable
-    )
+  def collectHealingSettings(): HealingSettings = HealingSettings(
+    enabled = autoHealCheckbox.selected,
+    lightHealSpell = autoHealBot.lightHealSpellField.text,
+    lightHealHealth = parseTextFieldToInt(autoHealBot.lightHealHealthField.text),
+    lightHealMana = parseTextFieldToInt(autoHealBot.lightHealManaField.text),
+    strongHealSpell = autoHealBot.strongHealSpellField.text,
+    strongHealHealth = parseTextFieldToInt(autoHealBot.strongHealHealthField.text),
+    strongHealMana = parseTextFieldToInt(autoHealBot.strongHealManaField.text),
+    ihHealHealth = parseTextFieldToInt(autoHealBot.ihHealHealthField.text),
+    ihHealMana = parseTextFieldToInt(autoHealBot.ihHealManaField.text),
+    uhHealHealth = parseTextFieldToInt(autoHealBot.uhHealHealthField.text),
+    uhHealMana = parseTextFieldToInt(autoHealBot.uhHealManaField.text),
+    hPotionHealHealth = parseTextFieldToInt(autoHealBot.hPotionHealHealthField.text),
+    hPotionHealMana = parseTextFieldToInt(autoHealBot.hPotionHealManaField.text),
+    mPotionHealManaMin = parseTextFieldToInt(autoHealBot.mPotionHealManaMinField.text)
+  )
 
-    val protectionZoneSettings = ProtectionZoneSettings(
-      enabled = protectionZoneCheckbox.selected,
-      playerOnScreenAlert = protectionZoneBot.playerOnScreenAlertCheckbox.selected,
-      escapeToProtectionZone = protectionZoneBot.escapeToProtectionZoneCheckbox.selected,
-      ignoredCreatures = protectionZoneBot.getIgnoredCreatures,
-    )
-
-    val fishingSettings = FishingSettings(
-      enabled = fishingCheckbox.selected,
-      selectedRectangles = fishingBot.selectedRectangles,
-    )
-
-    val caveBotSettings = CaveBotSettings(
-      enabled = caveBotCheckbox.selected,
-      waypointsList = caveBotBot.waypointsList,
-    )
-
-    val autoTargetSettings = AutoTargetSettings(
-      enabled = autoTargetCheckbox.selected,
-      targetMonstersOnBattle = autoTargetBot.targetMonstersOnBattleCheckbox.selected,
-      creaturePriorityList = autoTargetBot.creaturePriorityList.toList,
-    )
-
-    val autoResponderSettings = AutoResponderSettings(
-      enabled = autoResponderCheckbox.selected,
-    )
-
-    val trainingSettings = TrainingSettings(
-      enabled = trainingCheckbox.selected,
-      pickAmmunition = trainingBot.pickAmmunitionCheckbox.selected,
-      refillAmmunition = trainingBot.refillAmmunitionCheckbox.selected,
-      doNotKillTarget = trainingBot.doNotKillTargetCheckbox.selected,
-      switchAttackModeToEnsureDamage = trainingBot.switchAttackModeToEnsureDamageCheckbox.selected,
-      switchWeaponToEnsureDamage = trainingBot.switchWeaponToEnsureDamageCheckbox.selected,
-    )
+  def collectRuneMakingSettings(): RuneMakingSettings = RuneMakingSettings(
+    enabled = runeMakerCheckbox.selected,
+    selectedSpell = runeMakerBot.spellComboBox.selection.item,
+    requiredMana = parseTextFieldToInt(runeMakerBot.manaTextField.text)
+  )
 
 
-    UISettings(
-      healingSettings = healingSettings,
-      runeMakingSettings = runeMakingSettings,
-      protectionZoneSettings = protectionZoneSettings,
-      fishingSettings = fishingSettings,
-      autoResponderSettings = autoResponderSettings,
-      trainingSettings = trainingSettings,
-      mouseMovements = mouseMovementsCheckbox.selected,
-      autoTargetSettings = autoTargetSettings,
-      caveBotSettings = caveBotSettings,
-    )
-  }
+  def collectProtectionZoneSettings(): ProtectionZoneSettings = ProtectionZoneSettings(
+    enabled = protectionZoneCheckbox.selected,
+    playerOnScreenAlert = protectionZoneBot.playerOnScreenAlertCheckbox.selected,
+    escapeToProtectionZone = protectionZoneBot.escapeToProtectionZoneCheckbox.selected,
+    ignoredCreatures = protectionZoneBot.getIgnoredCreatures
+  )
+
+  def collectFishingSettings(): FishingSettings = FishingSettings(
+    enabled = fishingCheckbox.selected,
+    selectedRectangles = fishingBot.selectedRectangles
+  )
+
+  def collectCaveBotSettings(): CaveBotSettings = CaveBotSettings(
+    enabled = caveBotCheckbox.selected,
+    waypointsList = jListToSeq(caveBotBot.waypointsList)
+  )
+
+
+  def collectAutoTargetSettings(): AutoTargetSettings = AutoTargetSettings(
+    enabled = autoTargetCheckbox.selected,
+    creatureList = jListToSeq(autoTargetBot.creatureList),
+    targetMonstersOnBattle = autoTargetBot.targetMonstersOnBattleCheckbox.selected
+  )
+
+
+  def collectAutoResponderSettings(): AutoResponderSettings = AutoResponderSettings(
+    enabled = autoResponderCheckbox.selected
+  )
+
+  def collectTrainingSettings(): TrainingSettings = TrainingSettings(
+    enabled = trainingCheckbox.selected,
+    pickAmmunition = trainingBot.pickAmmunitionCheckbox.selected,
+    refillAmmunition = trainingBot.refillAmmunitionCheckbox.selected,
+    doNotKillTarget = trainingBot.doNotKillTargetCheckbox.selected,
+    switchAttackModeToEnsureDamage = trainingBot.switchAttackModeToEnsureDamageCheckbox.selected,
+    switchWeaponToEnsureDamage = trainingBot.switchWeaponToEnsureDamageCheckbox.selected
+  )
+
+
+  def collectSettingsFromUI(): UISettings = UISettings(
+    healingSettings = collectHealingSettings(),
+    runeMakingSettings = collectRuneMakingSettings(),
+    protectionZoneSettings = collectProtectionZoneSettings(),
+    fishingSettings = collectFishingSettings(),
+    caveBotSettings = collectCaveBotSettings(),
+    autoTargetSettings = collectAutoTargetSettings(),
+    autoResponderSettings = collectAutoResponderSettings(),
+    trainingSettings = collectTrainingSettings(),
+    mouseMovements = mouseMovementsCheckbox.selected
+  )
+
 
   // Helper function to safely parse integer values from text fields
   def parseTextFieldToInt(text: String): Int = {
@@ -142,71 +146,109 @@ class SwingApp(playerClassList: List[Player],
     }
   }
 
-
   val loadButton = new Button("Load Settings") {
     reactions += {
       case ButtonClicked(_) =>
+        println("Load button clicked") // Confirm button press
         val chooser = new FileChooser(new java.io.File("C:\\MyLibraries\\botSettings"))
         chooser.title = "Load Settings"
         val result = chooser.showOpenDialog(null)
+        println(s"FileChooser result: $result") // Check the result of the file chooser
         if (result == FileChooser.Result.Approve) {
-          SettingsUtils.loadSettingsFromFile(chooser.selectedFile.getAbsolutePath).foreach { settings =>
-            applySettingsToUI(settings)
+          println(s"File chosen: ${chooser.selectedFile.getAbsolutePath}") // Log the path of the selected file
+          SettingsUtils.loadSettingsFromFile(chooser.selectedFile.getAbsolutePath) match {
+            case Some(settings) =>
+              println("Settings loaded successfully, applying to UI...") // Confirm settings were loaded
+              applySettingsToUI(settings)
+            case None =>
+              println("Failed to load settings from file.") // Indicate failure
           }
+        } else {
+          println("File selection was cancelled or failed.") // Log cancellation or failure
         }
     }
   }
 
 
+  def setListModel(jList: JList[String], items: Seq[String]): Unit = {
+    val model = new DefaultListModel[String]()
+    items.foreach(model.addElement)
+    jList.setModel(model)
+  }
+
+
   def applySettingsToUI(settings: UISettings): Unit = {
-    // CheckBox settings
-    autoHealCheckbox.selected = settings.healingSettings.enabled
-    runeMakerCheckbox.selected = settings.runeMakingSettings.enabled
-
-    protectionZoneCheckbox.selected = settings.protectionZoneSettings.enabled
-    protectionZoneBot.playerOnScreenAlertCheckbox.selected = settings.protectionZoneSettings.playerOnScreenAlert
-    protectionZoneBot.escapeToProtectionZoneCheckbox.selected = settings.protectionZoneSettings.escapeToProtectionZone
-    protectionZoneBot.setIgnoredCreatures(settings.protectionZoneSettings.ignoredCreatures)
-    fishingCheckbox.selected = settings.fishingSettings.enabled
-    autoResponderCheckbox.selected = settings.autoResponderSettings.enabled
-    trainingCheckbox.selected = settings.trainingSettings.enabled
-    trainingBot.pickAmmunitionCheckbox.selected = settings.trainingSettings.pickAmmunition
-    trainingBot.refillAmmunitionCheckbox.selected = settings.trainingSettings.refillAmmunition
-    trainingBot.doNotKillTargetCheckbox.selected = settings.trainingSettings.doNotKillTarget
-    trainingBot.switchAttackModeToEnsureDamageCheckbox.selected = settings.trainingSettings.switchAttackModeToEnsureDamage
-    trainingBot.switchWeaponToEnsureDamageCheckbox.selected = settings.trainingSettings.switchWeaponToEnsureDamage
-    caveBotCheckbox.selected = settings.caveBotSettings.enabled
-    autoTargetCheckbox.selected = settings.autoTargetSettings.enabled
-    autoTargetBot.targetMonstersOnBattleCheckbox.selected = settings.autoTargetSettings.targetMonstersOnBattle
-    autoTargetBot.setTargetPriority(settings.protectionZoneSettings.ignoredCreatures)
-    // caveBotBot.setIgnoredCreatures(settings.protectionZoneSettings.ignoredCreatures)
-
+    // General settings
     mouseMovementsCheckbox.selected = settings.mouseMovements
 
+    // Apply individual settings modules
+    applyHealingSettings(settings.healingSettings)
+    applyCaveBotSettings(settings.caveBotSettings)
+    applyAutoTargetSettings(settings.autoTargetSettings)
 
-
-    // TextField settings for HealingSettings
-    autoHealBot.lightHealSpellField.text = settings.healingSettings.lightHealSpell
-    autoHealBot.lightHealHealthField.text = settings.healingSettings.lightHealHealth.toString
-    autoHealBot.lightHealManaField.text = settings.healingSettings.lightHealMana.toString
-    autoHealBot.strongHealSpellField.text = settings.healingSettings.strongHealSpell
-    autoHealBot.strongHealHealthField.text = settings.healingSettings.strongHealHealth.toString
-    autoHealBot.strongHealManaField.text = settings.healingSettings.strongHealMana.toString
-    autoHealBot.ihHealHealthField.text = settings.healingSettings.ihHealHealth.toString
-    autoHealBot.ihHealManaField.text = settings.healingSettings.ihHealMana.toString
-    autoHealBot.uhHealHealthField.text = settings.healingSettings.uhHealHealth.toString
-    autoHealBot.uhHealManaField.text = settings.healingSettings.uhHealMana.toString
-    autoHealBot.hPotionHealHealthField.text = settings.healingSettings.hPotionHealHealth.toString
-    autoHealBot.hPotionHealManaField.text = settings.healingSettings.hPotionHealMana.toString
-    autoHealBot.mPotionHealManaMinField.text = settings.healingSettings.mPotionHealManaMin.toString
-
-    // Apply other settings fields if necessary
   }
 
+  //   Detailed implementation for each settings group, example:
   def applyHealingSettings(healingSettings: HealingSettings): Unit = {
     autoHealCheckbox.selected = healingSettings.enabled
-    // Assume there are methods or logic here to apply the rest of the healing settings
+    autoHealBot.lightHealSpellField.text = healingSettings.lightHealSpell
+    autoHealBot.lightHealHealthField.text = healingSettings.lightHealHealth.toString
+    autoHealBot.lightHealManaField.text = healingSettings.lightHealMana.toString
+    autoHealBot.strongHealSpellField.text = healingSettings.strongHealSpell
+    autoHealBot.strongHealHealthField.text = healingSettings.strongHealHealth.toString
+    autoHealBot.strongHealManaField.text = healingSettings.strongHealMana.toString
+    autoHealBot.ihHealHealthField.text = healingSettings.ihHealHealth.toString
+    autoHealBot.ihHealManaField.text = healingSettings.ihHealMana.toString
+    autoHealBot.uhHealHealthField.text = healingSettings.uhHealHealth.toString
+    autoHealBot.uhHealManaField.text = healingSettings.uhHealMana.toString
+    autoHealBot.hPotionHealHealthField.text = healingSettings.hPotionHealHealth.toString
+    autoHealBot.hPotionHealManaField.text = healingSettings.hPotionHealMana.toString
+    autoHealBot.mPotionHealManaMinField.text = healingSettings.mPotionHealManaMin.toString
   }
+
+
+  def applyCaveBotSettings(caveBotSettings: CaveBotSettings): Unit = {
+    caveBotCheckbox.selected = caveBotSettings.enabled
+    setListModel(caveBotBot.waypointsList, caveBotSettings.waypointsList)
+  }
+
+
+
+  def applyAutoTargetSettings(autoTargetSettings: AutoTargetSettings): Unit = {
+    autoTargetCheckbox.selected = autoTargetSettings.enabled
+    setListModel(autoTargetBot.creatureList, autoTargetSettings.creatureList)
+    autoTargetBot.targetMonstersOnBattleCheckbox.selected = autoTargetSettings.targetMonstersOnBattle
+  }
+
+
+  //    // CheckBox settings
+//    autoHealCheckbox.selected = settings.healingSettings.enabled
+//    runeMakerCheckbox.selected = settings.runeMakingSettings.enabled
+//
+//    protectionZoneCheckbox.selected = settings.protectionZoneSettings.enabled
+//    protectionZoneBot.playerOnScreenAlertCheckbox.selected = settings.protectionZoneSettings.playerOnScreenAlert
+//    protectionZoneBot.escapeToProtectionZoneCheckbox.selected = settings.protectionZoneSettings.escapeToProtectionZone
+//    protectionZoneBot.setIgnoredCreatures(settings.protectionZoneSettings.ignoredCreatures)
+//    fishingCheckbox.selected = settings.fishingSettings.enabled
+//    autoResponderCheckbox.selected = settings.autoResponderSettings.enabled
+//    trainingCheckbox.selected = settings.trainingSettings.enabled
+//    trainingBot.pickAmmunitionCheckbox.selected = settings.trainingSettings.pickAmmunition
+//    trainingBot.refillAmmunitionCheckbox.selected = settings.trainingSettings.refillAmmunition
+//    trainingBot.doNotKillTargetCheckbox.selected = settings.trainingSettings.doNotKillTarget
+//    trainingBot.switchAttackModeToEnsureDamageCheckbox.selected = settings.trainingSettings.switchAttackModeToEnsureDamage
+//    trainingBot.switchWeaponToEnsureDamageCheckbox.selected = settings.trainingSettings.switchWeaponToEnsureDamage
+//    caveBotCheckbox.selected = settings.caveBotSettings.enabled
+//    autoTargetCheckbox.selected = settings.autoTargetSettings.enabled
+//    autoTargetBot.targetMonstersOnBattleCheckbox.selected = settings.autoTargetSettings.targetMonstersOnBattle
+////    autoTargetBot.setTargetPriority(settings.autoTargetSettings.creatureList)
+//
+//
+//
+//
+//    // TextField settings for HealingSettings
+//
+//    // Apply other settings fields if necessary
+//  }
 
   def applyRuneMakingSettings(runeMakingSettings: RuneMakingSettings): Unit = {
     runeMakerCheckbox.selected = runeMakingSettings.enabled
@@ -234,15 +276,6 @@ class SwingApp(playerClassList: List[Player],
     autoResponderCheckbox.selected = autoResponderSettings.enabled
   }
 
-  def applyCaveBotSettings(caveBotSettings: CaveBotSettings): Unit = {
-    caveBotCheckbox.selected = caveBotSettings.enabled
-  }
-
-  def applyAutoTargetSettings(autoTargetSettings: AutoTargetSettings): Unit = {
-    autoTargetCheckbox.selected = autoTargetSettings.enabled
-    autoTargetBot.targetMonstersOnBattleCheckbox.selected = autoTargetSettings.targetMonstersOnBattle
-    autoTargetBot.setTargetPriority(autoTargetSettings.creaturePriorityList.toBuffer)
-  }
   def applyGeneralSettings(settings: UISettings): Unit = {
 //    fishingCheckbox.selected = settings.fishingSettings.enabled
     mouseMovementsCheckbox.selected = settings.mouseMovements
@@ -375,7 +408,7 @@ class SwingApp(playerClassList: List[Player],
 
     pages += new TabbedPane.Page("Auto Target", autoTargetBot.autoTargetTab)
 
-    pages += new TabbedPane.Page("Rune Maker", runeMaker.runeMakerTab)
+    pages += new TabbedPane.Page("Rune Maker", runeMakerBot.runeMakerTab)
 
     pages += new TabbedPane.Page("Trainer", trainingBot.trainerTab)
 
@@ -458,7 +491,10 @@ class SwingApp(playerClassList: List[Player],
         updateExample()
     }
   }
-  // Initialize UI state here if necessary
-  // ...similar to the second snippet
+
+
+
+
+
 }
 

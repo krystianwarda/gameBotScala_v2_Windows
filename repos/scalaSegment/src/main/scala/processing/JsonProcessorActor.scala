@@ -72,6 +72,7 @@ case class ProcessorState(
                            lastDirection: Option[String] = None,
                            lastAutoTargetCommandSend: Long = 0,
                            creatureTarget: Int = 0,
+                         
                            positionStagnantCount: Int = 0,
                            lastPosition: Option[Vec] = None,
                            uhRuneContainerName: String = "not_set",

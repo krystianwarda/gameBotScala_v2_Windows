@@ -69,57 +69,61 @@ object AutoTarget {
           } else None
         }.toSeq
 
-        // Printing the entire list of monsters with IDs and names
-        monsters.foreach { case (id, name) =>
-          println(s"Monster ID: $id, Name: $name")
-        }
+        println(s"Monsters: ${settings.autoTargetSettings.creatureList}")
 
-        // Filter and sort based on priority list
-        val priorityList = settings.autoTargetSettings.creaturePriorityList
-        var sortedMonsters = monsters
-          .filter { case (_, name) => priorityList.contains(name) }
-          .sortBy { case (_, name) => priorityList.indexOf(name) }
-
-        // Filter monsters with ID >= 5
-        sortedMonsters = sortedMonsters.filter { case (id, _) => id >= 5 }
-
-        // Sort the filtered list based on Y-coordinate in ascending order
-        sortedMonsters = sortedMonsters.sortBy { case (id, _) =>
-          val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ id.toString).asOpt[JsObject]
-          battleCreaturePosition match {
-            case Some(pos) => (pos \ "PosY").as[Int]
-            case None => Int.MaxValue // If position information is not available, put it at the end
-          }
-        }
-
-        // Take top 4 elements
-        val topFourMonsters = sortedMonsters.take(4)
-
-        // Sort the top 4 monsters based on priority
-        val sortedTopFourMonsters = topFourMonsters.sortBy { case (_, name) => priorityList.indexOf(name) }
-
-        sortedTopFourMonsters.headOption match {
-          case Some((id, name)) =>
-            println(s"Attack creature name: $name, and id: $id")
-            val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ id.toString).asOpt[JsObject]
-
-            battleCreaturePosition match {
-              case Some(pos) =>
-                val battleCreaturePositionX = (pos \ "PosX").as[Int]
-                val battleCreaturePositionY = (pos \ "PosY").as[Int]
-                println(s"Attack creature on battle positionX: $battleCreaturePositionX, and positionY: $battleCreaturePositionY")
-                val actionsSeq = Seq(
-                  MouseAction(battleCreaturePositionX, battleCreaturePositionY, "move"),
-                  MouseAction(battleCreaturePositionX, battleCreaturePositionY, "pressLeft"),
-                  MouseAction(battleCreaturePositionX, battleCreaturePositionY, "releaseLeft")
-                )
-                actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-              case None =>
-                println(s"No position information available for monster ID $id")
-            }
-          case None =>
-            println("No monsters found to attack.")
-        }
+//        // Printing the entire list of monsters with IDs and names
+//        monsters.foreach { case (id, name) =>
+//          println(s"Monster ID: $id, Name: $name")
+//        }
+//
+//        // Filter and sort based on priority list
+//        val priorityList = settings.autoTargetSettings.creaturePriorityList
+//        var sortedMonsters = monsters
+//          .filter { case (_, name) => priorityList.contains(name) }
+//          .sortBy { case (_, name) => priorityList.indexOf(name) }
+//
+//        // Filter monsters with ID >= 5
+//        sortedMonsters = sortedMonsters.filter { case (id, _) => id >= 5 }
+//
+//        // Sort the filtered list based on Y-coordinate in ascending order
+//        sortedMonsters = sortedMonsters.sortBy { case (id, _) =>
+//          val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ id.toString).asOpt[JsObject]
+//          battleCreaturePosition match {
+//            case Some(pos) => (pos \ "PosY").as[Int]
+//            case None => Int.MaxValue // If position information is not available, put it at the end
+//          }
+//        }
+//
+//        // Take top 4 elements
+//        val topFourMonsters = sortedMonsters.take(4)
+//
+//        // Sort the top 4 monsters based on priority
+//        val sortedTopFourMonsters = topFourMonsters.sortBy { case (_, name) => priorityList.indexOf(name) }
+//
+//        sortedTopFourMonsters.headOption match {
+//          case Some((id, name)) =>
+//            println(s"Attack creature name: $name, and id: $id")
+//            val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ id.toString).asOpt[JsObject]
+//
+//            battleCreaturePosition match {
+//              case Some(pos) =>
+//                val battleCreaturePositionX = (pos \ "PosX").as[Int]
+//                val battleCreaturePositionY = (pos \ "PosY").as[Int]
+//                println(s"Attack creature on battle positionX: $battleCreaturePositionX, and positionY: $battleCreaturePositionY")
+//                val actionsSeq = Seq(
+//                  MouseAction(battleCreaturePositionX, battleCreaturePositionY, "move"),
+//                  MouseAction(battleCreaturePositionX, battleCreaturePositionY, "pressLeft"),
+//                  MouseAction(battleCreaturePositionX, battleCreaturePositionY, "releaseLeft")
+//                )
+//                actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+//              case None =>
+//                println(s"No position information available for monster ID $id")
+//            }
+//          case None =>
+//            println("No monsters found to attack.")
+//        }
+//
+//
 
     }
 
