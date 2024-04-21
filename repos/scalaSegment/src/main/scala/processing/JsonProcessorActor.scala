@@ -20,6 +20,7 @@ import userUI.SettingsUtils.UISettings
 import keyboard.AutoResponderCommand
 import processing.CaveBot.{Vec, computeCaveBotActions}
 import processing.AutoTarget.{computeAutoTargetActions}
+import processing.AutoLoot.{computeAutoLootActions}
 import java.awt.event.{InputEvent, KeyEvent}
 import java.awt.{Robot, Toolkit}
 import java.io.{DataInputStream, DataOutputStream, IOException}
@@ -72,11 +73,13 @@ case class ProcessorState(
                            lastDirection: Option[String] = None,
                            lastAutoTargetCommandSend: Long = 0,
                            creatureTarget: Int = 0,
-                         
+                           lastTargetName: String = "",
+                           lastTargetPos: (Int, Int, Int) = (0,0,0),
                            positionStagnantCount: Int = 0,
                            lastPosition: Option[Vec] = None,
                            uhRuneContainerName: String = "not_set",
                            statusOfRuneAutoheal: String = "not_ready",
+                           stateHunting: String = "free",
                            caveBotLevelsList: List[Int] = List(),
                            antiOverpassDelay: Long = 0
 
@@ -188,12 +191,31 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     val afterTrainingState = performTraining(json, afterRuneMakingState)
     val afterProtectionZoneState = performProtectionZone(json, afterTrainingState)
     val afterAutoResponderState = performAutoResponder(json, afterProtectionZoneState)
-    val afterAutoTargetState = performAutoTarget(json, afterAutoResponderState)
+    val afterAutoLootState = performAutoLoot(json, afterAutoResponderState)
+    val afterAutoTargetState = performAutoTarget(json, afterAutoLootState)
     val afterCaveBotState = performCaveBot(json, afterAutoTargetState)
     // The final state after all updates
     afterCaveBotState
   }
 
+
+  def performAutoLoot(json: JsValue, currentState: ProcessorState): ProcessorState = {
+    val currentTime = System.currentTimeMillis()
+    currentState.settings.flatMap { settings =>
+      if (settings.autoTargetSettings.enabled) {
+        //        println("Performing cave bot action.")
+
+        // Call computeCaveBotActions with currentState
+        val ((actions, logs), updatedState) = computeAutoLootActions(json, settings, currentState.copy(lastCaveBotCommandSend = currentTime))
+
+        // Execute actions and logs if necessary
+        executeActionsAndLogs(actions, logs, Some(settings))
+
+        // Return the updated state from computeCaveBotActions, wrapped in an Option
+        Some(updatedState)
+      } else None // Here, None is explicitly an Option[ProcessorState], matching the expected return type
+    }.getOrElse(currentState) // If the settings flatMap results in None, return the original currentState
+  }
 
   def performProtectionZone(json: JsValue, currentState: ProcessorState): ProcessorState = {
     val currentTime = System.currentTimeMillis()

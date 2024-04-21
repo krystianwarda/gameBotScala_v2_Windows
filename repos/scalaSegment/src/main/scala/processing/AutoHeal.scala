@@ -19,8 +19,8 @@ object AutoHeal {
     val currentTime = System.currentTimeMillis()
 
     if (settings.healingSettings.enabled) {
-      println(s"Status autoheal : ${updatedState.statusOfRuneAutoheal}")
-      println(s"Status runeContainer : ${updatedState.uhRuneContainerName}")
+//      println(s"Status autoheal : ${updatedState.statusOfRuneAutoheal}")
+//      println(s"Status runeContainer : ${updatedState.uhRuneContainerName}")
 
       if (updatedState.statusOfRuneAutoheal == "open_new_backpack") {
         val newBpPosition = (json \ "screenInfo" \ "inventoryPanelLoc" \ updatedState.uhRuneContainerName \ "contentsPanel" \ "item0").as[JsObject]
@@ -77,7 +77,7 @@ object AutoHeal {
 
 
       if (updatedState.uhRuneContainerName == "not_set") {
-        logs = logs :+ Log(s"Checking for UH Rune container..")
+//        logs = logs :+ Log(s"Checking for UH Rune container..")
         val containersInfoOpt = (json \ "containersInfo").asOpt[JsObject]
 
         containersInfoOpt.foreach { containersInfo =>
