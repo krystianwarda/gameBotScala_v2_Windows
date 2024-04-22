@@ -15,7 +15,6 @@ object AutoTarget {
     val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
 
 
-// && updatedState.stateHunting == "free"
 
     if (settings.autoTargetSettings.enabled) {
 
@@ -25,8 +24,8 @@ object AutoTarget {
       logs = chaseModeUpdateResult._2
 
       val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
-      if ((settings.caveBotSettings.enabled && updatedState.caveBotLevelsList.contains(presentCharLocationZ)) || (!settings.caveBotSettings.enabled)) {
-
+      if (((settings.caveBotSettings.enabled && updatedState.caveBotLevelsList.contains(presentCharLocationZ)) || !settings.caveBotSettings.enabled)) {
+        println(s"AutoTarget is ON")
         (json \ "battleInfo").validate[Map[String, JsValue]] match {
           case JsSuccess(battleInfo, _) =>
             val hasMonsters = battleInfo.exists { case (_, creature) =>
@@ -74,93 +73,97 @@ object AutoTarget {
 
 
       case None =>
-        println("attackInfo is null or not present or Id is not an Int")
-        updatedState = updatedState.copy(creatureTarget = 0)
+        if (updatedState.stateHunting == "free") {
+          println("attackInfo is null or not present or Id is not an Int")
+          updatedState = updatedState.copy(creatureTarget = 0)
 
-        // Extract monsters, their IDs, and Names
-        val monsters: Seq[(Long, String)] = (json \ "battleInfo").as[JsObject].values.flatMap { creature =>
-          val isMonster = (creature \ "IsMonster").as[Boolean]
-          if (isMonster) {
-            Some((creature \ "Id").as[Long], (creature \ "Name").as[String])
-          } else None
-        }.toSeq
-
-
-//        println(s"Monsters from UI settings: ${settings.autoTargetSettings.creatureList}")
-//
-//
-//        // Printing the entire list of monsters with IDs and names
-//        monsters.foreach { case (id, name) =>
-//          println(s"Monster ID: $id, Name: $name")
-//        }
-
-        // Use the existing creatureList from settings
-        val jsonResult = transformToJSON(settings.autoTargetSettings.creatureList)
-        println(Json.prettyPrint(Json.toJson(jsonResult)))
-
-        // Now use Reads from the Creature object
-        val creatureDangerMap = jsonResult.map { json =>
-          val creature = Json.parse(json.toString()).as[Creature](Creature.reads)
-          (creature.name, creature.danger)
-        }.toMap
-
-        println(creatureDangerMap)
+          // Extract monsters, their IDs, and Names
+          val monsters: Seq[(Long, String)] = (json \ "battleInfo").as[JsObject].values.flatMap { creature =>
+            val isMonster = (creature \ "IsMonster").as[Boolean]
+            if (isMonster) {
+              Some((creature \ "Id").as[Long], (creature \ "Name").as[String])
+            } else None
+          }.toSeq
 
 
-        // Filter and sort based on the danger level, sorting by descending danger
-        var sortedMonsters = monsters
-          .filter { case (_, name) => creatureDangerMap.contains(name) }
-          .sortBy { case (_, name) => -creatureDangerMap(name) } // Descending order of danger
+          //        println(s"Monsters from UI settings: ${settings.autoTargetSettings.creatureList}")
+          //
+          //
+          //        // Printing the entire list of monsters with IDs and names
+          //        monsters.foreach { case (id, name) =>
+          //          println(s"Monster ID: $id, Name: $name")
+          //        }
 
-        // Filter monsters with ID >= 5
-        sortedMonsters = sortedMonsters.filter { case (id, _) => id >= 5 }
+          // Use the existing creatureList from settings
+          val jsonResult = transformToJSON(settings.autoTargetSettings.creatureList)
+//          println(Json.prettyPrint(Json.toJson(jsonResult)))
 
+          // Now use Reads from the Creature object
+          val creatureDangerMap = jsonResult.map { json =>
+            val creature = Json.parse(json.toString()).as[Creature](Creature.reads)
+            (creature.name, creature.danger)
+          }.toMap
 
-        // Sort based on danger and position
-        sortedMonsters = sortedMonsters.sortBy { case (_, name) => -creatureDangerMap(name) }
-
-        // Further filter and sort
-        sortedMonsters = sortedMonsters
-          .filter { case (id, _) => id >= 5 }
-          .sortBy { case (id, _) =>
-            val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ id.toString).asOpt[JsObject]
-            battleCreaturePosition.flatMap(pos => (pos \ "PosY").asOpt[Int]).getOrElse(Int.MaxValue)
-          }
-
-        // Take top 4 elements and re-sort
-        val topFourMonsters = sortedMonsters.take(4)
-          .sortBy { case (_, name) => -creatureDangerMap(name) }
+//          println(creatureDangerMap)
 
 
-        // Process the highest priority target
-        topFourMonsters.headOption match {
-          case Some((id, name)) =>
-//            println(s"Attack creature name: $name, and id: $id")
-            val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ id.toString).asOpt[JsObject]
+          // Filter and sort based on the danger level, sorting by descending danger
+          var sortedMonsters = monsters
+            .filter { case (_, name) => creatureDangerMap.contains(name) }
+            .sortBy { case (_, name) => -creatureDangerMap(name) } // Descending order of danger
+
+          // Filter monsters with ID >= 5
+          sortedMonsters = sortedMonsters.filter { case (id, _) => id >= 5 }
 
 
-            battleCreaturePosition match {
-              case Some(pos) =>
-                val battleCreaturePositionX = (pos \ "PosX").asOpt[Int].getOrElse(0)
-                val battleCreaturePositionY = (pos \ "PosY").asOpt[Int].getOrElse(0)
-//                println(s"Attack creature on battle positionX: $battleCreaturePositionX, and positionY: $battleCreaturePositionY")
+          // Sort based on danger and position
+          sortedMonsters = sortedMonsters.sortBy { case (_, name) => -creatureDangerMap(name) }
 
-
-                // Perform the mouse actions
-                val actionsSeq = Seq(
-                  MouseAction(battleCreaturePositionX, battleCreaturePositionY, "move"),
-                  MouseAction(battleCreaturePositionX, battleCreaturePositionY, "pressLeft"),
-                  MouseAction(battleCreaturePositionX, battleCreaturePositionY, "releaseLeft")
-                )
-               actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-
-
-              case None =>
-                println(s"No position information available for monster ID $id")
+          // Further filter and sort
+          sortedMonsters = sortedMonsters
+            .filter { case (id, _) => id >= 5 }
+            .sortBy { case (id, _) =>
+              val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ id.toString).asOpt[JsObject]
+              battleCreaturePosition.flatMap(pos => (pos \ "PosY").asOpt[Int]).getOrElse(Int.MaxValue)
             }
-          case None =>
-            println("No monsters found to attack.")
+
+          // Take top 4 elements and re-sort
+          val topFourMonsters = sortedMonsters.take(4)
+            .sortBy { case (_, name) => -creatureDangerMap(name) }
+
+
+          // Process the highest priority target
+          topFourMonsters.headOption match {
+            case Some((id, name)) =>
+              println(s"Attack creature name: $name, and id: $id")
+              val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ id.toString).asOpt[JsObject]
+
+
+              battleCreaturePosition match {
+                case Some(pos) =>
+                  val battleCreaturePositionX = (pos \ "PosX").asOpt[Int].getOrElse(0)
+                  val battleCreaturePositionY = (pos \ "PosY").asOpt[Int].getOrElse(0)
+                  println(s"Attack creature on battle positionX: $battleCreaturePositionX, and positionY: $battleCreaturePositionY")
+
+                  updatedState = updatedState.copy(lastTargetName = name)
+
+                  // Perform the mouse actions
+                  val actionsSeq = Seq(
+                    MouseAction(battleCreaturePositionX, battleCreaturePositionY, "move"),
+                    MouseAction(battleCreaturePositionX, battleCreaturePositionY, "pressLeft"),
+                    MouseAction(battleCreaturePositionX, battleCreaturePositionY, "releaseLeft")
+                  )
+                  actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+
+
+                case None =>
+                  println(s"No position information available for monster ID $id")
+              }
+            case None =>
+              println("No monsters found to attack.")
+          }
         }
+
     }
 
 

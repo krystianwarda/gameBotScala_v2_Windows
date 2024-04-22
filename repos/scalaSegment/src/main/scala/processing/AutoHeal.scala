@@ -99,10 +99,11 @@ object AutoHeal {
       }
 
       if (updatedState.uhRuneContainerName != "not_set" && updatedState.statusOfRuneAutoheal == "ready") {
-        logs = logs :+ Log(s"UH Rune container set to ${updatedState.uhRuneContainerName}. Checking for free space and parent...")
+//        logs = logs :+ Log(s"UH Rune container set to ${updatedState.uhRuneContainerName}. Checking for free space and parent...")
         (json \ "containersInfo" \ updatedState.uhRuneContainerName).asOpt[JsObject].foreach { containerInfo =>
           val freeSpace = (containerInfo \ "freeSpace").asOpt[Int]
           val hasParent = (containerInfo \ "hasParent").asOpt[Boolean]
+
 
           if (freeSpace.contains(20) && hasParent.contains(true)) {
 

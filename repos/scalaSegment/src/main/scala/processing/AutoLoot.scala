@@ -17,11 +17,11 @@ object AutoLoot {
           updatedState = updatedState.copy(stateHunting = "attacking")
           println(s"attackInfo is not null, still fighting target Id: $attackedCreatureTarget, can't loot yet")
         case None =>
-
+          println("Trying to loot.")
           if (updatedState.lastTargetName == "") {
-            println("No target specified, no action taken.")
+            println("No target specified, no looting needed.")
           } else {
-
+            println("Trying to loot2.")
             if (updatedState.stateHunting == "opening window") {
 
               println("stage: opening window")
@@ -46,7 +46,7 @@ object AutoLoot {
                     MouseAction(xPosWindowOpen, yPosWindowOpen, "releaseLeft"),
                   )
                   actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-
+                  updatedState = updatedState.copy(stateHunting = "free") // looting later
                 case None =>
                   println("No Open position available or extraWindowLoc is null")
               }
@@ -57,13 +57,8 @@ object AutoLoot {
               val yPositionGame = updatedState.lastTargetPos._2
               val zPositionGame = updatedState.lastTargetPos._3
 
-              println(s"Creature in game position $xPositionGame, $yPositionGame, $zPositionGame")
+              println(s"Creature (${updatedState.lastTargetName}) in game position $xPositionGame, $yPositionGame, $zPositionGame")
 
-//              // Generate the key as a concatenated string of x, y, z with a leading zero for single-digit z
-//              val positionKey = f"$xPositionGame$yPositionGame${zPositionGame}%02d" // Adds leading zero if z is a single digit
-//
-//              // Fetch tile information from JSON using the position key
-//              val tileInfoJson = (json \ "areaInfo" \ "tiles" \ positionKey).asOpt[JsObject]
 
               // Function to generate position keys with padding on z-coordinate
               def generatePositionKey(x: Int, y: Int, z: Int): String = f"$x$y${z}%02d"
@@ -103,48 +98,37 @@ object AutoLoot {
 
               println(s"Creature screen index $indexOpt")
 
-              // Fetch screen coordinates from JSON using the index
-              val screenCoordsOpt = indexOpt.flatMap { index =>
-                (json \ "screenInfo" \ "mapPanelLoc" \ index).asOpt[JsObject].flatMap { coords =>
-                  for {
-                    x <- (coords \ "x").asOpt[Int]
-                    y <- (coords \ "y").asOpt[Int]
-                  } yield (x, y)
-                }
-              }.getOrElse((0, 0)) // Default coordinates if not found
+              if (!indexOpt.isEmpty) {
+                // Fetch screen coordinates from JSON using the index
+                val screenCoordsOpt = indexOpt.flatMap { index =>
+                  (json \ "screenInfo" \ "mapPanelLoc" \ index).asOpt[JsObject].flatMap { coords =>
+                    for {
+                      x <- (coords \ "x").asOpt[Int]
+                      y <- (coords \ "y").asOpt[Int]
+                    } yield (x, y)
+                  }
+                }.getOrElse((0, 0)) // Default coordinates if not found
 
-              println(s"Screen coordinates are x: ${screenCoordsOpt._1}, y: ${screenCoordsOpt._2}")
+                println(s"Screen coordinates are x: ${screenCoordsOpt._1}, y: ${screenCoordsOpt._2}")
 
-              // Define the sequence of mouse actions based on retrieved screen coordinates
-              val (xPositionScreen, yPositionScreen) = screenCoordsOpt
-              
+                // Define the sequence of mouse actions based on retrieved screen coordinates
+                val (xPositionScreen, yPositionScreen) = screenCoordsOpt
 
-              println(s"Creature body screen position $xPositionScreen, $yPositionScreen")
 
-              val actionsSeq = Seq(
-                MouseAction(xPositionScreen, yPositionScreen, "move"),
-                MouseAction(xPositionScreen, yPositionScreen, "pressCtrl"),
-                MouseAction(xPositionScreen, yPositionScreen, "pressLeft"),
-                MouseAction(xPositionScreen, yPositionScreen, "releaseLeft"),
-                MouseAction(xPositionScreen, yPositionScreen, "releaseCtrl")
-              )
+                println(s"Creature body screen position $xPositionScreen, $yPositionScreen")
 
-              actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-              updatedState = updatedState.copy(stateHunting = "opening window")
+                val actionsSeq = Seq(
+                  MouseAction(xPositionScreen, yPositionScreen, "move"),
+                  MouseAction(xPositionScreen, yPositionScreen, "pressCtrl"),
+                  MouseAction(xPositionScreen, yPositionScreen, "pressLeft"),
+                  MouseAction(xPositionScreen, yPositionScreen, "releaseLeft"),
+                  MouseAction(xPositionScreen, yPositionScreen, "releaseCtrl")
+                )
 
-            } else if (updatedState.stateHunting == "opening creature") {
-
-              updatedState = updatedState.copy(stateHunting = "looting")
-            } else if (updatedState.stateHunting == "looting") {
-              // check if something is lootable
-
-              // if not
-              updatedState = updatedState.copy(lastTargetName = "")
-              updatedState = updatedState.copy(lastTargetPos = (0, 0, 0))
-              updatedState = updatedState.copy(stateHunting = "free")
-
+                actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+                updatedState = updatedState.copy(stateHunting = "opening window")
+              }
             }
-
           }
       }
     }
