@@ -62,7 +62,12 @@ object SettingsUtils {
 
   case class CaveBotSettings(
                               enabled: Boolean,
-                              waypointsList: Seq[String]
+                              waypointsList: Seq[String],
+                            )
+
+  case class AutoLootSettings(
+                              enabled: Boolean,
+                              lootList: Seq[String],
                             )
 
   case class AutoTargetSettings(
@@ -90,6 +95,7 @@ object SettingsUtils {
   implicit val rectangleSettingsFormat: Format[RectangleSettings] = Json.format[RectangleSettings]
   implicit val autoTargetSettingsFormat: Format[AutoTargetSettings] = Json.format[AutoTargetSettings]
   implicit val caveBotSettingsFormat: Format[CaveBotSettings] = Json.format[CaveBotSettings]
+  implicit val autoLootSettingsFormat: Format[AutoLootSettings] = Json.format[AutoLootSettings]
 
   // Now define the UISettings case class
   case class UISettings(
@@ -101,6 +107,7 @@ object SettingsUtils {
                          trainingSettings: TrainingSettings,
                          mouseMovements: Boolean,
                          caveBotSettings: CaveBotSettings,
+                         autoLootSettings: AutoLootSettings,
                          autoTargetSettings: AutoTargetSettings,
                          // Add other settings or groups of settings as needed
                        )

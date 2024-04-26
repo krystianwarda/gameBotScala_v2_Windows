@@ -34,6 +34,7 @@ class SwingApp(playerClassList: List[Player],
   val autoHealBot = new AutoHealBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val caveBotBot = new CaveBotBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val autoTargetBot = new AutoTargetBot(currentPlayer, uiAppActor, jsonProcessorActor)
+  val autoLootBot = new AutoLootBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val runeMakerBot = new RuneMakerBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val fishingBot = new FishingBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val protectionZoneBot = new ProtectionZoneBot(currentPlayer, uiAppActor, jsonProcessorActor)
@@ -89,6 +90,10 @@ class SwingApp(playerClassList: List[Player],
     waypointsList = jListToSeq(caveBotBot.waypointsList)
   )
 
+  def collectAutoLootSettings(): AutoLootSettings = AutoLootSettings(
+    enabled = autoLootCheckbox.selected,
+    lootList = jListToSeq(autoLootBot.lootList)
+  )
 
   def collectAutoTargetSettings(): AutoTargetSettings = AutoTargetSettings(
     enabled = autoTargetCheckbox.selected,
@@ -118,6 +123,7 @@ class SwingApp(playerClassList: List[Player],
     fishingSettings = collectFishingSettings(),
     caveBotSettings = collectCaveBotSettings(),
     autoTargetSettings = collectAutoTargetSettings(),
+    autoLootSettings = collectAutoLootSettings(),
     autoResponderSettings = collectAutoResponderSettings(),
     trainingSettings = collectTrainingSettings(),
     mouseMovements = mouseMovementsCheckbox.selected
@@ -211,7 +217,6 @@ class SwingApp(playerClassList: List[Player],
     caveBotCheckbox.selected = caveBotSettings.enabled
     setListModel(caveBotBot.waypointsList, caveBotSettings.waypointsList)
   }
-
 
 
   def applyAutoTargetSettings(autoTargetSettings: AutoTargetSettings): Unit = {
@@ -317,12 +322,14 @@ class SwingApp(playerClassList: List[Player],
   val mouseMovementsCheckbox = new CheckBox("Mouse Movements")
   val protectionZoneCheckbox = new CheckBox("Protection Zone")
   val autoTargetCheckbox = new CheckBox("Auto Target")
+  val autoLootCheckbox = new CheckBox("Auto Loot")
   // ...and other fields and buttons as in the second snippet
 
   // Define UI behavior and event handling here, similar to the second snippet...
   listenTo(autoHealCheckbox, runeMakerCheckbox, trainingCheckbox, caveBotCheckbox,
     autoResponderCheckbox, protectionZoneCheckbox, fishingCheckbox,
     mouseMovementsCheckbox, protectionZoneCheckbox, autoTargetCheckbox,
+    autoLootCheckbox,
   )
   //  exampleDropdown.selection
   reactions += {
@@ -362,9 +369,14 @@ class SwingApp(playerClassList: List[Player],
       println("Mouse Movements Checkbox clicked")
     // Add logic for when caveBotCheckbox is clicked
 
+    case ButtonClicked(`autoLootCheckbox`) =>
+      println("Auto Loot Checkbox clicked")
+    // Add logic for when caveBotCheckbox is clicked
 
     case SelectionChanged(`exampleDropdown`) =>
       println("Dropdown selection changed")
+
+
     // Add logic for when the selection in exampleDropdown changes
   }
 
@@ -382,7 +394,7 @@ class SwingApp(playerClassList: List[Player],
       // Adding Checkboxes in the first column
       val checkBoxComponents = Seq(autoHealCheckbox, runeMakerCheckbox, trainingCheckbox,
         caveBotCheckbox, fishingCheckbox, mouseMovementsCheckbox,autoResponderCheckbox,
-        protectionZoneCheckbox, autoTargetCheckbox)
+        protectionZoneCheckbox, autoTargetCheckbox, autoLootCheckbox)
 
       for ((checkbox, idx) <- checkBoxComponents.zipWithIndex) {
         c.gridx = 0
@@ -407,6 +419,8 @@ class SwingApp(playerClassList: List[Player],
     pages += new TabbedPane.Page("Cave Bot", caveBotBot.caveBotTab)
 
     pages += new TabbedPane.Page("Auto Target", autoTargetBot.autoTargetTab)
+
+    pages += new TabbedPane.Page("Auto Loot", autoLootBot.autoLootTab)
 
     pages += new TabbedPane.Page("Rune Maker", runeMakerBot.runeMakerTab)
 

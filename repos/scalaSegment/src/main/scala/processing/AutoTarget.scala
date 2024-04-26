@@ -85,15 +85,6 @@ object AutoTarget {
             } else None
           }.toSeq
 
-
-          //        println(s"Monsters from UI settings: ${settings.autoTargetSettings.creatureList}")
-          //
-          //
-          //        // Printing the entire list of monsters with IDs and names
-          //        monsters.foreach { case (id, name) =>
-          //          println(s"Monster ID: $id, Name: $name")
-          //        }
-
           // Use the existing creatureList from settings
           val jsonResult = transformToJSON(settings.autoTargetSettings.creatureList)
 //          println(Json.prettyPrint(Json.toJson(jsonResult)))
@@ -104,7 +95,18 @@ object AutoTarget {
             (creature.name, creature.danger)
           }.toMap
 
-//          println(creatureDangerMap)
+          // create a list of monsters to be looted
+          if (updatedState.monstersListToLoot.isEmpty) {
+            // Parse JSON to List of Creature objects and filter to get names of creatures with loot
+            val monstersWithLoot = jsonResult.flatMap { json =>
+              Json.parse(json.toString()).validate[Creature] match {
+                case JsSuccess(creature, _) if creature.loot => Some(creature.name)
+                case _ => None
+              }
+            }
+            // Assuming updatedState is being updated within a case class or similar context
+            updatedState = updatedState.copy(monstersListToLoot = monstersWithLoot)
+          }
 
 
           // Filter and sort based on the danger level, sorting by descending danger
@@ -254,7 +256,8 @@ object AutoTarget {
                        hpFrom: Int,
                        hpTo: Int,
                        danger: Int,
-                       targetBattle: Boolean
+                       targetBattle: Boolean,
+                       loot: Boolean,
                      )
 
   object Creature {
@@ -270,7 +273,8 @@ object AutoTarget {
     val hpRange = parts(2).split(": ")(1).split("-").map(_.toInt)
     val danger = parts(3).split(": ")(1).toInt
     val targetBattle = parts(4).split(": ")(1).equalsIgnoreCase("yes")
-    Creature(name, count, hpRange(0), hpRange(1), danger, targetBattle)
+    val loot = parts(5).split(": ")(1).equalsIgnoreCase("yes")
+    Creature(name, count, hpRange(0), hpRange(1), danger, targetBattle, loot)
   }
 
   // Transform to JSON function

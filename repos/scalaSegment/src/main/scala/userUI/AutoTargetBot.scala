@@ -13,6 +13,7 @@ import scala.collection.mutable.ListBuffer
 class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: ActorRef) {
 
   val targetMonstersOnBattleCheckbox = new CheckBox("Target monsters on battle list")
+  val lootMonsterCheckbox = new CheckBox("Loot this monster")
 
   val loadButton = new JButton("Load")
   val saveButton = new JButton("Save")
@@ -137,7 +138,8 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
     c.gridy += 1
     c.gridwidth = 4
     add(targetMonstersOnBattleCheckbox.peer, c)
-
+    c.gridy += 1
+    add(lootMonsterCheckbox.peer, c)
 
 
 
@@ -149,9 +151,10 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
       val hpRangeTo = healthRangeTo.text.trim
       val dangerLevel = creatureDangerDropdown.getSelectedItem.toString
       val targetOnBattle = if(targetMonstersOnBattleCheckbox.selected) "Yes" else "No"
+      val lootMonster = if(lootMonsterCheckbox.selected) "Yes" else "No"
 
       // Concatenate all information into a single string
-      val creatureInfo = s"$creatureName, Count: $count, HP: $hpRangeFrom-$hpRangeTo, Danger: $dangerLevel, Target in Battle: $targetOnBattle"
+      val creatureInfo = s"$creatureName, Count: $count, HP: $hpRangeFrom-$hpRangeTo, Danger: $dangerLevel, Target in Battle: $targetOnBattle, Loot: $lootMonster"
 
       if (creatureName.nonEmpty && !creatureListModel.contains(creatureInfo)) {
         creatureListModel.addElement(creatureInfo)
@@ -162,6 +165,7 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
         creaturesCountDropdown.setSelectedIndex(0) // Reset to default value if needed
         creatureDangerDropdown.setSelectedIndex(0) // Reset to default value if needed
         targetMonstersOnBattleCheckbox.selected = false // Reset to default if needed
+        lootMonsterCheckbox.selected = false
       }
     })
 
@@ -175,6 +179,8 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
         val hpParts = parts(2).substring("HP: ".length).split("-")
         val danger = parts(3).substring("Danger: ".length).toInt
         val targetInBattle = parts(4).substring("Target in Battle: ".length).equalsIgnoreCase("Yes")
+        val lootMonster = parts(5).substring("Loot: ".length).equalsIgnoreCase("Yes")
+
 
         creatureNameTextField.text = name
         creaturesCountDropdown.setSelectedItem(count.asInstanceOf[Object]) // Ensure this matches the type in the dropdown
@@ -182,6 +188,7 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
         healthRangeTo.text = hpParts(1)
         creatureDangerDropdown.setSelectedItem(danger.asInstanceOf[Object]) // Ensure this matches the type in the dropdown
         targetMonstersOnBattleCheckbox.selected = targetInBattle
+        lootMonsterCheckbox.selected = lootMonster
       }
     }
 

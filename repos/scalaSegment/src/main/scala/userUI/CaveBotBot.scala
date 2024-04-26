@@ -52,17 +52,6 @@ class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
   val moveUpButton = new JButton("Move Up")
   val moveDownButton = new JButton("Move Down")
 
-// loot settings
-  val lootListModel = new DefaultListModel[String]()
-  val lootList = new JList[String](lootListModel)
-  val lootMonsterAfterKillCheckbox = new CheckBox("Loot monster immediately after kill.")
-  val killMonstersFirstThanLootCheckbox = new CheckBox("Kill monsters first than loot.")
-  val lootId = new TextField("Loot ID", 4)
-  val lootbagId = new TextField("Lootbag ID", 2)
-  val lootName = new TextField("Loot Name", 15)
-  val addLootButton = new JButton("Add")
-  val deleteLootButton = new JButton("Delete")
-  val convertGoldToPlatinumCheckbox = new CheckBox("Convert gold coins to platinum.")
 
 
   def createWaypoint(waypointType: String): Unit = {
@@ -95,25 +84,6 @@ class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
         println(s"Failed to create waypoint due to: $e")
     }
   }
-  def createLoot(): Unit = {
-    val lootIdText = lootId.text
-    val lootbagIdText = lootbagId.text
-    val lootNameText = lootName.text
-
-    // Validate input, perform necessary actions
-    // For example, add the loot to the loot list
-    val lootDisplayString = s"$lootIdText, $lootbagIdText, $lootNameText"
-    lootListModel.addElement(lootDisplayString)
-  }
-
-  def deleteLoot(): Unit = {
-    // Get the index of the selected item in the loot list
-    val selectedIndex = lootList.getSelectedIndex
-    if (selectedIndex != -1) { // Check if an item is selected
-      // Remove the selected item from the loot list model
-      lootListModel.remove(selectedIndex)
-    }
-  }
 
 
   // Add action listener to the add button
@@ -130,14 +100,10 @@ class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
   moveUpButton.addActionListener(_ => moveSelectedWaypointUp())
   moveDownButton.addActionListener(_ => moveSelectedWaypointDown())
 
-  // loot
-  addLootButton.addActionListener(_ => createLoot())
-  deleteLootButton.addActionListener(_ => deleteLoot())
-
-
 
   // Add action listener to the remove button
   removeButton.addActionListener((_) => removeSelectedWaypoint())
+
   val caveBotTab: Component = Component.wrap(new javax.swing.JPanel(new GridBagLayout) {
     val c = new GridBagConstraints()
     c.insets = new Insets(2, 2, 2, 2)
@@ -147,7 +113,7 @@ class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
     // Waypoint Label and List
     c.gridy = 0 // Adjust gridy for subsequent components
     c.gridx = 0
-    add(new JLabel("Save&Loading"), c)
+    add(new JLabel("Save&Load"), c)
     c.gridx = 1
     add(loadButton, c)
     c.gridx = 2
@@ -209,44 +175,7 @@ class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
     c.gridx = 3
     add(addRunButton, c)
 
-
-
-
-    // Loot
-    c.fill = GridBagConstraints.HORIZONTAL
-    c.gridwidth = 4
-    c.gridx = 4
-    c.gridy = 0
-    add(convertGoldToPlatinumCheckbox.peer, c)
-    c.gridy = 1
-    add(killMonstersFirstThanLootCheckbox.peer, c)
-    c.gridy = 2
-    add(lootMonsterAfterKillCheckbox.peer, c)
-
-    c.gridwidth = 4
-    c.gridx = 4
-    c.gridy = 3
-    add(new JScrollPane(lootList), c)
-
-    c.gridwidth = 1
-    c.gridx = 4
-    c.gridy = 4
-    add(lootId.peer, c)
-    c.gridx = 5
-    add(lootbagId.peer, c)
-    c.gridx = 6
-    c.gridwidth = 2
-    add(lootName.peer, c)
-
-    c.gridy = 5
-    c.gridx = 4
-    c.gridwidth = 2
-    add(addLootButton, c)
-    c.gridx = 7
-    add(deleteLootButton, c)
-    c.gridwidth = 1
   })
-
 
 
   loadButton.addActionListener(_ => {

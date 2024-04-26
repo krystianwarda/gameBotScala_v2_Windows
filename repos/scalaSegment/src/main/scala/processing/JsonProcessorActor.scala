@@ -81,8 +81,8 @@ case class ProcessorState(
                            statusOfRuneAutoheal: String = "not_ready",
                            stateHunting: String = "free",
                            caveBotLevelsList: List[Int] = List(),
-                           antiOverpassDelay: Long = 0
-
+                           antiOverpassDelay: Long = 0,
+                           monstersListToLoot: List[String] = List(),
                          )
 case class UpdateSettings(settings: UISettings)
 
