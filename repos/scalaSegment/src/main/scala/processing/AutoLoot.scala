@@ -12,7 +12,7 @@ object AutoLoot {
     var updatedState = currentState // Initialize updatedState
 
     if (settings.autoTargetSettings.enabled && settings.autoLootSettings.enabled) {
-      println(s"computeAutoLootActions process started")
+      println(s"computeAutoLootActions process started with status:${updatedState.stateHunting}")
       //test
       // Assuming 'json' is your input JsValue
       val containersInfoOpt: Option[JsObject] = (json \ "containersInfo").asOpt[JsObject]
@@ -95,7 +95,7 @@ object AutoLoot {
                     }
 
                     // Extract all items from the last container and find first matching loot item
-                    val foundItemOpt = itemsInContainer.fields.collectFirst {
+                    val foundItemOpt = itemsInContainer.fields.reverse.collectFirst {
                       case (slot, itemInfo) if lootItems((itemInfo \ "itemId").as[Int]) =>
                         (slot, itemInfo.as[JsObject])
                     }
@@ -117,6 +117,7 @@ object AutoLoot {
                           case JsSuccess(contentsPanel, _) =>
                             // Now validate and access the specific item information within the contentsPanel
                             (contentsPanel \ itemSlot).validate[JsObject] match {
+
                               case JsSuccess(itemInfo, _) =>
                                 val x = (itemInfo \ "x").as[Int]
                                 val y = (itemInfo \ "y").as[Int]
@@ -145,9 +146,22 @@ object AutoLoot {
                                     }
                                     println(s"Move item to ground at ($targetX, $targetY)")
 
-                                  //                    case _ =>  // Handle other actions
-                                  //                      println(s"Item position on screen: ($x, $y)")
+                                  case containerIndex if containerIndex.forall(_.isDigit) => // Check if action is a digit, indicating a container
+                                    val containerName = s"container$containerIndex"
+                                    val itemLocation = (screenInfo \ "inventoryPanelLoc" \ containerName \ "contentsPanel" \ "item0").as[JsObject]
+                                    val (targetX, targetY) = ((itemLocation \ "x").as[Int], (itemLocation \ "y").as[Int])
+
+                                    if (itemCount == 1) {
+                                      val actionsSeq = moveSingleItem(x, y, targetX, targetY)
+                                      actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+                                    } else {
+                                      val actionsSeq = moveMultipleItems(x, y, targetX, targetY)
+                                      actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+                                    }
+                                    println(s"Move item to $containerName at ($targetX, $targetY)")
+
                                 }
+
 
                               case JsError(errors) =>
                                 println(s"Error accessing item info for $itemSlot: ${errors.mkString(", ")}")
@@ -164,7 +178,8 @@ object AutoLoot {
                         // Iterate over items in the last container to find any that are marked as a container
                         itemsInContainer.fields.collectFirst {
                           case (slot, itemInfo) if (itemInfo \ "isContainer").asOpt[Boolean].getOrElse(false) =>
-                            val itemScreenInfo = (screenInfo \ "inventoryPanelLoc" \ lastContainerIndex.replace("container", "item" + slot.replace("slot", ""))).as[JsObject]
+                            val itemSlot = slot.replace("slot", "item")
+                            val itemScreenInfo = (screenInfo \ "inventoryPanelLoc" \ lastContainerIndex \ "contentsPanel" \ itemSlot).as[JsObject]
                             val (x, y) = ((itemScreenInfo \ "x").as[Int], (itemScreenInfo \ "y").as[Int])
                             (x, y)
                         } match {
@@ -216,6 +231,7 @@ object AutoLoot {
                   updatedState = updatedState.copy(stateHunting = "looting") // looting later
                 case None =>
                   println("No Open position available or extraWindowLoc is null")
+                  updatedState = updatedState.copy(stateHunting = "free")
               }
 
             } else if (updatedState.stateHunting == "attacking") {
@@ -269,36 +285,38 @@ object AutoLoot {
 
                 println(s"Creature screen index $indexOpt")
 
-                if (!indexOpt.isEmpty) {
-                  // Fetch screen coordinates from JSON using the index
-                  val screenCoordsOpt = indexOpt.flatMap { index =>
-                    (json \ "screenInfo" \ "mapPanelLoc" \ index).asOpt[JsObject].flatMap { coords =>
+                indexOpt match {
+                  case Some(index) =>
+                    // Fetch screen coordinates from JSON using the index
+                    val screenCoordsOpt = (json \ "screenInfo" \ "mapPanelLoc" \ index).asOpt[JsObject].flatMap { coords =>
                       for {
                         x <- (coords \ "x").asOpt[Int]
                         y <- (coords \ "y").asOpt[Int]
                       } yield (x, y)
-                    }
-                  }.getOrElse((0, 0)) // Default coordinates if not found
+                    }.getOrElse((0, 0)) // Default coordinates if not found
 
-                  println(s"Screen coordinates are x: ${screenCoordsOpt._1}, y: ${screenCoordsOpt._2}")
+                    println(s"Screen coordinates are x: ${screenCoordsOpt._1}, y: ${screenCoordsOpt._2}")
 
-                  // Define the sequence of mouse actions based on retrieved screen coordinates
-                  val (xPositionScreen, yPositionScreen) = screenCoordsOpt
+                    // Define the sequence of mouse actions based on retrieved screen coordinates
+                    val (xPositionScreen, yPositionScreen) = screenCoordsOpt
+                    println(s"Creature body screen position $xPositionScreen, $yPositionScreen")
 
+                    val actionsSeq = Seq(
+                      MouseAction(xPositionScreen, yPositionScreen, "move"),
+                      MouseAction(xPositionScreen, yPositionScreen, "pressCtrl"),
+                      MouseAction(xPositionScreen, yPositionScreen, "pressLeft"),
+                      MouseAction(xPositionScreen, yPositionScreen, "releaseLeft"),
+                      MouseAction(xPositionScreen, yPositionScreen, "releaseCtrl")
+                    )
 
-                  println(s"Creature body screen position $xPositionScreen, $yPositionScreen")
+                    actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+                    updatedState = updatedState.copy(stateHunting = "opening window")
 
-                  val actionsSeq = Seq(
-                    MouseAction(xPositionScreen, yPositionScreen, "move"),
-                    MouseAction(xPositionScreen, yPositionScreen, "pressCtrl"),
-                    MouseAction(xPositionScreen, yPositionScreen, "pressLeft"),
-                    MouseAction(xPositionScreen, yPositionScreen, "releaseLeft"),
-                    MouseAction(xPositionScreen, yPositionScreen, "releaseCtrl")
-                  )
-
-                  actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-                  updatedState = updatedState.copy(stateHunting = "opening window")
+                  case None =>
+                    println(s"Creature screen index $indexOpt")
+                    updatedState = updatedState.copy(stateHunting = "free")
                 }
+
               }
 
             }

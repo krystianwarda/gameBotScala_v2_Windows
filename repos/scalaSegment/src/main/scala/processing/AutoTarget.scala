@@ -172,6 +172,8 @@ object AutoTarget {
             case None =>
               println("No monsters found to attack.")
           }
+        } else {
+          println(s"Autotarget condition is met, but state is not ready: ${updatedState.stateHunting}")
         }
 
     }

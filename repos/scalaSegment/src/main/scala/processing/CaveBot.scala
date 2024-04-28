@@ -31,17 +31,15 @@ object CaveBot {
 //    val nextWaypointIndex = (currentState.currentWaypointIndex + 1) % settings.caveBotSettings.waypoints.length
 
 
-    if (settings.caveBotSettings.enabled) {
+    if (settings.caveBotSettings.enabled && updatedState.stateHunting == "free") {
 
-//      println("caveBotSettings enabled.")
 
       // Safely attempt to parse battleInfo as a map
       val battleInfoResult = (json \ "battleInfo").validate[Map[String, JsValue]]
 
-      // Modified to correctly handle mutable state update
+      // Initial loading of waypoints
       if (!updatedState.waypointsLoaded) {
         updatedState = loadingWaypointsFromSettings(settings, updatedState)
-        // Assuming waypoints are now loaded and available
         val presentCharLocationX = (json \ "characterInfo" \ "PositionX").as[Int]
         val presentCharLocationY = (json \ "characterInfo" \ "PositionY").as[Int]
         val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
@@ -59,7 +57,11 @@ object CaveBot {
         // Update the currentWaypointIndex to the index of the closest waypoint
         updatedState = updatedState.copy(currentWaypointIndex = closestWaypointIndex, subWaypoints = List.empty)
       }
+
       val currentTime = currentTimeMillis()
+
+
+      // DEBUGING if character went level up or down by mistake
       val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
       println(s"Debug: Looking for character positionZ: $presentCharLocationZ in ${updatedState.caveBotLevelsList}")
       if (!updatedState.caveBotLevelsList.contains(presentCharLocationZ)) {
@@ -129,6 +131,7 @@ object CaveBot {
           }
         }
       } else {
+        // character is on good floor  - proceeding
         battleInfoResult match {
           case JsSuccess(battleInfo, _) =>
             val hasMonsters = battleInfo.exists { case (_, creature) =>
