@@ -108,6 +108,14 @@ object AutoTarget {
             updatedState = updatedState.copy(monstersListToLoot = monstersWithLoot)
           }
 
+          if (updatedState.staticContainersList.isEmpty) {
+            // Assuming `json` is already defined as JsValue containing the overall data
+            val containersInfo = (json \ "containersInfo").as[JsObject]
+            // Extracting keys as a list of container names
+            val containerKeys = containersInfo.keys.toList
+
+            updatedState = updatedState.copy(staticContainersList = containerKeys)
+          }
 
           // Filter and sort based on the danger level, sorting by descending danger
           var sortedMonsters = monsters

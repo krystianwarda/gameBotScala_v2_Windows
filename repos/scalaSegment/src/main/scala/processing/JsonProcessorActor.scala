@@ -83,6 +83,7 @@ case class ProcessorState(
                            caveBotLevelsList: List[Int] = List(),
                            antiOverpassDelay: Long = 0,
                            monstersListToLoot: List[String] = List(),
+                           staticContainersList: List[String] = List()
                          )
 case class UpdateSettings(settings: UISettings)
 

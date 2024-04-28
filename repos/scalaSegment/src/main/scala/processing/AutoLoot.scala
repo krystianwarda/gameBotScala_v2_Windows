@@ -1,8 +1,9 @@
 package processing
 
 import mouse.FakeAction
-import play.api.libs.json.{JsObject, JsValue}
+import play.api.libs.json.{JsError, JsObject, JsValue}
 import userUI.SettingsUtils.UISettings
+import play.api.libs.json._
 
 object AutoLoot {
   def computeAutoLootActions(json: JsValue, settings: UISettings, currentState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
@@ -11,6 +12,20 @@ object AutoLoot {
     var updatedState = currentState // Initialize updatedState
 
     if (settings.autoTargetSettings.enabled && settings.autoLootSettings.enabled) {
+      println(s"computeAutoLootActions process started")
+      //test
+      // Assuming 'json' is your input JsValue
+      val containersInfoOpt: Option[JsObject] = (json \ "containersInfo").asOpt[JsObject]
+
+      containersInfoOpt.foreach { containersInfoTest =>
+        containersInfoTest.fields.foreach {
+          case (key, value) =>
+            val nameOpt = (value \ "name").asOpt[String]
+            nameOpt.foreach { name =>
+              println(s"$key: $name")
+            }
+        }
+      }
 
       (json \ "attackInfo" \ "Id").asOpt[Int] match {
         case Some(attackedCreatureTarget) =>
@@ -21,10 +36,158 @@ object AutoLoot {
           } else {
 
             if (updatedState.stateHunting == "looting") {
-              settings.autoLootSettings.lootList.foreach { lootItem =>
-                println(lootItem)
+              println(s"Looting process started")
+              val containersInfo = (json \ "containersInfo").as[JsObject]
+              println(s"gate1")
+              val screenInfo = (json \ "screenInfo").as[JsObject]
+              println(s"gate2")
+              // Get the last container from containersInfo
+              val lastContainerIndex = containersInfo.keys.maxBy(_.replace("container", "").toInt)
+              println(s"gate3")
+              val lastContainer = (containersInfo \ lastContainerIndex).as[JsObject]
+              println(s"gate4 - Last Container: $lastContainer")  // Added debug print for lastContainer
+
+
+
+              // Check if the items field is a string indicating "empty" or contains objects
+              (lastContainer \ "items").validate[JsObject] match {
+                case JsError(_) =>
+                  (lastContainer \ "items").asOpt[String] match {
+                    case Some("empty") =>
+                      println("Items field is 'empty'. No items to process.")
+                      updatedState = updatedState.copy(stateHunting = "free")
+
+                    case None =>
+                      println("No items field present or it is not in expected format")
+                      updatedState = updatedState.copy(stateHunting = "free")
+
+                    case Some(other) =>
+                      println(s"Unexpected string in items field: $other")
+                      updatedState = updatedState.copy(stateHunting = "free")
+                  }
+
+                case JsSuccess(itemsInContainer, _) =>
+
+                  val itemsInContainer = (lastContainer \ "items").as[JsObject]
+                  println(s"Items in container detected: $itemsInContainer")
+
+                  println(s"Considering looting from from $lastContainerIndex")
+                  println(s"Statis container list ${updatedState.staticContainersList}")
+
+                  // Check if the last container is not already in the updatedState.staticContainersList
+                  if (!updatedState.staticContainersList.contains(lastContainerIndex)) {
+
+                    println(s"Looting from $lastContainerIndex")
+                    // Prepare a set of item IDs from lootList
+                    val lootItems = settings.autoLootSettings.lootList.map(_.trim.split(",\\s*")(0).toInt).toSet
+                    println(s"Available Loot Items: ${lootItems.mkString(", ")}")
+
+
+                    // Assuming `json` is your JSON object parsed into a JsValue
+                    val container = (json \ "containersInfo" \ lastContainerIndex \ "items").as[JsObject]
+
+                    // Printing each item in the container
+                    container.fields.foreach { case (slot, itemInfo) =>
+                      val itemName = (itemInfo \ "Name").as[String]
+                      val itemCount = (itemInfo \ "itemCount").as[Int]
+                      val itemId = (itemInfo \ "itemId").as[Int]
+                      println(s"Slot $slot: $itemName, Count: $itemCount, Item ID: $itemId")
+                    }
+
+                    // Extract all items from the last container and find first matching loot item
+                    val foundItemOpt = itemsInContainer.fields.collectFirst {
+                      case (slot, itemInfo) if lootItems((itemInfo \ "itemId").as[Int]) =>
+                        (slot, itemInfo.as[JsObject])
+                    }
+
+                    foundItemOpt match {
+                      case Some((slot, item)) =>
+
+                        val itemId = (item \ "itemId").as[Int]
+                        val itemCount = (item \ "itemCount").as[Int]
+                        println(s"Item to loot has been found: $itemId")
+
+                        // Assuming lastContainerIndex and slot are already defined
+                        val itemSlot = slot.replace("slot", "item") // Convert "slot2" to "item2"
+
+                        //                        val itemScreenInfo = (screenInfo \ "inventoryPanelLoc" \ lastContainerIndex.replace("container", "item" + slot.replace("slot", ""))).as[JsObject]
+
+                        // Validate and access the contentsPanel under the specified container
+                        (screenInfo \ "inventoryPanelLoc" \ lastContainerIndex \ "contentsPanel").validate[JsObject] match {
+                          case JsSuccess(contentsPanel, _) =>
+                            // Now validate and access the specific item information within the contentsPanel
+                            (contentsPanel \ itemSlot).validate[JsObject] match {
+                              case JsSuccess(itemInfo, _) =>
+                                val x = (itemInfo \ "x").as[Int]
+                                val y = (itemInfo \ "y").as[Int]
+                                println(s"Coordinates for $itemSlot: (x: $x, y: $y)")
+
+
+                                // Retrieve action from lootList based on itemId
+                                val action = settings.autoLootSettings.lootList
+                                  .find(_.trim.split(",\\s*")(0).toInt == itemId) // Find the correct item
+                                  .map(_.trim.split(",\\s*")) // Split each entry into an array
+                                  .map(arr => (arr(0), arr(1), arr(2))) // Convert array to a tuple
+                                  .get // Safely get the tuple
+                                  ._2 // Extract the second element (action) from the tuple
+
+                                action match {
+                                  case "g" => // Handle ground placement
+                                    val mapTarget = (screenInfo \ "mapPanelLoc" \ "8x6").as[JsObject]
+                                    val (targetX, targetY) = ((mapTarget \ "x").as[Int], (mapTarget \ "y").as[Int])
+
+                                    if (itemCount == 1) {
+                                      val actionsSeq = moveSingleItem(x, y, targetX, targetY)
+                                      actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+                                    } else {
+                                      val actionsSeq = moveMultipleItems(x, y, targetX, targetY)
+                                      actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+                                    }
+                                    println(s"Move item to ground at ($targetX, $targetY)")
+
+                                  //                    case _ =>  // Handle other actions
+                                  //                      println(s"Item position on screen: ($x, $y)")
+                                }
+
+                              case JsError(errors) =>
+                                println(s"Error accessing item info for $itemSlot: ${errors.mkString(", ")}")
+                              // Handle the error case here, such as logging or corrective actions
+                            }
+                          case JsError(errors) =>
+                            println(s"Error accessing contents panel for container $lastContainerIndex: ${errors.mkString(", ")}")
+                          // Handle the error case here, such as logging or corrective actions
+                        }
+
+
+                      case None =>
+                        println(s"No item has been found, looking for container inside container")
+                        // Iterate over items in the last container to find any that are marked as a container
+                        itemsInContainer.fields.collectFirst {
+                          case (slot, itemInfo) if (itemInfo \ "isContainer").asOpt[Boolean].getOrElse(false) =>
+                            val itemScreenInfo = (screenInfo \ "inventoryPanelLoc" \ lastContainerIndex.replace("container", "item" + slot.replace("slot", ""))).as[JsObject]
+                            val (x, y) = ((itemScreenInfo \ "x").as[Int], (itemScreenInfo \ "y").as[Int])
+                            (x, y)
+                        } match {
+                          case Some((x, y)) =>
+                            println(s"Another container detected at position ($x, $y)")
+                            // Right-click action sequence for the detected container
+                            val actionsSeq = Seq(
+                              MouseAction(x, y, "move"),
+                              MouseAction(x, y, "pressRight"), // Changed to pressRight for right-click
+                              MouseAction(x, y, "releaseRight") // Changed to releaseRight for right-click
+                            )
+                            actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+                          case None =>
+                            println(s"No container ( and no items to loot) detected within the items, setting the state to free")
+                            updatedState = updatedState.copy(stateHunting = "free")
+                        }
+                    }
+                  } else {
+                    println(s"No new backpack has been found.")
+                    updatedState = updatedState.copy(stateHunting = "free")
+                  }
               }
-              updatedState = updatedState.copy(stateHunting = "free")
+
 
             } else if (updatedState.stateHunting == "opening window") {
 
@@ -146,4 +309,26 @@ object AutoLoot {
     ((actions, logs), updatedState)
   }
 
+
+  def moveSingleItem(xItemPosition: Int, yItemPositon: Int, xDestPos: Int, yDestPos: Int): Seq[MouseAction] =
+    Seq(
+      MouseAction(xItemPosition, yItemPositon, "move"),
+      MouseAction(xItemPosition, yItemPositon, "pressLeft"),
+      MouseAction(xDestPos, yDestPos, "move"),
+      MouseAction(xDestPos, yDestPos, "releaseLeft")
+    )
+
+  def moveMultipleItems(xItemPosition: Int, yItemPositon: Int, xDestPos: Int, yDestPos: Int): Seq[MouseAction] =
+    Seq(
+      MouseAction(xItemPosition, yItemPositon, "move"),
+      MouseAction(xItemPosition, yItemPositon, "pressCtrl"),
+      MouseAction(xItemPosition, yItemPositon, "pressLeft"),
+      MouseAction(xDestPos, yDestPos, "move"),
+      MouseAction(xDestPos, yDestPos, "releaseLeft"),
+      MouseAction(xDestPos, yDestPos, "releaseCtrl")
+    )
+
+
 }
+
+
