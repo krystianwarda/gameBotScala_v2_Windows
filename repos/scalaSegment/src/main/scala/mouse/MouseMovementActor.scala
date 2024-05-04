@@ -147,16 +147,7 @@ class MouseMovementActor(actionStateManager: ActorRef) extends Actor {
       this.mouseMovementsEnabled = movementsEnabled
   }
 
-//  override def receive: Receive = {
-//    case "simulateIdleMovement" =>
-//      simulateIdleMouseMovement(robotInstance)
-//    case MouseMoveCommand(actions, mouseMovementsEnabled) =>
-////      println(s"Received MouseMoveCommand with enabled: $mouseMovementsEnabled")
-//      actions.foreach(performMouseAction)
-//      actionStateManager ! ActionCompleted(ActionTypes.Move)
-//    case MouseMovementStatusUpdate(taskCount, movementsEnabled) =>
-//      println(s"Received MouseMovementStatusUpdate with taskCount: $taskCount, movementsEnabled: $movementsEnabled")
-//  }
+
 
   override def postStop(): Unit = {
     println("MouseMovementActor stopped")

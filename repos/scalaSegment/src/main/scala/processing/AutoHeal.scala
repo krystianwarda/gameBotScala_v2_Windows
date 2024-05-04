@@ -17,6 +17,7 @@ object AutoHeal {
     var logs: Seq[Log] = Seq()
     var updatedState = currentState
     val currentTime = System.currentTimeMillis()
+    val startTime = System.nanoTime()
 
     if (settings.healingSettings.enabled) {
 //      println(s"Status autoheal : ${updatedState.statusOfRuneAutoheal}")
@@ -284,7 +285,9 @@ object AutoHeal {
       }
 
     }
-
+    val endTime = System.nanoTime()
+    val duration = (endTime - startTime) / 1e6d
+    println(f"Processing computeAutoHealActions took $duration%.3f ms")
 
     ((actions, logs), updatedState)
   }

@@ -9,6 +9,8 @@ import userUI.SettingsUtils.UISettings
 object AutoTarget {
   def computeAutoTargetActions(json: JsValue, settings: UISettings, currentState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
 //    println("Performing computeCaveBotActions action.")
+    val startTime = System.nanoTime()
+
     var actions: Seq[FakeAction] = Seq.empty
     var logs: Seq[Log] = Seq.empty
     var updatedState = currentState // Initialize updatedState
@@ -16,7 +18,7 @@ object AutoTarget {
 
 
 
-    if (settings.autoTargetSettings.enabled) {
+    if (settings.autoTargetSettings.enabled && updatedState.stateHunting == "free") {
 
       // After handling monsters, update chase mode if necessary
       val chaseModeUpdateResult = updateChaseModeIfNecessary(json, actions, logs)
@@ -25,7 +27,7 @@ object AutoTarget {
 
       val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
       if (((settings.caveBotSettings.enabled && updatedState.caveBotLevelsList.contains(presentCharLocationZ)) || !settings.caveBotSettings.enabled)) {
-        println(s"AutoTarget is ON")
+//        println(s"AutoTarget is ON")
         (json \ "battleInfo").validate[Map[String, JsValue]] match {
           case JsSuccess(battleInfo, _) =>
             val hasMonsters = battleInfo.exists { case (_, creature) =>
@@ -44,6 +46,10 @@ object AutoTarget {
         }
       }
     }
+
+    val endTime = System.nanoTime()
+    val duration = (endTime - startTime) / 1e6d
+    println(f"Processing computeAutoTargetActions took $duration%.3f ms")
     ((actions, logs), updatedState)
   }
 

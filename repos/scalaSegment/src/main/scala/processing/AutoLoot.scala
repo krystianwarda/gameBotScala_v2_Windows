@@ -7,12 +7,13 @@ import play.api.libs.json._
 
 object AutoLoot {
   def computeAutoLootActions(json: JsValue, settings: UISettings, currentState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
+    val startTime = System.nanoTime()
     var actions: Seq[FakeAction] = Seq.empty
     var logs: Seq[Log] = Seq.empty
     var updatedState = currentState // Initialize updatedState
 
     if (settings.autoTargetSettings.enabled && settings.autoLootSettings.enabled) {
-      println(s"computeAutoLootActions process started with status:${updatedState.stateHunting}")
+//      println(s"computeAutoLootActions process started with status:${updatedState.stateHunting}")
       //test
       // Assuming 'json' is your input JsValue
       val containersInfoOpt: Option[JsObject] = (json \ "containersInfo").asOpt[JsObject]
@@ -21,9 +22,9 @@ object AutoLoot {
         containersInfoTest.fields.foreach {
           case (key, value) =>
             val nameOpt = (value \ "name").asOpt[String]
-            nameOpt.foreach { name =>
-              println(s"$key: $name")
-            }
+//            nameOpt.foreach { name =>
+//              println(s"$key: $name")
+//            }
         }
       }
 
@@ -38,14 +39,11 @@ object AutoLoot {
             if (updatedState.stateHunting == "looting") {
               println(s"Looting process started")
               val containersInfo = (json \ "containersInfo").as[JsObject]
-              println(s"gate1")
               val screenInfo = (json \ "screenInfo").as[JsObject]
-              println(s"gate2")
               // Get the last container from containersInfo
               val lastContainerIndex = containersInfo.keys.maxBy(_.replace("container", "").toInt)
-              println(s"gate3")
               val lastContainer = (containersInfo \ lastContainerIndex).as[JsObject]
-              println(s"gate4 - Last Container: $lastContainer")  // Added debug print for lastContainer
+//              println(s"gate4 - Last Container: $lastContainer")  // Added debug print for lastContainer
 
 
 
@@ -68,8 +66,14 @@ object AutoLoot {
 
                 case JsSuccess(itemsInContainer, _) =>
 
-                  val itemsInContainer = (lastContainer \ "items").as[JsObject]
-                  println(s"Items in container detected: $itemsInContainer")
+                  val itemsInContainerInitial = (lastContainer \ "items").as[JsObject]
+                  println(s"Items in container detected: $itemsInContainerInitial")
+
+                  val itemsInContainer = JsObject(itemsInContainerInitial.fields.filterNot { case (_, itemInfo) =>
+                    val itemId = (itemInfo \ "itemId").as[Int]
+                    updatedState.alreadyLootedIds.contains(itemId)
+                  })
+                  println(s"Filtered items excluding already looted: $itemsInContainer")
 
                   println(s"Considering looting from from $lastContainerIndex")
                   println(s"Statis container list ${updatedState.staticContainersList}")
@@ -106,6 +110,7 @@ object AutoLoot {
                         val itemId = (item \ "itemId").as[Int]
                         val itemCount = (item \ "itemCount").as[Int]
                         println(s"Item to loot has been found: $itemId")
+                        updatedState = updatedState.copy(alreadyLootedIds = updatedState.alreadyLootedIds :+ itemId)
 
                         // Assuming lastContainerIndex and slot are already defined
                         val itemSlot = slot.replace("slot", "item") // Convert "slot2" to "item2"
@@ -300,7 +305,7 @@ object AutoLoot {
                     // Define the sequence of mouse actions based on retrieved screen coordinates
                     val (xPositionScreen, yPositionScreen) = screenCoordsOpt
                     println(s"Creature body screen position $xPositionScreen, $yPositionScreen")
-
+                    updatedState = updatedState.copy(alreadyLootedIds = List.empty)
                     val actionsSeq = Seq(
                       MouseAction(xPositionScreen, yPositionScreen, "move"),
                       MouseAction(xPositionScreen, yPositionScreen, "pressCtrl"),
@@ -323,6 +328,9 @@ object AutoLoot {
           }
       }
     }
+    val endTime = System.nanoTime()
+    val duration = (endTime - startTime) / 1e6d
+    println(f"Processing computeAutoLootActions took $duration%.3f ms")
 
     ((actions, logs), updatedState)
   }

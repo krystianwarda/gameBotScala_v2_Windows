@@ -56,6 +56,7 @@ case class WaypointInfo(
 
 case class ProcessorState(
                            lastFishingCommandSent: Long = 0,
+                           fixedWaypoints: List[WaypointInfo] = List(),
                            lastHealingTime: Long = 0,
                            lastSpellCastTime: Long = 0,
                            lastRuneMakingTime: Long = 0,
@@ -68,8 +69,7 @@ case class ProcessorState(
                            currentWaypointIndex: Int = 0,
                            currentTargetIndex: Int = 0,
                            subWaypoints: List[Vec] = List(),
-                           waypointsLoaded: Boolean = false, // Added list of subway points
-                           fixedWaypoints: List[WaypointInfo] = List(),
+                           waypointsLoaded: Boolean = false, // Added list of subway point
                            lastDirection: Option[String] = None,
                            lastAutoTargetCommandSend: Long = 0,
                            creatureTarget: Int = 0,
@@ -83,7 +83,11 @@ case class ProcessorState(
                            caveBotLevelsList: List[Int] = List(),
                            antiOverpassDelay: Long = 0,
                            monstersListToLoot: List[String] = List(),
-                           staticContainersList: List[String] = List()
+                           staticContainersList: List[String] = List(),
+                           gridState: Array[Array[Boolean]] = Array.ofDim[Boolean](10, 10), // Example default value
+                           gridBoundsState: (Int, Int, Int, Int) = (0, 0, 10, 10), // Example default value
+                           presentCharLocation: Vec = Vec(0, 0),
+                           alreadyLootedIds: List[Int] = List(),
                          )
 case class UpdateSettings(settings: UISettings)
 
@@ -102,9 +106,9 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
   // Mutable state
   var player: Option[Player] = None
   var settings: Option[UISettings] = None
-  var state: ProcessorState = ProcessorState(settings = None)
-//  var state: ProcessorState = ProcessorState()
-//  var state: ProcessorState = ProcessorState()
+
+  // var state: ProcessorState = ProcessorState()
+  var state: ProcessorState = ProcessorState(settings = settings)
 
   // Initialize lastFishingCommandTime to a value ensuring the first check will always pass
   private val fishingCommandInterval: Long = 1000
@@ -466,6 +470,40 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
 
 
 
+//  // Initializing ProcessorState with required and optional parameters
+//  var state: ProcessorState = ProcessorState(
+//    lastFishingCommandSent = 0,
+//    fixedWaypoints = List(),
+//    lastHealingTime = 0,
+//    lastSpellCastTime = 0,
+//    lastRuneMakingTime = 0,
+//    lastMoveTime = 0,
+//    lastTrainingCommandSend = 0,
+//    lastProtectionZoneCommandSend = 0,
+//    settings = settings, // This assumes settings initialized or provided earlier
+//    lastAutoResponderCommandSend = 0,
+//    lastCaveBotCommandSend = 0,
+//    currentWaypointIndex = 0,
+//    currentTargetIndex = 0,
+//    subWaypoints = List(),
+//    waypointsLoaded = false,
+//    lastDirection = None,
+//    lastAutoTargetCommandSend = 0,
+//    creatureTarget = 0,
+//    lastTargetName = "",
+//    lastTargetPos = (0, 0, 0),
+//    positionStagnantCount = 0,
+//    lastPosition = None,
+//    uhRuneContainerName = "not_set",
+//    statusOfRuneAutoheal = "not_ready",
+//    stateHunting = "free",
+//    caveBotLevelsList = List(),
+//    antiOverpassDelay = 0,
+//    monstersListToLoot = List(),
+//    staticContainersList = List(),
+//    gridState = Array.ofDim[Boolean](0, 0), // Assign the initial grid
+//    gridBoundsState = (0, 0, 0, 0) // Assign the initial grid bounds
+//  )
 
   // Assuming necessary imports and context are available
 
