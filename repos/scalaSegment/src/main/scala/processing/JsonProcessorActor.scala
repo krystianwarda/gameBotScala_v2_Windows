@@ -33,7 +33,7 @@ import scala.util.Random
 // import userUI.UIAppActor
 //import src.main.scala.Main.JsonData
 import mouse.{MouseMoveCommand, MouseMovementSettings}
-
+import utils.consoleColorPrint._
 case class cpResult(message: String, additionalData: Option[JsValue] = None)
 
 trait CommandProcessor {
@@ -57,6 +57,7 @@ case class WaypointInfo(
 case class ProcessorState(
                            lastFishingCommandSent: Long = 0,
                            fixedWaypoints: List[WaypointInfo] = List(),
+                           currentWaypointLocation: Vec = Vec(0, 0),
                            lastHealingTime: Long = 0,
                            lastSpellCastTime: Long = 0,
                            lastRuneMakingTime: Long = 0,
@@ -85,7 +86,7 @@ case class ProcessorState(
                            monstersListToLoot: List[String] = List(),
                            staticContainersList: List[String] = List(),
                            gridState: Array[Array[Boolean]] = Array.ofDim[Boolean](10, 10), // Example default value
-                           gridBoundsState: (Int, Int, Int, Int) = (0, 0, 10, 10), // Example default value
+                           gridBoundsState: (Int, Int, Int, Int) = (0, 0, 0, 0), // Example default value
                            presentCharLocation: Vec = Vec(0, 0),
                            alreadyLootedIds: List[Int] = List(),
                          )
@@ -106,7 +107,6 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
   // Mutable state
   var player: Option[Player] = None
   var settings: Option[UISettings] = None
-
   // var state: ProcessorState = ProcessorState()
   var state: ProcessorState = ProcessorState(settings = settings)
 
@@ -136,12 +136,11 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
   def receive: Receive = {
     case MainApp.JsonData(json) =>
 
-      println("JsonProcessorActor received JSON: " + json)
+      printInColor(ANSI_CYAN, "[MAIN] JsonProcessorActor received JSON: " + json)
 
       // Check if JSON contains more than just "__status":"ok"
       if ((json \ "__status").asOpt[String].contains("ok") && json.as[JsObject].keys.size == 1) {
-        // JSON only contains the status ok, handle accordingly
-        println("Received simple status update, not processing further.")
+        println("Wrong json.")
       } else {
         // JSON contains additional information, process it
         val startTime = System.nanoTime()
@@ -149,7 +148,7 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
         state = newState
         val endTime = System.nanoTime()
         val duration = (endTime - startTime) / 1e6d
-        println(f"Processing JSON took $duration%.3f ms")
+        printInColor(ANSI_CYAN, f"[INFO] Processing JSON took $duration%.3f ms")
       }
 //      val startTime = System.nanoTime() // Capture start time
 //      println("JsonProcessorActor received JSON: " + json)
@@ -157,7 +156,7 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
 //      state = newState // Critical: Ensure the state is updated here
 //      val endTime = System.nanoTime() // Capture end time
 //      val duration = (endTime - startTime) / 1e6d // Calculate duration in milliseconds
-//      println(f"Processing JSON took $duration%.3f ms") // Print the duration
+//      println(f"[INFO] Processing JSON took $duration%.3f ms") // Print the duration
 
     case InitializeProcessor(p, s) =>
       // Update state with new settings
@@ -270,18 +269,6 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
   }
 
 
-  //  def performCaveBot(json: JsValue, currentState: ProcessorState): ProcessorState = {
-//    val currentTime = System.currentTimeMillis()
-//    currentState.settings.flatMap { settings =>
-//      if (settings.caveBotSettings.enabled) {
-//        println("Performing cave bot action.")
-//        val (actions, logs) = computeCaveBotActions(json, settings)
-//        executeActionsAndLogs(actions, logs, Some(settings))
-//        Some(currentState.copy(lastCaveBotCommandSend = currentTime))
-//      } else None
-//    }.getOrElse(currentState)
-//  }
-
   def performAutoResponder(json: JsValue, currentState: ProcessorState): ProcessorState = {
     val currentTime = System.currentTimeMillis()
     currentState.settings.flatMap { settings =>
@@ -290,12 +277,6 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
         executeActionsAndLogs(actions, logs, Some(settings))
         Some(currentState.copy(lastAutoResponderCommandSend = currentTime))
       } else None
-      //      if (settings.fishingSettings.enabled && currentTime - currentState.lastTrainingCommandSend >= 2000) {
-      //        println("Performing training action.")
-      //        val (actions, logs) = computeTrainingActions(json, settings)
-      //        executeActionsAndLogs(actions, logs, Some(settings))
-      //        Some(currentState.copy(lastTrainingCommandSend = currentTime))
-      //      } else None
     }.getOrElse(currentState)
   }
 
@@ -308,12 +289,6 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
         executeActionsAndLogs(actions, logs, Some(settings))
         Some(currentState.copy(lastTrainingCommandSend = currentTime))
       } else None
-//      if (settings.fishingSettings.enabled && currentTime - currentState.lastTrainingCommandSend >= 2000) {
-//        println("Performing training action.")
-//        val (actions, logs) = computeTrainingActions(json, settings)
-//        executeActionsAndLogs(actions, logs, Some(settings))
-//        Some(currentState.copy(lastTrainingCommandSend = currentTime))
-//      } else None
     }.getOrElse(currentState)
   }
 
@@ -415,95 +390,6 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     }
   }
 
-
-  //  private def handleOkStatus(json: JsValue, currentState: ProcessorState): ProcessorState = {
-//    currentState.settings match {
-//      case Some(settings) if settings.fishingSettings.enabled =>
-//        val currentTime = System.currentTimeMillis()
-//        // Check if sufficient time has passed since the last fishing command
-//        if (currentTime - currentState.lastFishingCommandSent >= 2000) {
-//          println("Performing fishing action.")
-//          val (actions, logs) = computeFishingActions(json, settings)
-//          executeActionsAndLogs(actions, logs, Some(settings))
-//          currentState.copy(lastFishingCommandSent = currentTime)
-//        } else {
-//          println("Throttling fishing action due to insufficient delay since the last command.")
-//          currentState // Return the current state unmodified if the delay interval has not passed
-//        }
-//      case _ => currentState // Return the current state if fishing is not enabled or settings are undefined
-//    }
-//  }
-
-
-
-  //  private def processJson(json: JsValue): Unit = {
-  //    // First, check if the status is "ok" and if the 'msg' key is not present
-  //    (json \ "__status").asOpt[String] match {
-  //      case Some("ok") if (json \ "msg").isDefined => // If 'msg' key exists, do nothing or log
-  //        println("Message key exists. Skipping handleOkStatus.")
-  //      case Some("ok") => // If 'msg' key doesn't exist, proceed to handleOkStatus
-  //        handleOkStatus(json)
-  //      case Some("error") => // Handle error status as before
-  //        handleErrorStatus(json)
-  //      case _ => // Handle unknown status as before
-  //        println("Unknown status")
-  //    }
-  //  }
-
-//
-//  def performRuneMaking(json: JsValue, settings: SettingsUtils.UISettings): Unit = {
-//    val (actions, logs) = computeRuneMakingActions(json, settings)
-//    executeActionsAndLogs(actions, logs, Some(settings))
-//  }
-//
-//  def performAutoHeal(json: JsValue, settings: SettingsUtils.UISettings): Unit = {
-//    val (actions, logs) = computeHealingActions(json, settings)
-//    executeActionsAndLogs(actions, logs, Some(settings))
-//  }
-
-//
-//  def performFishing(json: JsValue, settings: UISettings): Unit = {
-//    println("Performing fishing action.")
-//    val (actions, logs) = computeFishingActions(json, settings)
-//    executeActionsAndLogs(actions, logs, Some(settings))
-//  }
-
-
-
-//  // Initializing ProcessorState with required and optional parameters
-//  var state: ProcessorState = ProcessorState(
-//    lastFishingCommandSent = 0,
-//    fixedWaypoints = List(),
-//    lastHealingTime = 0,
-//    lastSpellCastTime = 0,
-//    lastRuneMakingTime = 0,
-//    lastMoveTime = 0,
-//    lastTrainingCommandSend = 0,
-//    lastProtectionZoneCommandSend = 0,
-//    settings = settings, // This assumes settings initialized or provided earlier
-//    lastAutoResponderCommandSend = 0,
-//    lastCaveBotCommandSend = 0,
-//    currentWaypointIndex = 0,
-//    currentTargetIndex = 0,
-//    subWaypoints = List(),
-//    waypointsLoaded = false,
-//    lastDirection = None,
-//    lastAutoTargetCommandSend = 0,
-//    creatureTarget = 0,
-//    lastTargetName = "",
-//    lastTargetPos = (0, 0, 0),
-//    positionStagnantCount = 0,
-//    lastPosition = None,
-//    uhRuneContainerName = "not_set",
-//    statusOfRuneAutoheal = "not_ready",
-//    stateHunting = "free",
-//    caveBotLevelsList = List(),
-//    antiOverpassDelay = 0,
-//    monstersListToLoot = List(),
-//    staticContainersList = List(),
-//    gridState = Array.ofDim[Boolean](0, 0), // Assign the initial grid
-//    gridBoundsState = (0, 0, 0, 0) // Assign the initial grid bounds
-//  )
 
   // Assuming necessary imports and context are available
 
@@ -654,46 +540,4 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
       println("Maximum reconnection attempts reached. Stopping reconnection attempts.")
     }
   }
-
 }
-
-
-
-//// TO BE EDITED
-//if (currentSettings.caveBot) {
-//  // Assuming findRats is related to the Cavebot functionality
-//  (json \ "battleInfo").asOpt[JsValue].foreach { battleInfo =>
-//    findRats(battleInfo, currentSettings.mouseMovements).foreach(attackOnRat)
-//  }
-//}
-//
-//if (currentSettings.fishing) {
-//  activateFishing(json, currentSettings.mouseMovements)
-//}
-//// New logic for player detection and sound alert
-//if (currentSettings.protectionZoneSettings.enabled && currentSettings.protectionZoneSettings.playerOnScreenAlert) {
-//  (json \ "battleInfo").asOpt[JsObject].foreach { battleInfo =>
-//    if (isPlayerDetected(battleInfo)) {
-//      // Trigger a beep sound as an alert
-//      Toolkit.getDefaultToolkit().beep()
-//      // Log or perform additional actions as needed
-//      println("Player on the screen!")
-//    }
-//  }
-//}
-
-
-//// Use the function to make decisions
-//if (currentSettings.protectionZoneSettings.escapeToProtectionZone) {
-//  if (detectPlayersAndMonsters(json)) {
-//    // Logic for when another player or monster is detected
-//    if (currentSettings.mouseMovements) {
-//      println("Player dected, move with keyboard.")
-//    } else {
-//      println("Player dected, move function.")
-//    }
-//  } else {
-//    // Logic for when no other players or monsters are detected
-//    // Placeholder to exit or skip the escapeToProtectionZone logic
-//  }
-//}

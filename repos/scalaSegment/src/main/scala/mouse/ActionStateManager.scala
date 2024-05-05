@@ -42,23 +42,23 @@ class ActionStateManager extends Actor {
 
   override def receive: Receive = {
     case MouseMoveCommand(actions, mouseMovementsEnabled) =>
-//      println(s"Received MouseMoveCommand with actions: ${actions.length} and mouseMovementsEnabled: $mouseMovementsEnabled")
+      //      println(s"Received MouseMoveCommand with actions: ${actions.length} and mouseMovementsEnabled: $mouseMovementsEnabled")
       val actionType = extractActionType(actions)
       val currentTime = System.currentTimeMillis()
       val (state, lastExecutionTime, _) = actionStates(actionType)
-//      println(s"Current state for actionType $actionType: $state")
+      //      println(s"Current state for actionType $actionType: $state")
 
       if (state == "free" && isPriorityMet(actionType)) {
-//        println(s"Action $actionType is set to 'in progress'")
+        //        println(s"Action $actionType is set to 'in progress'")
         actionStates(actionType) = ("in progress", currentTime, calculateNextExecutionTime(actionType, currentTime))
         mouseMovementActorRef ! MouseMoveCommand(actions, mouseMovementsEnabled)
       }
 
     case ActionCompleted(actionType) =>
-//      println(s"ActionCompleted received for actionType: $actionType")
+      //      println(s"ActionCompleted received for actionType: $actionType")
       val currentTime = System.currentTimeMillis()
       actionStates(actionType) = ("free", currentTime, None)
-//      println(s"Action $actionType is now free")
+    //      println(s"Action $actionType is now free")
   }
 
   def extractActionType(actions: Seq[MouseAction]): ActionTypes.Value = {
@@ -78,7 +78,7 @@ class ActionStateManager extends Actor {
     // If you want to keep the throttle as it was, just leave `existingThrottleInfo` as it is.
     actionStates(actionType) = ("free", currentTime, existingThrottleInfo)
 
-//    println(s"Action $actionType completed and is now free.")
+    //    println(s"Action $actionType completed and is now free.")
     // Additional logic for post-action completion...
   }
 

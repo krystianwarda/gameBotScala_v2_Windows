@@ -5,6 +5,7 @@ import play.api.libs.json.JsValue
 import play.api.libs.json._
 import processing.CaveBot.executeWhenNoMonstersOnScreen
 import userUI.SettingsUtils.UISettings
+import utils.consoleColorPrint.{ANSI_GREEN, ANSI_RED, printInColor}
 
 object AutoTarget {
   def computeAutoTargetActions(json: JsValue, settings: UISettings, currentState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
@@ -45,11 +46,37 @@ object AutoTarget {
           //          println("battleInfo is null or invalid format. Skipping processing.")
         }
       }
+    } else if (settings.autoTargetSettings.enabled && updatedState.stateHunting == "attacking") {
+      // Safely attempt to extract the attacked creature's target ID
+
+      // After handling monsters, update chase mode if necessary
+      val chaseModeUpdateResult = updateChaseModeIfNecessary(json, actions, logs)
+      actions = chaseModeUpdateResult._1
+      logs = chaseModeUpdateResult._2
+
+      (json \ "attackInfo" \ "Id").asOpt[Int] match {
+        case Some(attackedCreatureTarget) =>
+//          println(s"Targeting creature id: $attackedCreatureTarget")
+          val targetName = (json \ "attackInfo" \ "Name").asOpt[String].getOrElse("Unknown")
+
+          val xPos = (json \ "attackInfo" \ "Position" \ "x").asOpt[Int].getOrElse(0)
+          val yPos = (json \ "attackInfo" \ "Position" \ "y").asOpt[Int].getOrElse(0)
+          val zPos = (json \ "attackInfo" \ "Position" \ "z").asOpt[Int].getOrElse(0)
+
+//          printInColor(ANSI_RED, f"[DEBUG] Updating position of attacked creature $targetName in game position $xPos, $yPos, $zPos")
+
+          updatedState = updatedState.copy(lastTargetName = targetName)
+          updatedState = updatedState.copy(lastTargetPos = (xPos, yPos, zPos))
+          updatedState = updatedState.copy(creatureTarget = attackedCreatureTarget)
+
+        case None =>
+          println(s"Attack Info is empty")
+      }
     }
 
     val endTime = System.nanoTime()
     val duration = (endTime - startTime) / 1e6d
-    println(f"Processing computeAutoTargetActions took $duration%.3f ms")
+    printInColor(ANSI_GREEN, f"[INFO] Processing computeAutoTargetActions took $duration%.3f ms")
     ((actions, logs), updatedState)
   }
 
@@ -236,7 +263,7 @@ object AutoTarget {
 
     val endTime = System.nanoTime()
     val duration = (endTime - startTime) / 1e6d
-//    println(f"Processing executeWhenNoMonstersOnScreen took $duration%.3f ms")
+//    println(f"[INFO] Processing executeWhenNoMonstersOnScreen took $duration%.3f ms")
     ((actions, logs), updatedState)
   }
 

@@ -31,8 +31,10 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
   override def receive: Receive = {
     case "startListening" =>
       startListening()
+
     case json: JsValue =>
       jsonProcessorActor ! MainApp.JsonData(json)
+
     case StartActors(settings) =>
       println("PeriodicFunctionActor received StartActors message.")
       if (socket.isEmpty || socket.exists(!_.isConnected)) {
@@ -40,9 +42,11 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
       }
       startListening()
       initiateSendFunction("periodicEvent")
+
     case jsonStr: String =>
       // Assuming jsonStr is a JSON string, parse it to JsValue before forwarding
       val json: JsValue = Json.parse(jsonStr)
+      println("json send to jsonProcessorActor.")
       jsonProcessorActor ! MainApp.JsonData(json)
 
     case _ => println("PeriodicFunctionActor received an unhandled message type.")

@@ -301,6 +301,7 @@ class SwingApp(playerClassList: List[Player],
           mainActorRef ! StartMouseMovementActor
         }
 
+
         // Sending the settings to the JsonProcessorActor and PeriodicFunctionActor
 //        jsonProcessorActorRef ! MainApp.StartActors(currentSettings)
         periodicFunctionActorRef ! MainApp.StartActors(currentSettings)

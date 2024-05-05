@@ -72,38 +72,38 @@ object Mouse {
     }
   }
 
-//  def mouseMoveSmooth(robotInstance: Robot, loc: Option[(Int, Int)], simulateHumanBehavior: Boolean = false): Unit = {
-//    loc.foreach { case (x, y) =>
-//      val currentLoc = MouseInfo.getPointerInfo.getLocation
-//      val xStep = (x - currentLoc.getX).toInt / 10
-//      val yStep = (y - currentLoc.getY).toInt / 10
-//      for (i <- 1 to 10) {
-//        robotInstance.mouseMove(currentLoc.getX.toInt + i * xStep, currentLoc.getY.toInt + i * yStep)
-//        Thread.sleep(50)
-//      }
-//    }
-//  }
+  //  def mouseMoveSmooth(robotInstance: Robot, loc: Option[(Int, Int)], simulateHumanBehavior: Boolean = false): Unit = {
+  //    loc.foreach { case (x, y) =>
+  //      val currentLoc = MouseInfo.getPointerInfo.getLocation
+  //      val xStep = (x - currentLoc.getX).toInt / 10
+  //      val yStep = (y - currentLoc.getY).toInt / 10
+  //      for (i <- 1 to 10) {
+  //        robotInstance.mouseMove(currentLoc.getX.toInt + i * xStep, currentLoc.getY.toInt + i * yStep)
+  //        Thread.sleep(50)
+  //      }
+  //    }
+  //  }
 
-//  def mouseMoveSmooth(robotInstance: Robot, loc: Option[(Int, Int)], simulateHumanBehavior: Boolean = false): Unit = {
-//    loc.foreach { case (targetX, targetY) =>
-//      println(s"Starting smooth mouse movement to target: ($targetX, $targetY)")
-//
-//      val currentLoc = MouseInfo.getPointerInfo.getLocation
-//      println(s"Current mouse position: (${currentLoc.x}, ${currentLoc.y})")
-//
-//      val steps = if (simulateHumanBehavior) Math.max(20, (Math.hypot(targetX - currentLoc.x, targetY - currentLoc.y) / 5).toInt) else 10
-//      for (i <- 1 to steps) {
-//        val intermediateX = currentLoc.x + (targetX - currentLoc.x) * i / steps
-//        val intermediateY = currentLoc.y + (targetY - currentLoc.y) * i / steps
-//
-//        println(s"Moving to intermediate position: ($intermediateX, $intermediateY) step $i of $steps")
-//        robotInstance.mouseMove(intermediateX.toInt, intermediateY.toInt)
-//        Thread.sleep(if (simulateHumanBehavior) 50 + random.nextInt(50) else 50)
-//      }
-//
-//      println(s"Completed smooth mouse movement to: ($targetX, $targetY)")
-//    }
-//  }
+  //  def mouseMoveSmooth(robotInstance: Robot, loc: Option[(Int, Int)], simulateHumanBehavior: Boolean = false): Unit = {
+  //    loc.foreach { case (targetX, targetY) =>
+  //      println(s"Starting smooth mouse movement to target: ($targetX, $targetY)")
+  //
+  //      val currentLoc = MouseInfo.getPointerInfo.getLocation
+  //      println(s"Current mouse position: (${currentLoc.x}, ${currentLoc.y})")
+  //
+  //      val steps = if (simulateHumanBehavior) Math.max(20, (Math.hypot(targetX - currentLoc.x, targetY - currentLoc.y) / 5).toInt) else 10
+  //      for (i <- 1 to steps) {
+  //        val intermediateX = currentLoc.x + (targetX - currentLoc.x) * i / steps
+  //        val intermediateY = currentLoc.y + (targetY - currentLoc.y) * i / steps
+  //
+  //        println(s"Moving to intermediate position: ($intermediateX, $intermediateY) step $i of $steps")
+  //        robotInstance.mouseMove(intermediateX.toInt, intermediateY.toInt)
+  //        Thread.sleep(if (simulateHumanBehavior) 50 + random.nextInt(50) else 50)
+  //      }
+  //
+  //      println(s"Completed smooth mouse movement to: ($targetX, $targetY)")
+  //    }
+  //  }
 
   import java.awt.Robot
   import java.awt.MouseInfo
@@ -148,37 +148,37 @@ object Mouse {
 
 
   //  def mouseMoveSmooth(robotInstance: Robot, loc: Option[(Int, Int)], simulateHumanBehavior: Boolean = false): Unit = {
-//    loc.foreach { case (targetX, targetY) =>
-//      println(s"Smoothly moving mouse to ($targetX, $targetY) with human behavior: $simulateHumanBehavior")
-//      val currentLoc = MouseInfo.getPointerInfo.getLocation
-//      val startX = currentLoc.x
-//      val startY = currentLoc.y
-//      val distance = Math.hypot(targetX - startX, targetY - startY).toInt
-//
-//      val steps = if (simulateHumanBehavior) Math.max(20, distance / 50) else 10 // Increase steps for smoother movement
-//      val arcFactor = if (simulateHumanBehavior) 0.2 else 0 // Arc factor for human-like movement
-//
-//      for (i <- 1 to steps) {
-//        val progress = i.toDouble / steps
-//        val intermediateX = startX + ((targetX - startX) * progress).toInt
-//        val intermediateY = startY + ((targetY - startY) * progress).toInt
-//        val arcYOffset = if (simulateHumanBehavior) (Math.sin(progress * Math.PI) * (distance * arcFactor)).toInt else 0
-//
-//        robotInstance.mouseMove(intermediateX, intermediateY + arcYOffset)
-//        Thread.sleep(if (simulateHumanBehavior) 10 + random.nextInt(20) else 50) // Randomize delay for human-like behavior
-//      }
-//
-//      // Simulate overshoot if applicable
-//      // Simulate overshoot if applicable
-//      if (simulateHumanBehavior && distance > 100) {
-//        val overshootX = targetX + (if (random.nextBoolean()) 5 else -5)
-//        val overshootY = targetY + (if (random.nextBoolean()) 5 else -5)
-//        robotInstance.mouseMove(overshootX, overshootY)
-//        Thread.sleep(100 + random.nextInt(100))
-//        robotInstance.mouseMove(targetX, targetY) // Adjust to the final target position
-//      }
-//    }
-//  }
+  //    loc.foreach { case (targetX, targetY) =>
+  //      println(s"Smoothly moving mouse to ($targetX, $targetY) with human behavior: $simulateHumanBehavior")
+  //      val currentLoc = MouseInfo.getPointerInfo.getLocation
+  //      val startX = currentLoc.x
+  //      val startY = currentLoc.y
+  //      val distance = Math.hypot(targetX - startX, targetY - startY).toInt
+  //
+  //      val steps = if (simulateHumanBehavior) Math.max(20, distance / 50) else 10 // Increase steps for smoother movement
+  //      val arcFactor = if (simulateHumanBehavior) 0.2 else 0 // Arc factor for human-like movement
+  //
+  //      for (i <- 1 to steps) {
+  //        val progress = i.toDouble / steps
+  //        val intermediateX = startX + ((targetX - startX) * progress).toInt
+  //        val intermediateY = startY + ((targetY - startY) * progress).toInt
+  //        val arcYOffset = if (simulateHumanBehavior) (Math.sin(progress * Math.PI) * (distance * arcFactor)).toInt else 0
+  //
+  //        robotInstance.mouseMove(intermediateX, intermediateY + arcYOffset)
+  //        Thread.sleep(if (simulateHumanBehavior) 10 + random.nextInt(20) else 50) // Randomize delay for human-like behavior
+  //      }
+  //
+  //      // Simulate overshoot if applicable
+  //      // Simulate overshoot if applicable
+  //      if (simulateHumanBehavior && distance > 100) {
+  //        val overshootX = targetX + (if (random.nextBoolean()) 5 else -5)
+  //        val overshootY = targetY + (if (random.nextBoolean()) 5 else -5)
+  //        robotInstance.mouseMove(overshootX, overshootY)
+  //        Thread.sleep(100 + random.nextInt(100))
+  //        robotInstance.mouseMove(targetX, targetY) // Adjust to the final target position
+  //      }
+  //    }
+  //  }
 
   def calcLocOffset(location: Option[(Int, Int)], x: Int, y: Int): Option[(Int, Int)] = {
     location.map { case (lat, long) =>

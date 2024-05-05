@@ -1,6 +1,6 @@
 package mouse
 
-import akka.actor.{Actor, ActorRef}
+import akka.actor.{Actor, ActorRef, Cancellable}
 import play.api.libs.json.{JsValue, Json, Writes}
 import mouse.ActionTypes
 import processing.{ActionDetail, JsonActionDetails, KeyboardText, MouseAction, MouseActions}
@@ -46,14 +46,15 @@ object MouseMovementSettings {
 
 class MouseMovementActor(actionStateManager: ActorRef) extends Actor {
   val robotInstance = new Robot()
-  val c = new Random()
+//  val c = new Random()
   // Schedule idle mouse movement simulation every 5 to 10 seconds
-  val idleMovementSchedule = context.system.scheduler.scheduleWithFixedDelay(5.seconds, 10.seconds, self, "simulateIdleMovement")
+  var idleMovementSchedule: Option[Cancellable] = None
   var activeTaskCount: Int = 0
   var mouseMovementsEnabled: Boolean = false
 
-  println("MouseMovementActor initialized")
-  // Schedule idle mouse movement simulation
+  override def preStart(): Unit = {
+    println("MouseMovementActor initialized")
+  }
 
   // Schedule idle mouse movement simulation every 5 to 10 seconds
   context.system.scheduler.scheduleWithFixedDelay(
@@ -63,60 +64,62 @@ class MouseMovementActor(actionStateManager: ActorRef) extends Actor {
     message = "simulateIdleMovement"
   )(context.system.dispatcher)
 
-  def simulateIdleMouseMovement(robotInstance: Robot): Unit = {
-    val random = new Random()
-    if (activeTaskCount == 0 && mouseMovementsEnabled) {
-      val currentLoc = MouseInfo.getPointerInfo.getLocation
-      val angle = random.nextDouble() * 2 * Math.PI // Random angle in radians
-      val distance = random.nextInt(20) + 20 // Random distance between 20 and 40 pixels
-
-      // Calculate target position with a curve
-      val targetX = (currentLoc.x + Math.cos(angle) * distance).toInt
-      val targetY = (currentLoc.y + Math.sin(angle) * distance).toInt
-
-      val steps = 20 // More steps for smoother movement
-      for (i <- 1 to steps) {
-        val progress = i.toDouble / steps
-        val intermediateX = currentLoc.x + (targetX - currentLoc.x) * progress
-        val intermediateY = currentLoc.y + (targetY - currentLoc.y) * progress
-
-        // Optionally add a slight curve effect by adjusting the intermediate positions
-        val curveEffect = Math.sin(progress * Math.PI) * 5 // Sine wave for the curve
-        robotInstance.mouseMove((intermediateX + curveEffect).toInt, intermediateY.toInt)
-
-        Thread.sleep(50) // Slow down the movement for realism
-      }
-//      println(s"Idle movement to ($targetX, $targetY) with a curve")
+  private def startIdleMovement(): Unit = {
+    if (idleMovementSchedule.isEmpty && mouseMovementsEnabled && activeTaskCount == 0) {
+      idleMovementSchedule = Some(context.system.scheduler.scheduleWithFixedDelay(
+        initialDelay = 5.seconds,
+        delay = 10.seconds,
+        receiver = self,
+        message = "simulateIdleMovement"
+      )(context.system.dispatcher))
     }
   }
 
-//  def performMouseAction(mouseAction: MouseAction): Unit = {
-//    println(s"Performing mouse action: ${mouseAction.action} at (${mouseAction.x}, ${mouseAction.y})")
-//    mouseAction.action match {
-//      case "move" => // Implement mouse movement logic here
-//      case "pressLeft" => robotInstance.mousePress(InputEvent.BUTTON1_DOWN_MASK)
-//      case "releaseLeft" => robotInstance.mouseRelease(InputEvent.BUTTON1_DOWN_MASK)
-//      case "pressRight" => robotInstance.mousePress(InputEvent.BUTTON3_DOWN_MASK)
-//      case "releaseRight" => robotInstance.mouseRelease(InputEvent.BUTTON3_DOWN_MASK)
-//      case _ => println(s"Invalid mouse action: ${mouseAction.action}")
-//    }
-//  }
+  private def stopIdleMovement(): Unit = {
+    idleMovementSchedule.foreach(_.cancel())
+    idleMovementSchedule = None
+  }
+
+  def simulateIdleMouseMovement(): Unit = {
+    val random = new Random()
+    val currentLoc = MouseInfo.getPointerInfo.getLocation
+    val angle = random.nextDouble() * 2 * Math.PI // Random angle in radians
+    val distance = random.nextInt(20) + 20 // Random distance between 20 and 40 pixels
+
+    val targetX = (currentLoc.x + Math.cos(angle) * distance).toInt
+    val targetY = (currentLoc.y + Math.sin(angle) * distance).toInt
+
+    val steps = 20
+    for (i <- 1 to steps) {
+      if (activeTaskCount > 0) return // Stop if new tasks have arrived
+
+      val progress = i.toDouble / steps
+      val intermediateX = currentLoc.x + (targetX - currentLoc.x) * progress
+      val intermediateY = currentLoc.y + (targetY - currentLoc.y) * progress
+
+      val curveEffect = Math.sin(progress * Math.PI) * 5
+      robotInstance.mouseMove((intermediateX + curveEffect).toInt, intermediateY.toInt)
+
+      Thread.sleep(50) // Realism
+    }
+  }
+
 
   // This method simulates typing a string using the Robot class.
   def performMouseAction(mouseAction: MouseAction): Unit = {
-//    println(s"Performing mouse action: ${mouseAction.action} at (${mouseAction.x}, ${mouseAction.y})")
+    //    println(s"Performing mouse action: ${mouseAction.action} at (${mouseAction.x}, ${mouseAction.y})")
     mouseAction.action match {
       case "move" =>
-//        println(s"Moving mouse to (${mouseAction.x}, ${mouseAction.y})")
+        //        println(s"Moving mouse to (${mouseAction.x}, ${mouseAction.y})")
         Mouse.mouseMoveSmooth(robotInstance, Some((mouseAction.x, mouseAction.y)), simulateHumanBehavior = true)
       case "pressLeft" =>
-//        println("Pressing left mouse button")
+        //        println("Pressing left mouse button")
         robotInstance.mousePress(InputEvent.BUTTON1_DOWN_MASK)
       case "releaseLeft" =>
-//        println("Releasing left mouse button")
+        //        println("Releasing left mouse button")
         robotInstance.mouseRelease(InputEvent.BUTTON1_DOWN_MASK)
       case "pressRight" =>
-//        println("Pressing right mouse button")
+        //        println("Pressing right mouse button")
         robotInstance.mousePress(InputEvent.BUTTON3_DOWN_MASK)
       case "releaseRight" =>
         robotInstance.mouseRelease(InputEvent.BUTTON3_DOWN_MASK)
@@ -132,25 +135,25 @@ class MouseMovementActor(actionStateManager: ActorRef) extends Actor {
 
   override def receive: Receive = {
     case MouseMoveCommand(actions, movementsEnabled) =>
-      // Update the local flag based on the command received
-      this.mouseMovementsEnabled = movementsEnabled
-      // If any actions need to be performed immediately, do so here
+      stopIdleMovement() // Stop idle movements when a new command is received
+      activeTaskCount += actions.length
       actions.foreach(performMouseAction)
+      activeTaskCount -= actions.length
+      startIdleMovement() // Restart idle movements if still appropriate
+
 
     case "simulateIdleMovement" =>
-      if (mouseMovementsEnabled) {
-        simulateIdleMouseMovement(robotInstance)
-      }
+      if (mouseMovementsEnabled && activeTaskCount == 0) simulateIdleMouseMovement()
 
     case MouseMovementStatusUpdate(taskCount, movementsEnabled) =>
-      // Optionally update active task count and movementsEnabled based on your application's logic
-      this.mouseMovementsEnabled = movementsEnabled
+      activeTaskCount = taskCount
+      mouseMovementsEnabled = movementsEnabled
+      if (mouseMovementsEnabled && activeTaskCount == 0) startIdleMovement()
+      else stopIdleMovement()
   }
 
-
-
   override def postStop(): Unit = {
+    stopIdleMovement()
     println("MouseMovementActor stopped")
   }
 }
-

@@ -7,6 +7,7 @@ import userUI.SettingsUtils.UISettings
 import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, Mouse, MouseMoveCommand, MouseMovementSettings}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
 import processing.Process.findItemInContainerSlot14
+import utils.consoleColorPrint._
 
 import scala.collection.immutable.Seq
 
@@ -287,7 +288,7 @@ object AutoHeal {
     }
     val endTime = System.nanoTime()
     val duration = (endTime - startTime) / 1e6d
-    println(f"Processing computeAutoHealActions took $duration%.3f ms")
+    printInColor(ANSI_GREEN, f"[INFO] Processing computeAutoHealActions took $duration%.3f ms")
 
     ((actions, logs), updatedState)
   }

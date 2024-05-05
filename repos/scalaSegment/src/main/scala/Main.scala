@@ -8,7 +8,7 @@ import player.Player
 import mouse.{ActionStateManager, Mouse, MouseMovementActor}
 import keyboard.{ActionKeyboardManager, AutoResponderManager, KeyboardActor}
 import play.api.libs.json._
-import processing.{JsonProcessorActor, SubwaypointGeneratorActor}
+import processing.{JsonProcessorActor}
 import userUI.UIAppActor
 import utils.{FunctionExecutorActor, InitialJsonProcessorActor, InitialRunActor, MainActor, PeriodicFunctionActor}
 
@@ -95,7 +95,6 @@ object MainApp extends App {
   case class JsonData(json: JsValue)
 // Create the ActionStateManager without any parameters
   val actionStateManagerRef = system.actorOf(Props[ActionStateManager], "actionStateManager")
-  val subwaypointGeneratorActorRef = system.actorOf(Props[SubwaypointGeneratorActor], "subwaypointGenerator")
 
   // Create the MouseMovementActor, passing the ActionStateManager reference
   val mouseMovementActorRef = system.actorOf(Props(new MouseMovementActor(actionStateManagerRef)), "mouseMovementActor")
