@@ -110,6 +110,8 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
   // var state: ProcessorState = ProcessorState()
   var state: ProcessorState = ProcessorState(settings = settings)
 
+
+
   // Initialize lastFishingCommandTime to a value ensuring the first check will always pass
   private val fishingCommandInterval: Long = 1000
   private var lastFishingCommandTime: Long = System.currentTimeMillis() - fishingCommandInterval

@@ -22,7 +22,7 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
   var socket: Option[Socket] = None
   var out: Option[DataOutputStream] = None
   var in: Option[DataInputStream] = None
-
+  private var latestJson: Option[JsValue] = None
 
   override def preStart(): Unit = {
 
@@ -34,6 +34,10 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
 
     case json: JsValue =>
       jsonProcessorActor ! MainApp.JsonData(json)
+      latestJson = Some(json)
+
+    case "fetchLatestJson" =>
+      latestJson.foreach(sender() ! _)
 
     case StartActors(settings) =>
       println("PeriodicFunctionActor received StartActors message.")
@@ -43,15 +47,16 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
       startListening()
       initiateSendFunction("periodicEvent")
 
-    case jsonStr: String =>
-      // Assuming jsonStr is a JSON string, parse it to JsValue before forwarding
-      val json: JsValue = Json.parse(jsonStr)
-      println("json send to jsonProcessorActor.")
-      jsonProcessorActor ! MainApp.JsonData(json)
 
     case _ => println("PeriodicFunctionActor received an unhandled message type.")
 
   }
+
+//  case jsonStr: String =>
+//  // Assuming jsonStr is a JSON string, parse it to JsValue before forwarding
+//  val json: JsValue = Json.parse(jsonStr)
+//  println("json send to jsonProcessorActor.")
+//  jsonProcessorActor ! MainApp.JsonData(json)
 
 
   def connectToServer(): Unit = {

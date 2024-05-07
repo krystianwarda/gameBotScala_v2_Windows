@@ -3,13 +3,14 @@ package userUI
 import akka.actor.ActorRef
 import akka.pattern.ask
 import akka.util.Timeout
-import main.scala.MainApp.functionExecutorActorRef
+import main.scala.MainApp.{functionExecutorActorRef, periodicFunctionActorRef}
 import play.api.libs.json.JsValue
 import player.Player
+import play.api.libs.json._
 
 import scala.util.{Failure, Success}
-import java.awt.{Dimension, GridBagConstraints, GridBagLayout, Insets}
-import javax.swing.{DefaultComboBoxModel, DefaultListModel, JButton, JComboBox, JFileChooser, JLabel, JList, JOptionPane, JPanel, JScrollPane, ListSelectionModel, SwingUtilities, filechooser}
+import java.awt.{Color, Dimension, GridBagConstraints, GridBagLayout, GridLayout, Insets}
+import javax.swing.{BorderFactory, DefaultComboBoxModel, DefaultListModel, JButton, JComboBox, JFileChooser, JLabel, JList, JOptionPane, JPanel, JScrollPane, ListSelectionModel, ScrollPaneConstants, SwingUtilities, filechooser}
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 import scala.swing.{CheckBox, Component, TextField}
@@ -18,8 +19,52 @@ import utils.ExecuteFunction
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import java.io.{BufferedWriter, File, FileWriter}
+import javax.swing.event.{ListSelectionEvent, ListSelectionListener}
+
+class GridTile(val accessible: Boolean, val color: Color) {
+  override def toString: String = s"Accessible: $accessible, Color: $color"
+}
+
+class GridInfo(val grid: Array[Array[GridTile]]) {
+  def defaultGrid: Array[Array[GridTile]] = Array.fill(13, 17)(new GridTile(false, Color.WHITE))
+
+  // Added a utility method to get a specific tile's accessibility
+  def isTileAccessible(x: Int, y: Int): Boolean = grid(y)(x).accessible
+  def fromTileData(indexStr: String, isWalkable: Boolean): GridInfo = {
+    val grid = defaultGrid
+    val coords = indexStr.split("x").map(_.toIntOption).flatten
+    if (coords.length == 2) {
+      val x = coords(0)
+      val y = coords(1)
+      if (x >= 0 && x < 17 && y >= 0 && y < 13) {
+        grid(y)(x) = new GridTile(isWalkable, if (isWalkable) Color.GREEN else Color.RED)
+        return new GridInfo(grid)
+      }
+    }
+    println(s"Invalid coordinates provided: $indexStr")
+    new GridInfo(grid) // Return a default grid in case of invalid coordinates
+  }
+  def updateTile(x: Int, y: Int, isWalkable: Boolean): Unit = {
+    if (x >= 0 && x < grid(0).length && y >= 0 && y < grid.length) {
+      grid(y)(x) = new GridTile(isWalkable, if (isWalkable) Color.GREEN else Color.RED)
+    } else {
+      println(s"Invalid tile coordinates: $x, $y")
+    }
+  }
+}
+
+
+
 
 class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: ActorRef) {
+  // Debug flag
+  val gridInfo = GridInfo.getSingletonGrid
+  private val debugEnabled = true
+
+  // Method to optionally print debug messages
+  private def debug(msg: => String): Unit = {
+    if (debugEnabled) println(msg)
+  }
 
   // Define list model for waypoints
   val placementDropdown = new JComboBox[String]()
@@ -30,8 +75,10 @@ class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
   val waypointListModel = new DefaultListModel[String]()
   // Now, you can use this model in a JList
   val waypointsList = new JList[String](waypointListModel)
+  waypointsList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
 
-
+  val gridPlaceholder = createGridPlaceholder()
+  val gridInfoListModel = new DefaultListModel[GridInfo]()
 
   val waypointName = new TextField("not saved", 30)
   // Add button to add waypoints
@@ -53,37 +100,142 @@ class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
   val moveDownButton = new JButton("Move Down")
 
 
-
   def createWaypoint(waypointType: String): Unit = {
     println("Creating waypoint...")
-    implicit val timeout: Timeout = Timeout(5.seconds) // Define the timeout for the `ask` pattern
+    implicit val timeout: Timeout = Timeout(5.seconds)
 
-    // Correctly send the message and handle the response as a future
-    val futureWaypoint: Future[JsValue] = (functionExecutorActorRef ? ExecuteFunction("getCharPos")).mapTo[JsValue]
+    val futureWaypoint: Future[JsValue] = (periodicFunctionActorRef ? "fetchLatestJson").mapTo[JsValue]
 
     futureWaypoint.onComplete {
       case Success(json) =>
-        // Check if the JSON response includes the keys 'x' and 'y'
-        (json \ "x").asOpt[Int] match {
-          case Some(positionX) =>
-            val positionY = (json \ "y").asOpt[Int].getOrElse(0)
-            val positionZ = (json \ "z").asOpt[Int].getOrElse(0)
-            val placement = placementDropdown.getSelectedItem.toString
-
-            val displayString = s"$waypointType, $placement, $positionX, $positionY, $positionZ"
-            println(s"Waypoint created successfully: $displayString")
-            // Assuming waypointListModel is a Swing component model or similar
-            waypointListModel.addElement(displayString)
-
-          case None =>
-            println("Received JSON response without 'x' and 'y' coordinates. Processing differently...")
-        }
-
+        processJsonData(waypointType, json)
+        SwingUtilities.invokeLater(() => {
+          waypointsList.setSelectedIndex(waypointListModel.getSize() - 1)
+//          updateGridPanelFromGridInfo()
+        })
       case Failure(e) =>
-        // Handle any errors that occurred during the future operation
         println(s"Failed to create waypoint due to: $e")
     }
   }
+
+  def processJsonData(waypointType: String, json: JsValue): Unit = {
+    println(s"Processing JSON data for $waypointType")
+    val playerInfo = (json \ "characterInfo").asOpt[JsObject]
+    playerInfo.foreach { infoJson =>
+      val x = (infoJson \ "PositionX").as[Int]
+      val y = (infoJson \ "PositionY").as[Int]
+      val z = (infoJson \ "PositionZ").as[Int]
+      val placement = placementDropdown.getSelectedItem.toString
+      val displayString = s"$waypointType, $placement, $x, $y, $z"
+      println(s"Player position: $displayString")
+      waypointListModel.addElement(displayString)
+
+      // Create a new GridInfo object for the current waypoint
+      val newGridInfo = new GridInfo(GridInfo.defaultGrid)
+
+      val tiles = (json \ "areaInfo" \ "tiles").as[JsObject]
+      tiles.fields.foreach { case (key, value) =>
+        val indexStr = (value \ "index").as[String]
+        val isWalkableTile = (value \ "isWalkableTile").asOpt[Boolean].getOrElse(false)
+        val isPathable = (value \ "isPathable").asOpt[Boolean].getOrElse(false)
+
+        val isWalkable = isWalkableTile && isPathable
+
+        val coords = indexStr.split("x").map(_.toInt)
+        if (coords.length == 2) {
+          val x = coords(0)
+          val y = coords(1)
+          if (x >= 0 && x < 17 && y >= 0 && y < 13) {
+            println(s"Updating tile at X: $x, Y: $y to $isWalkable")
+            newGridInfo.updateTile(x, y, isWalkable)
+          } else {
+            println(s"Skipping invalid tile index: $indexStr")
+          }
+        }
+      }
+      // Add the new GridInfo to the model
+      gridInfoListModel.addElement(newGridInfo)
+    }
+    initialGridDisplay()  // Optionally update the display here or after a selection change
+  }
+
+  def initialGridDisplay(): Unit = {
+    val selectedIndex = waypointsList.getSelectedIndex()
+    if (selectedIndex >= 0 && selectedIndex < gridInfoListModel.getSize()) {
+      val gridInfo = gridInfoListModel.get(selectedIndex)  // Fetch the grid info for the selected index
+      val gridPanel = gridPlaceholder.getViewport.getView.asInstanceOf[JPanel]
+      gridPanel.removeAll()
+      gridPanel.setLayout(new GridLayout(13, 17))
+
+      for (y <- 0 until 13) {
+        for (x <- 0 until 17) {
+          val cell = new JPanel()
+          cell.setBorder(BorderFactory.createLineBorder(Color.black))
+          // Check if it's the character's central position
+          if (x == 8 && y == 6) {
+            cell.setBackground(Color.YELLOW) // Set to yellow regardless of actual tile state
+          } else {
+            val tile = gridInfo.grid(y)(x)
+            cell.setBackground(if (tile.accessible) Color.GREEN else Color.RED)
+          }
+          gridPanel.add(cell)
+        }
+      }
+      gridPanel.revalidate()
+      gridPanel.repaint()
+      println("Grid updated for current selection.")
+    } else {
+      println("No grid data available to display.")
+    }
+  }
+
+  def updateGridDisplayOld(): Unit = {
+    val selectedIndex = waypointsList.getSelectedIndex()
+    if (selectedIndex >= 0 && selectedIndex < gridInfoListModel.getSize()) {
+      val gridInfo = gridInfoListModel.get(selectedIndex)
+      val gridPanel = gridPlaceholder.getViewport.getView.asInstanceOf[JPanel]
+      gridPanel.removeAll()
+      gridPanel.setLayout(new GridLayout(13, 17))
+      for (y <- 0 until 13) {
+        for (x <- 0 until 17) {
+          val cell = new JPanel()
+          cell.setBorder(BorderFactory.createLineBorder(Color.black))
+          val tile = gridInfo.grid(y)(x)
+          cell.setBackground(if (tile.accessible) Color.GREEN else Color.RED)
+          gridPanel.add(cell)
+        }
+      }
+      gridPanel.revalidate()
+      gridPanel.repaint()
+    } else {
+      println("No grid data available to display.")
+    }
+  }
+
+
+  def createWaypointOld(waypointType: String): Unit = {
+    println("Creating waypoint...")
+    implicit val timeout: Timeout = Timeout(5.seconds)
+
+    val futureWaypoint: Future[JsValue] = (periodicFunctionActorRef ? "fetchLatestJson").mapTo[JsValue]
+
+    futureWaypoint.onComplete {
+      case Success(json) =>
+        processJsonData(waypointType, json)
+      case Failure(e) =>
+        println(s"Failed to create waypoint due to: $e")
+    }
+  }
+
+
+  def convertListModelToList(model: DefaultListModel[GridInfo]): List[GridInfo] = {
+    val list = List.newBuilder[GridInfo]
+    for (i <- 0 until model.getSize) {
+      list += model.get(i)
+    }
+    list.result()
+  }
+
 
 
   // Add action listener to the add button
@@ -141,9 +293,10 @@ class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
 
     c.gridy = 3
     c.gridx = 0
-    c.gridwidth = 4
+    c.gridwidth = 2
     add(new JScrollPane(waypointsList), c)
-
+    c.gridx = 2
+    add(gridPlaceholder, c)
 
 
     // Placement of point
@@ -196,6 +349,79 @@ class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
   })
 
 
+  waypointsList.addListSelectionListener(new ListSelectionListener {
+    override def valueChanged(e: ListSelectionEvent): Unit = {
+      if (!e.getValueIsAdjusting) {
+        val selectedIndex = waypointsList.getSelectedIndex()
+        println(s"Selection changed: updating grid for index $selectedIndex")
+        if (selectedIndex >= 0 && selectedIndex < gridInfoListModel.getSize()) {
+          val gridInfo = gridInfoListModel.get(selectedIndex)
+          updateGridDisplay(gridInfo)  // Ensure this method uses the gridInfo to update the UI
+        } else {
+          println("No grid data available to display.")
+        }
+      }
+    }
+  })
+
+  def updateGridDisplay(gridInfo: GridInfo): Unit = {
+    val gridPanel = gridPlaceholder.getViewport.getView.asInstanceOf[JPanel]
+    gridPanel.removeAll()
+    gridPanel.setLayout(new GridLayout(13, 17))
+
+    for (y <- 0 until 13) {
+      for (x <- 0 until 17) {
+        val cell = new JPanel()
+        cell.setBorder(BorderFactory.createLineBorder(Color.black))
+        // Check if it's the character's central position
+        if (x == 8 && y == 6) {
+          cell.setBackground(Color.YELLOW)  // Set to yellow regardless of actual tile state
+        } else {
+          val tile = gridInfo.grid(y)(x)
+          cell.setBackground(if (tile.accessible) Color.GREEN else Color.RED)
+        }
+        gridPanel.add(cell)
+      }
+    }
+    gridPanel.revalidate()
+    gridPanel.repaint()
+    println("Grid updated for current selection.")
+  }
+
+
+//  waypointsList.addListSelectionListener(new ListSelectionListener {
+//    override def valueChanged(e: ListSelectionEvent): Unit = {
+//      if (!e.getValueIsAdjusting) {
+//        println(s"Selection changed: updating grid for index ${waypointsList.getSelectedIndex}")
+//        SwingUtilities.invokeLater(() => {
+//          updateGridPanelFromGridInfo()
+//        })
+//      }
+//    }
+//  })
+
+
+  //  waypointsList.addListSelectionListener(new ListSelectionListener {
+//    override def valueChanged(e: ListSelectionEvent): Unit = {
+//      if (!e.getValueIsAdjusting) {
+//        println(s"Selection changed: updating grid for index ${waypointsList.getSelectedIndex}")
+//        updateGridPanelFromGridInfo() // Call to update the grid for the current selection
+//      }
+//    }
+//  })
+
+
+//  // Assuming each waypoint's associated grid JSON is stored or retrievable
+//  waypointsList.addListSelectionListener(new ListSelectionListener {
+//    override def valueChanged(e: ListSelectionEvent): Unit = {
+//      if (!e.getValueIsAdjusting) {
+//        println(s"Selection changed: updating grid for index ${waypointsList.getSelectedIndex}")
+//        updateGridPanelFromGridInfo() // Update the grid to reflect the current selection
+//      }
+//    }
+//  })
+
+
   def resetWaypointsAndName(): Unit = {
     // Clear the list model to remove all waypoints from the UI
     waypointListModel.clear()
@@ -238,10 +464,12 @@ class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
   }
 
 
+  // Ensure synchronized list operations
   def removeSelectedWaypoint(): Unit = {
     val selectedIndex = waypointsList.getSelectedIndex
     if (selectedIndex != -1) {
       waypointListModel.remove(selectedIndex)
+      gridInfoListModel.remove(selectedIndex)
     }
   }
 
@@ -249,26 +477,178 @@ class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
     val selectedIndex = waypointsList.getSelectedIndex
     if (selectedIndex > 0) {
       val waypoint = waypointListModel.get(selectedIndex)
+      val gridInfo = gridInfoListModel.get(selectedIndex)
       waypointListModel.remove(selectedIndex)
+      gridInfoListModel.remove(selectedIndex)
       waypointListModel.add(selectedIndex - 1, waypoint)
+      gridInfoListModel.add(selectedIndex - 1, gridInfo)
       waypointsList.setSelectedIndex(selectedIndex - 1)
     }
   }
+
 
   def moveSelectedWaypointDown(): Unit = {
     val selectedIndex = waypointsList.getSelectedIndex
     if (selectedIndex < waypointListModel.getSize - 1 && selectedIndex >= 0) {
       val waypoint = waypointListModel.get(selectedIndex)
+      val gridInfo = gridInfoListModel.get(selectedIndex)
       waypointListModel.remove(selectedIndex)
+      gridInfoListModel.remove(selectedIndex)
       waypointListModel.add(selectedIndex + 1, waypoint)
+      gridInfoListModel.add(selectedIndex + 1, gridInfo)
       waypointsList.setSelectedIndex(selectedIndex + 1)
     }
   }
 
-  def jListToScalaList(waypointsList: JList[String]): List[String] = {
-    val model = waypointsList.getModel
-    (for (i <- 0 until model.getSize) yield model.getElementAt(i)).toList
+
+  // Function to create a blank grid panel with a specified size
+  def createGridPlaceholderOld(): JScrollPane = {
+    val gridPanel = new JPanel(new GridLayout(13, 17)) // Updated to 13 rows and 17 columns
+    gridPanel.setPreferredSize(new Dimension(510, 390)) // Updated dimensions to accommodate extra tiles
+    for (_ <- 0 until 13 * 17) { // Updated count for the loop to fill the grid
+      val cell = new JPanel()
+      cell.setBorder(BorderFactory.createLineBorder(Color.lightGray))
+      gridPanel.add(cell)
+    }
+    new JScrollPane(gridPanel, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED, ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED)
   }
+
+  def createGridPlaceholder(): JScrollPane = {
+    val gridPanel = new JPanel(new GridLayout(13, 17))  // Assuming 13x17 grid layout
+    gridPanel.setPreferredSize(new Dimension(510, 390))
+    for (_ <- 0 until 13 * 17) {
+      val cell = new JPanel()
+      cell.setBorder(BorderFactory.createLineBorder(Color.lightGray))
+      cell.setBackground(Color.WHITE)  // Default color
+      gridPanel.add(cell)
+    }
+    new JScrollPane(gridPanel, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED, ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED)
+  }
+
+
+
+  // Adjust your grid update logic:
+  def updateGridPanelFromGridInfo(): Unit = {
+    if (gridInfoListModel.getSize() == 0) {
+      println("No grid data available to display.")
+      return
+    }
+
+    val selectedIndex = waypointsList.getSelectedIndex()
+    if (selectedIndex < 0 || selectedIndex >= gridInfoListModel.getSize()) {
+      println("Invalid selection index.")
+      return
+    }
+
+    val gridInfo = gridInfoListModel.get(selectedIndex)  // Ensure this index is valid
+    val gridPanel = gridPlaceholder.getViewport.getView.asInstanceOf[JPanel]
+    gridPanel.removeAll()
+    gridPanel.setLayout(new GridLayout(13, 17))
+
+    for (y <- 0 until 13) {
+      for (x <- 0 until 17) {
+        val cell = new JPanel()
+        cell.setBorder(BorderFactory.createLineBorder(Color.black))
+        val tile = gridInfo.grid(y)(x)
+        cell.setBackground(if (tile.accessible) Color.GREEN else Color.RED)
+        gridPanel.add(cell)
+      }
+    }
+
+    gridPanel.revalidate()
+    gridPanel.repaint()
+  }
+
+  def clearGrid(): Unit = {
+    val gridPanel = gridPlaceholder.getViewport.getView.asInstanceOf[JPanel]
+    gridPanel.removeAll()
+    gridPanel.setLayout(new GridLayout(13, 17))
+    debug("Clearing the grid...")
+
+    for (_ <- 0 until 13 * 17) {
+      val cell = new JPanel()
+      cell.setBorder(BorderFactory.createLineBorder(Color.lightGray))
+      cell.setBackground(Color.WHITE)
+      gridPanel.add(cell)
+    }
+    gridPanel.revalidate()
+    gridPanel.repaint()
+    debug("Grid cleared.")
+  }
+
+
+
+  def updateGridPanelOld(gridPanel: JPanel, tiles: JsValue): Unit = {
+    gridPanel.removeAll() // Clear previous cells
+
+    // Parse tiles if it's a JsObject
+    val tileObj = tiles.asOpt[JsObject].getOrElse {
+      println("Unexpected JSON type.")
+      return
+    }
+
+    // Prepare a map for indexed tiles, considering only valid coordinates
+    val indexedTiles = tileObj.fields.flatMap { case (key, value) =>
+      val indexStr = (value \ "index").asOpt[String].getOrElse("")
+      val isWalkable = (value \ "isWalkableTile").asOpt[Boolean].getOrElse(false)
+      val coords = indexStr.split("x").map(_.toInt)
+      if (coords.length == 2 && coords(0) >= 0 && coords(0) <= 16 && coords(1) >= 0 && coords(1) <= 12)
+        Some(((coords(0), coords(1)), isWalkable))
+      else None
+    }.toMap
+
+    // Set the grid dimensions based on the new specified range
+    val gridSizeX = 17 // updated to include two extra columns on the right
+    val gridSizeY = 13 // updated to include two extra rows at the bottom
+
+    // Fill the grid with tiles, creating panels as needed
+    for (y <- 0 until gridSizeY) {
+      for (x <- 0 until gridSizeX) {
+        val key = (x, y)
+        val isWalkable = indexedTiles.getOrElse(key, false)
+        val panel = new JPanel()
+        panel.setBorder(BorderFactory.createLineBorder(Color.black))
+
+        // Check if the current tile is the player's location (8,6)
+        val bgColor = if (x == 8 && y == 6) {
+          Color.YELLOW // Set the color to yellow for the player's location
+        } else if (!indexedTiles.contains(key)) {
+          Color.WHITE // Default to white if no tile data
+        } else if (isWalkable) {
+          Color.GREEN
+        } else {
+          Color.BLUE
+        }
+
+        panel.setBackground(bgColor)
+        gridPanel.add(panel)
+      }
+    }
+
+    gridPanel.revalidate()
+    gridPanel.repaint()
+  }
+
+  object GridInfo {
+    def defaultGrid: Array[Array[GridTile]] = Array.fill(13, 17)(new GridTile(false, Color.WHITE))
+    def getSingletonGrid: GridInfo = new GridInfo(defaultGrid)
+
+    def fromTileData(indexStr: String, isWalkable: Boolean): GridInfo = {
+      val grid = defaultGrid
+      val coords = indexStr.split("x").map(_.toIntOption).flatten
+      if (coords.length == 2) {
+        val x = coords(0)
+        val y = coords(1)
+        if (x >= 0 && x < 17 && y >= 0 && y < 13) {
+          grid(y)(x) = new GridTile(isWalkable, if (isWalkable) Color.GREEN else Color.RED)
+          return new GridInfo(grid)
+        }
+      }
+      println(s"Invalid coordinates provided: $indexStr")
+      new GridInfo(grid) // Return a default grid in case of invalid coordinates
+    }
+  }
+
 
 
 }
