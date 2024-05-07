@@ -1011,15 +1011,22 @@ object CaveBot {
     println(s"[DEBUG] Path: ${filteredPath.mkString(" -> ")}")
     println(s"[DEBUG] Char loc: $presentCharLocation")
     println(s"[DEBUG] Waypoint loc: $currentWaypointLocation")
-    printGrid(grid, gridBounds, filteredPath, updatedState.presentCharLocation, currentWaypointLocation)
 
-    updatedState.copy(
-      subWaypoints = filteredPath,
-      gridBoundsState = gridBounds,
-      gridState = grid,
-      currentWaypointLocation = currentWaypointLocation,
-      presentCharLocation = presentCharLocation
-    )
+
+    if (presentCharLocation != currentWaypointLocation) {
+      printGrid(grid, gridBounds, filteredPath, updatedState.presentCharLocation, currentWaypointLocation)
+      // Locations are different, update state accordingly
+      updatedState.copy(
+        subWaypoints = filteredPath,
+        gridBoundsState = gridBounds,
+        gridState = grid,
+        currentWaypointLocation = currentWaypointLocation,
+        presentCharLocation = presentCharLocation
+      )
+    } else {
+      println(s"[DEBUG] presentCharLocation &  Char loc are the same.")
+      updatedState
+    }
   }
 
 

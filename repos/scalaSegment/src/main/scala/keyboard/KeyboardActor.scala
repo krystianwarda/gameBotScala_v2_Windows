@@ -19,7 +19,7 @@ class KeyboardActor extends Actor {
   }
 
   // Schedule a key release with a delay
-  private def scheduleKeyRelease(keyCode: Int, delay: FiniteDuration = 550.milliseconds): Unit = {
+  private def scheduleKeyRelease(keyCode: Int, delay: FiniteDuration = 400.milliseconds): Unit = {
     keyReleaseTasks.get(keyCode).foreach(_.cancel())
     val task = context.system.scheduler.scheduleOnce(delay) {
       robot.keyRelease(keyCode)
