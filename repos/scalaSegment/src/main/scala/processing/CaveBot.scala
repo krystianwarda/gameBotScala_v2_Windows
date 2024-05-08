@@ -33,7 +33,7 @@ object CaveBot {
     var updatedState = currentState // Initialize updatedState
 
 
-    if (settings.caveBotSettings.enabled && updatedState.stateHunting == "free") {
+    if (settings.caveBotSettings.enabled) {
 
 
       // Safely attempt to parse battleInfo as a map
@@ -74,7 +74,7 @@ object CaveBot {
           updatedState = updatedState.copy(antiOverpassDelay = currentTime)
 
 
-          val levelMovementEnablersIdsList: List[Int] = List(414, 1977)
+          val levelMovementEnablersIdsList: List[Int] = List(414, 369, 469, 1977, 1947, 1948)
           printInColor(ANSI_BLUE, f"[WRONG FLOOR] Level movement enablers: $levelMovementEnablersIdsList")
 
           val presentCharLocationX = (json \ "characterInfo" \ "PositionX").as[Int]
@@ -84,55 +84,40 @@ object CaveBot {
           printInColor(ANSI_BLUE, f"[WRONG FLOOR] Character position - X: $presentCharLocationX, Y: $presentCharLocationY")
 
           val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
-          printInColor(ANSI_BLUE, f"[WRONG FLOOR] Number of tiles loaded: ${tiles.size}")
 
           val currentWaypointLocationOpt = tiles.collectFirst {
-            case (key, value) if (value \ "items").validate[Map[String, Int]].asOpt.exists(items =>
-              items.values.exists(id => levelMovementEnablersIdsList.contains(id))) =>
+            case (key, value) if (value \ "items").validate[Map[String, JsObject]].asOpt.exists(items =>
+              items.values.exists(item => (item \ "id").asOpt[Int].exists(id => levelMovementEnablersIdsList.contains(id)))) =>
               // Extracting x and y from the key considering the first 5 digits for x and the next 5 for y
               val x = key.take(5).toInt
               val y = key.drop(5).take(5).toInt
-              printInColor(ANSI_RED, f"[DEBUG] Found matching item in tile - X: $x, Y: $y, Key: $key")
-              Vec(x, y)
-          }
+              val tileLocation = Vec(x, y)
+              val distance = manhattanDistance(presentCharLocation, tileLocation)
+              if (distance <= 4) {
+                printInColor("ANSI_BLUE", s"[WRONG FLOOR] Found matching item in tile - X: $x, Y: $y, Key: $key, Distance: $distance")
+                tileLocation
+              } else {
+                null
+              }
+          }.filter(_ != null)
 
           currentWaypointLocationOpt match {
             case Some(currentWaypointLocation) =>
-              printInColor(ANSI_BLUE, f"[WRONG FLOOR] Found current waypoint location: $currentWaypointLocation")
+              printInColor(ANSI_BLUE, s"[WRONG FLOOR] Found current waypoint location: $currentWaypointLocation")
 
-              val xs = tiles.keys.map(_.substring(0, 5).toInt)
-              val ys = tiles.keys.map(_.substring(5, 10).toInt)
-              val min_x = xs.min
-              val min_y = ys.min
-              val maxX = xs.max
-              val maxY = ys.max
+              // Set the found waypoint as the next waypoint
+              val nextWaypoint = currentWaypointLocation
 
-              val gridBounds = (min_x, min_y, maxX, maxY)
-              val (grid, _) = createBooleanGrid(tiles, min_x, min_y)
-
-              // Before calling findPathUsingGameCoordinates, ensure the waypoint is within bounds
-              val adjustedWaypointLocation = if (currentWaypointLocation.x < min_x || currentWaypointLocation.x > maxX ||
-                currentWaypointLocation.y < min_y || currentWaypointLocation.y > maxY) {
-
-                adjustGoalWithinBounds(currentWaypointLocation, grid, gridBounds)
-              } else {
-                currentWaypointLocation
-              }
-
-              val newPath = findPathUsingGameCoordinates(presentCharLocation, adjustedWaypointLocation, grid, gridBounds)
-              updatedState = updatedState.copy(subWaypoints = newPath, lastDirection = None)
-
-              val nextWaypoint = updatedState.subWaypoints.head
               val direction = calculateDirection(presentCharLocation, nextWaypoint, updatedState.lastDirection)
               updatedState = updatedState.copy(lastDirection = direction)
-              println(s"Direction ${direction}")
-              printGrid(grid, gridBounds, newPath, presentCharLocation, currentWaypointLocation)
+              println(s"Direction $direction")
 
               direction.foreach { dir =>
                 actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(dir)))
+                logs :+= Log(s"Moving closer to the subWaypoint in direction: $dir")
               }
             case None =>
-              printInColor(ANSI_BLUE, f"[WRONG FLOOR] No valid waypoint found based on level movement enablers.")
+              printInColor("ANSI_BLUE", "[WRONG FLOOR] No valid waypoint found based on level movement enablers.")
           }
         }
       } else {
@@ -143,7 +128,7 @@ object CaveBot {
             val hasMonsters = battleInfo.exists { case (_, creature) =>
               (creature \ "IsMonster").asOpt[Boolean].getOrElse(false)
             }
-            if (!hasMonsters) {
+            if (!hasMonsters && updatedState.stateHunting == "free") {
               val result = executeWhenNoMonstersOnScreen(json, settings, updatedState, actions, logs)
               actions = result._1._1
               logs = result._1._2
@@ -158,14 +143,17 @@ object CaveBot {
 
               // track if character crossed a subwaypoint
               if (updatedState.subWaypoints.nonEmpty) {
+                // Get the current subWaypoint
+                val currentWaypoint = updatedState.subWaypoints.head
                 // Check if character is at the current subWaypoint or needs to move towards the next
-                if (isCloseToWaypoint(presentCharLocation, updatedState.subWaypoints.head)) {
+                if (Math.abs(currentWaypoint.x - presentCharLocationX) <= 1 && Math.abs(currentWaypoint.y - presentCharLocationY) <= 1) {
                   // Advance to next subWaypoint, ensuring we do not exceed the list's bounds
                   updatedState = updatedState.copy(subWaypoints = updatedState.subWaypoints.tail)
                   // Log for debugging
-                  printInColor(ANSI_BLUE, f"[SUBWAYPOINT PROGRESS]  Character advanced to next subWaypoint. Remaining Path: ${updatedState.subWaypoints}")
+                  printInColor(ANSI_BLUE, f"[SUBWAYPOINT PROGRESS] Character advanced to next subWaypoint. Remaining Path: ${updatedState.subWaypoints}")
                 }
               }
+
 
               // track if character crossed a waypoint
               val currentWaypointIndex = updatedState.currentWaypointIndex
@@ -285,7 +273,7 @@ object CaveBot {
 
 
     if (updatedState.subWaypoints.length < 2) {
-      printInColor(ANSI_RED, f"[DEBUG] Subwaypoints are empty or few. Need to regenrate the path")
+      printInColor(ANSI_RED, f"[DEBUG] Subwaypoints are empty or few. Generating the path")
       currentWaypoint = updatedState.fixedWaypoints(updatedState.currentWaypointIndex)
 
       updatedState = generateSubwaypoints(currentWaypoint, updatedState, json)

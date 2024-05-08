@@ -4,6 +4,7 @@ import java.awt.Robot
 import java.awt.event.KeyEvent
 import scala.concurrent.duration._
 
+
 class KeyboardActor extends Actor {
   import context.dispatcher
 
@@ -11,11 +12,15 @@ class KeyboardActor extends Actor {
   var keyReleaseTasks: Map[Int, Cancellable] = Map()
 
   // Cancel any existing release task and press the key
-  private def pressKey(keyCode: Int): Unit = {
+  private def pressKey(keyCode: Int, immediateRelease: Boolean = false): Unit = {
     robot.keyPress(keyCode)
     keyReleaseTasks.get(keyCode).foreach(_.cancel())
     keyReleaseTasks -= keyCode
     println(s"KeyboardActor: Key $keyCode pressed.")
+    if (immediateRelease) {
+      robot.keyRelease(keyCode)
+      println(s"KeyboardActor: Key $keyCode released immediately.")
+    }
   }
 
   // Schedule a key release with a delay
@@ -32,21 +37,27 @@ class KeyboardActor extends Actor {
 
   override def receive: Receive = {
     case PressArrowKey(direction) =>
-      val keyCode = direction match {
-        case "ArrowUp" => KeyEvent.VK_UP
-        case "ArrowDown" => KeyEvent.VK_DOWN
-        case "ArrowLeft" => KeyEvent.VK_LEFT
-        case "ArrowRight" => KeyEvent.VK_RIGHT
+      val (keyCode, immediateRelease) = direction match {
+        case "ArrowUp" => (KeyEvent.VK_UP, false)
+        case "ArrowDown" => (KeyEvent.VK_DOWN, false)
+        case "ArrowLeft" => (KeyEvent.VK_LEFT, false)
+        case "ArrowRight" => (KeyEvent.VK_RIGHT, false)
+        case "ArrowUpSingle" => (KeyEvent.VK_UP, true)
+        case "ArrowDownSingle" => (KeyEvent.VK_DOWN, true)
+        case "ArrowLeftSingle" => (KeyEvent.VK_LEFT, true)
+        case "ArrowRightSingle" => (KeyEvent.VK_RIGHT, true)
         case _ =>
           println("KeyboardActor: Invalid direction received.")
-          -1
+          (-1, false)
       }
 
       if (keyCode != -1) {
-        // Press the key immediately to ensure responsiveness
-        pressKey(keyCode)
-        // Schedule the release of the key allowing it to be held
-        scheduleKeyRelease(keyCode)
+        // Press the key, with immediate release if specified
+        pressKey(keyCode, immediateRelease)
+        // Schedule the release of the key only if not immediately released
+        if (!immediateRelease) {
+          scheduleKeyRelease(keyCode)
+        }
       }
       sender() ! KeyboardActionCompleted(KeyboardActionTypes.PressKey)
   }
