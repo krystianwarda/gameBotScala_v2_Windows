@@ -100,6 +100,11 @@ class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
   val moveDownButton = new JButton("Move Down")
 
 
+  // Define fixed dimensions
+  val fixedHeight = 200
+  val waypointsListWidth = 200
+  val gridPlaceholderWidth = 300
+
   def createWaypoint(waypointType: String): Unit = {
     println("Creating waypoint...")
     implicit val timeout: Timeout = Timeout(5.seconds)
@@ -241,6 +246,22 @@ class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
     add(removeButton, c)
     c.gridx = 3
     add(resetButton, c)
+
+//    c.gridy = 3
+//    c.gridx = 0
+//    c.gridwidth = 2
+//
+//    // Set preferred size for waypointsList
+//    val waypointsScrollPane = new JScrollPane(waypointsList)
+//    waypointsScrollPane.setPreferredSize(new Dimension(waypointsListWidth, fixedHeight))
+//    add(waypointsScrollPane, c)
+//
+//    c.gridx = 2
+//
+//    // Set preferred size for gridPlaceholder
+//    val smallerGridPlaceholder = createGridPlaceholder()
+//    smallerGridPlaceholder.setPreferredSize(new Dimension(gridPlaceholderWidth, fixedHeight))
+//    add(smallerGridPlaceholder, c)
 
 
     c.gridy = 3
@@ -471,8 +492,20 @@ class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
     }
   }
 
-
   def createGridPlaceholder(): JScrollPane = {
+    val gridPanel = new JPanel(new GridLayout(13, 17)) // Assuming 13x17 grid layout
+    gridPanel.setPreferredSize(new Dimension(200, 140)) // Adjusted size for smaller cells
+    for (_ <- 0 until 13 * 17) {
+      val cell = new JPanel()
+      cell.setPreferredSize(new Dimension(5, 5)) // Adjust cell size
+      cell.setBorder(BorderFactory.createLineBorder(Color.lightGray))
+      cell.setBackground(Color.WHITE) // Default color
+      gridPanel.add(cell)
+    }
+    new JScrollPane(gridPanel, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED, ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED)
+  }
+
+  def createGridPlaceholderOld(): JScrollPane = {
     val gridPanel = new JPanel(new GridLayout(13, 17))  // Assuming 13x17 grid layout
     gridPanel.setPreferredSize(new Dimension(510, 390))
     for (_ <- 0 until 13 * 17) {

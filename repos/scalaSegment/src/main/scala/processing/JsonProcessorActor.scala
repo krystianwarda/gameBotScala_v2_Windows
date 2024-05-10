@@ -89,6 +89,8 @@ case class ProcessorState(
                            gridBoundsState: (Int, Int, Int, Int) = (0, 0, 0, 0), // Example default value
                            presentCharLocation: Vec = Vec(0, 0),
                            alreadyLootedIds: List[Int] = List(),
+                           retryStatus: Int = 0,
+                           retryAttempts: Int = 3,
                          )
 case class UpdateSettings(settings: UISettings)
 
@@ -149,16 +151,9 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
         val newState = processJson(json, state)
         state = newState
         val endTime = System.nanoTime()
-        val duration = (endTime - startTime) / 1e6d
-        printInColor(ANSI_CYAN, f"[INFO] Processing JSON took $duration%.3f ms")
+        val duration = (endTime - startTime) / 1e9d
+        printInColor(ANSI_CYAN, f"[INFO] Processing JSON took $duration%.6f seconds")
       }
-//      val startTime = System.nanoTime() // Capture start time
-//      println("JsonProcessorActor received JSON: " + json)
-//      val newState = processJson(json, state)
-//      state = newState // Critical: Ensure the state is updated here
-//      val endTime = System.nanoTime() // Capture end time
-//      val duration = (endTime - startTime) / 1e6d // Calculate duration in milliseconds
-//      println(f"[INFO] Processing JSON took $duration%.3f ms") // Print the duration
 
     case InitializeProcessor(p, s) =>
       // Update state with new settings

@@ -287,8 +287,8 @@ object AutoHeal {
 
     }
     val endTime = System.nanoTime()
-    val duration = (endTime - startTime) / 1e6d
-    printInColor(ANSI_GREEN, f"[INFO] Processing computeAutoHealActions took $duration%.3f ms")
+    val duration = (endTime - startTime) / 1e9d
+    printInColor(ANSI_GREEN, f"[INFO] Processing computeAutoHealActions took $duration%.6f seconds")
 
     ((actions, logs), updatedState)
   }

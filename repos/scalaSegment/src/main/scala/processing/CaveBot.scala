@@ -31,7 +31,7 @@ object CaveBot {
     var actions: Seq[FakeAction] = Seq.empty
     var logs: Seq[Log] = Seq.empty
     var updatedState = currentState // Initialize updatedState
-
+    printInColor(ANSI_RED, f"[DEBUG] computeAutoLootActions process started with status:${updatedState.stateHunting}")
 
     if (settings.caveBotSettings.enabled) {
 
@@ -129,13 +129,13 @@ object CaveBot {
               (creature \ "IsMonster").asOpt[Boolean].getOrElse(false)
             }
             if (!hasMonsters && updatedState.stateHunting == "free") {
+              printInColor(ANSI_RED, f"[DEBUG] executeWhenNoMonstersOnScreen process started with status:${updatedState.stateHunting}")
               val result = executeWhenNoMonstersOnScreen(json, settings, updatedState, actions, logs)
               actions = result._1._1
               logs = result._1._2
               updatedState = result._2
-            } else {
+            } else if  (updatedState.stateHunting == "free") {
               updatedState = updatedState.copy(lastDirection = Option(""))
-              printInColor(ANSI_RED, f"[DEBUG] Skipping actions due to presence of monsters.")
               val presentCharLocationX = (json \ "characterInfo" \ "PositionX").as[Int]
               val presentCharLocationY = (json \ "characterInfo" \ "PositionY").as[Int]
               val presentCharLocation = Vec(presentCharLocationX, presentCharLocationY)
@@ -169,10 +169,13 @@ object CaveBot {
 
             }
           case JsError(_) =>
-            val result = executeWhenNoMonstersOnScreen(json, settings, updatedState, actions, logs)
-            actions = result._1._1
-            logs = result._1._2
-            updatedState = result._2
+            printInColor(ANSI_RED, f"[DEBUG] case JsError with status:${updatedState.stateHunting}")
+            if (updatedState.stateHunting == "free") {
+              val result = executeWhenNoMonstersOnScreen(json, settings, updatedState, actions, logs)
+              actions = result._1._1
+              logs = result._1._2
+              updatedState = result._2
+            }
         }
       }
     }
@@ -284,243 +287,22 @@ object CaveBot {
     }
 
 
-
-    val nextWaypoint = updatedState.subWaypoints.head
-    val direction = calculateDirection(presentCharLocation, nextWaypoint, updatedState.lastDirection)
-    printInColor(ANSI_RED, f"[DEBUG] Calculated Next Direction: $direction")
-    updatedState = updatedState.copy(lastDirection = direction)
-
     if (updatedState.subWaypoints.nonEmpty) {
+      val nextWaypoint = updatedState.subWaypoints.head
+      val direction = calculateDirection(presentCharLocation, nextWaypoint, updatedState.lastDirection)
+      printInColor(ANSI_RED, f"[DEBUG] Calculated Next Direction: $direction")
+      updatedState = updatedState.copy(lastDirection = direction)
+
       direction.foreach { dir =>
         actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(dir)))
         logs :+= Log(s"Moving closer to the subWaypoint in direction: $dir")
       }
     }
-//    updatedState = updateCharacterPositionAndCheckStagnation(presentCharLocation, updatedState)
-//
-//    if (updatedState.positionStagnantCount > 20) {
-//      // Reset waypointsLoaded to false to force a reload of waypoints
-//      updatedState = updatedState.copy(lastDirection = Option(""))
-//      updatedState = updatedState.copy(waypointsLoaded = false, positionStagnantCount = 0)
-//      // Potentially log this event or take additional recovery actions
-//      printInColor(ANSI_RED, f"[DEBUG] Character has been stagnant for too long, resetting waypoints...")
-//    }
-//
-//
-//    ////////// START //////////
-//    // Define thresholdDistance with the specified value
-//    val thresholdDistance = 35
-//
-//    // Calculate the distance from the current character position to the current waypoint
-//
-//    var currentWaypointIndex = updatedState.currentWaypointIndex
-//    var currentWaypoint = updatedState.fixedWaypoints(updatedState.currentWaypointIndex)
-//    val distanceToCurrentWaypoint = presentCharLocation.manhattanDistance(Vec(currentWaypoint.waypointX, currentWaypoint.waypointY))
-//
-//
-//    // is waypoint within range threshold?
-//    if (distanceToCurrentWaypoint > thresholdDistance) {
-//      printInColor(ANSI_RED, f"[DEBUG] FALSE - distance above threshold")
-//      // Check if there are alternative waypoints closer and within the threshold distance
-//      val possibleWaypoints = updatedState.fixedWaypoints.zipWithIndex.filter { case (waypoint, _) =>
-//        val distance = presentCharLocation.manhattanDistance(Vec(waypoint.waypointX, waypoint.waypointY))
-//        distance <= thresholdDistance
-//      }
-//
-//      if (possibleWaypoints.nonEmpty) {
-//        printInColor(ANSI_RED, f"[DEBUG] TRUE - There is at least one waypoint within the threshold distance")
-//        val (closestWaypoint, closestIndex) = possibleWaypoints.minBy { case (waypoint, _) =>
-//          presentCharLocation.manhattanDistance(Vec(waypoint.waypointX, waypoint.waypointY))
-//        }
-//        updatedState = updatedState.copy(currentWaypointIndex = closestIndex, subWaypoints = List.empty)
-//        printInColor(ANSI_RED, f"[DEBUG] Using closer waypoint idx: $closestIndex, X: ${closestWaypoint.waypointX}, Y: ${closestWaypoint.waypointY}")
-//      } else {
-//        printInColor(ANSI_RED, f"[DEBUG] FALSE - No closer waypoints within the threshold, so find the nearest waypoint regardless of threshold")
-//        val nextWaypointIndex = updatedState.fixedWaypoints.zipWithIndex
-//          .minByOption { case (waypoint, _) =>
-//            presentCharLocation.manhattanDistance(Vec(waypoint.waypointX, waypoint.waypointY))
-//          }
-//          .map(_._2)
-//          .getOrElse(updatedState.currentWaypointIndex) // Fallback to current waypoint index if no suitable waypoint found
-//
-//        // Update the current waypoint index with the found index
-//        updatedState = updatedState.copy(currentWaypointIndex = nextWaypointIndex, subWaypoints = List.empty)
-//        currentWaypoint = updatedState.fixedWaypoints(updatedState.currentWaypointIndex)
-//        printInColor(ANSI_RED, f"[DEBUG] Nearest waypoint is idx: $nextWaypointIndex, X: ${currentWaypoint.waypointX}, Y: ${currentWaypoint.waypointY}")
-//      }
-//
-//      printInColor(ANSI_RED, f"[DEBUG] Waypoint idx: $currentWaypointIndex, PositionX: ${currentWaypoint.waypointX}, PositionY: ${currentWaypoint.waypointY}")
-//
-//      printInColor(ANSI_RED, f"[DEBUG] Launching subwaypoint generator Actor")
-//
-//      // Send message to generator actor and handle response asynchronously
-//      if (updatedState.subWaypoints.length < 3) {
-//        // Simulating the actor's call with direct function usage
-//        printInColor(ANSI_RED, "[DEBUG] Requesting updated state with subwaypoints.")
-//        val tryUpdateState = Try(generateSubwaypoints(currentWaypoint, initialState, json))
-//
-//        tryUpdateState match {
-//          case Success(initialUpdatedState) =>
-//            printInColor(ANSI_RED, "[DEBUG] State updated successfully with new subwaypoints.")
-//            var updatedState = initialUpdatedState // Use var to allow reassignment
-//
-//            // Additional processing
-//            if (updatedState.subWaypoints.nonEmpty) {
-//              printInColor(ANSI_RED, f"[DEBUG] Current subwaypoints before filtering: ${updatedState.subWaypoints}")
-//              val filteredSubwaypoints = filterCloseSubwaypoints(updatedState.presentCharLocation, updatedState.subWaypoints)
-//              updatedState = updatedState.copy(subWaypoints = filteredSubwaypoints)
-//              printInColor(ANSI_RED, f"[DEBUG] Filtered subwaypoints after filtering: $filteredSubwaypoints")
-//            }
-//
-//          case Failure(exception) =>
-//            printInColor(ANSI_RED, s"[ERROR] Failed to receive updated state: ${exception.getMessage}")
-//        }
-//      }
-//
-//
-//
-//    } else {
-//
-//      printInColor(ANSI_RED, f"[DEBUG] check if next waypoint is within 2 sqm")
-//      if (Math.abs(currentWaypoint.waypointX - presentCharLocationX) <= 2 && Math.abs(currentWaypoint.waypointY - presentCharLocationY) <= 2) {
-//        printInColor(ANSI_RED, f"[DEBUG] Move to the next waypoint, clear sub-waypoints, and force path recalculation")
-//
-//        val nextWaypointIndex = (currentWaypointIndex + 1) % updatedState.fixedWaypoints.size
-//        updatedState = updatedState.copy(currentWaypointIndex = nextWaypointIndex, subWaypoints = List.empty)
-//        var currentWaypoint = updatedState.fixedWaypoints(updatedState.currentWaypointIndex)
-//
-//      } else {
-//        printInColor(ANSI_RED, f"[DEBUG] Next waypoint is farer than 2sq, check if subwaypoints is empty")
-//        // Ensure we are within the bounds of the subWaypoints list
-//        if (updatedState.subWaypoints.size <= 3) {
-//          printInColor(ANSI_RED, f"[DEBUG] Subwaypoint list has less or equal than 2 elements")
-//          // generate new subwaypoints
-//          var currentWaypointLocation = Vec(currentWaypoint.waypointX, currentWaypoint.waypointY)
-//          printInColor(ANSI_RED, f"[DEBUG] Waypoint idx: $currentWaypointIndex, PositionX: ${currentWaypoint.waypointX}, PositionY: ${currentWaypoint.waypointY}")
-//
-//          // Previous calculations to determine gridBounds
-//          val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
-//          val xs = tiles.keys.map(_.substring(0, 5).toInt)
-//          val ys = tiles.keys.map(_.substring(5, 10).toInt)
-//          val min_x = xs.min
-//          val min_y = ys.min
-//          val maxX = xs.max
-//          val maxY = ys.max
-//
-//
-//          // Check if the character's current position is outside the grid bounds
-//          if ((currentWaypointLocation.x < min_x || currentWaypointLocation.x > maxX ||
-//            currentWaypointLocation.y < min_y || currentWaypointLocation.y > maxY) && (updatedState.subWaypoints.isEmpty)) {
-//
-//            // Before calling findPathUsingGameCoordinates, adjust the waypoint if it's out of bounds
-//            val gridBounds = (min_x, min_y, maxX, maxY)
-//            // Now call createBooleanGrid with the correct parameters
-//            val (grid, _) = createBooleanGrid(tiles, min_x, min_y)
-//
-//            val newWaypointLocation = adjustGoalWithinBounds(currentWaypointLocation, grid, gridBounds)
-//            currentWaypointLocation = newWaypointLocation
-//            updatedState = updatedState.copy(gridBoundsState = gridBounds)
-//            updatedState = updatedState.copy(gridState = grid)
-//            updatedState = updatedState.copy(currentWaypointLocation = currentWaypointLocation)
-//
-//            printInColor(ANSI_RED, f"[DEBUG] Waypoint is out of grid range. Temporary waypoint: $currentWaypointLocation")
-//          } else {
-//            printInColor(ANSI_RED, f"[DEBUG] Waypoint is in range.")
-//          }
-//
-//          if (updatedState.subWaypoints.length < 3) {
-//            // Simulating the actor's call with direct function usage
-//            printInColor(ANSI_RED, "[DEBUG] Requesting updated state with subwaypoints.")
-//            val tryUpdateState = Try(generateSubwaypoints(currentWaypoint, initialState, json))
-//
-//            tryUpdateState match {
-//              case Success(initialUpdatedState) =>
-//                printInColor(ANSI_RED, "[DEBUG] State updated successfully with new subwaypoints.")
-//                var updatedState = initialUpdatedState // Use var to allow reassignment
-//
-//                // Additional processing
-//                if (updatedState.subWaypoints.nonEmpty) {
-//                  printInColor(ANSI_RED, f"[DEBUG] Current subwaypoints before filtering: ${updatedState.subWaypoints}")
-//                  val filteredSubwaypoints = filterCloseSubwaypoints(updatedState.presentCharLocation, updatedState.subWaypoints)
-//                  updatedState = updatedState.copy(subWaypoints = filteredSubwaypoints)
-//                  printInColor(ANSI_RED, f"[DEBUG] Filtered subwaypoints after filtering: $filteredSubwaypoints")
-//                }
-//
-//              case Failure(exception) =>
-//                printInColor(ANSI_RED, s"[ERROR] Failed to receive updated state: ${exception.getMessage}")
-//            }
-//          }
-//
-//        } else {
-//          printInColor(ANSI_RED, f"[DEBUG] Check if character is at the current subWaypoint or needs to move towards the next")
-//          //
-//          if (isCloseToWaypoint(presentCharLocation, updatedState.subWaypoints.head) && updatedState.subWaypoints.size <= 1) {
-//            printInColor(ANSI_RED, f"[DEBUG] Advance to next subWaypoint, ensuring we do not exceed the list's bounds")
-//            updatedState = updatedState.copy(subWaypoints = updatedState.subWaypoints.tail)
-//
-//            // Log for debugging
-//            printInColor(ANSI_RED, f"[DEBUG] Character advanced to next subWaypoint. Remaining Path: ${updatedState.subWaypoints}")
-//          }
-//        }
-//      }
-//    }
-//
-//
-//    if (updatedState.subWaypoints.length < 3) {
-//      // Simulating the actor's call with direct function usage
-//      printInColor(ANSI_RED, "[DEBUG] Requesting updated state with subwaypoints.")
-//      val tryUpdateState = Try(generateSubwaypoints(currentWaypoint, initialState, json))
-//
-//      tryUpdateState match {
-//        case Success(initialUpdatedState) =>
-//          printInColor(ANSI_RED, "[DEBUG] State updated successfully with new subwaypoints.")
-//          var updatedState = initialUpdatedState // Use var to allow reassignment
-//
-//          // Additional processing
-//          if (updatedState.subWaypoints.nonEmpty) {
-//            printInColor(ANSI_RED, f"[DEBUG] Current subwaypoints before filtering: ${updatedState.subWaypoints}")
-//            val filteredSubwaypoints = filterCloseSubwaypoints(updatedState.presentCharLocation, updatedState.subWaypoints)
-//            updatedState = updatedState.copy(subWaypoints = filteredSubwaypoints)
-//            printInColor(ANSI_RED, f"[DEBUG] Filtered subwaypoints after filtering: $filteredSubwaypoints")
-//          }
-//
-//        case Failure(exception) =>
-//          printInColor(ANSI_RED, s"[ERROR] Failed to receive updated state: ${exception.getMessage}")
-//      }
-//    }
-//
-//    if (updatedState.subWaypoints.nonEmpty) {
-//      printInColor(ANSI_RED, f"[DEBUG] Current subwaypoints before filtering: ${updatedState.subWaypoints}")
-//      val filteredSubwaypoints = filterCloseSubwaypoints(presentCharLocation, updatedState.subWaypoints)
-//      updatedState = updatedState.copy(subWaypoints = filteredSubwaypoints)
-//      printInColor(ANSI_RED, f"[DEBUG] Filtered subwaypoints after filtering: $filteredSubwaypoints")
-//    }
-//
-//    if (updatedState.subWaypoints.nonEmpty) {
-//      printInColor(ANSI_RED, f"[DEBUG] Making move.")
-//      val nextWaypoint = updatedState.subWaypoints.head
-//      val direction = calculateDirection(presentCharLocation, nextWaypoint, updatedState.lastDirection)
-//      printInColor(ANSI_RED, f"[DEBUG] Calculated Next Direction: $direction")
-//      printInColor(ANSI_RED, f"[DEBUG] Last Direction: ${updatedState.lastDirection}")
-//
-//      printInColor(ANSI_RED, f"[DEBUG] Filtered Subwaypoints: ${updatedState.subWaypoints}")
-//      printInColor(ANSI_RED, f"[DEBUG]  grid: ${updatedState.gridState}, gridBounds: ${updatedState.gridBoundsState}, path: ${updatedState.subWaypoints}, char loc: ${updatedState.presentCharLocation} wp loc: ${updatedState.currentWaypointLocation}")
-//      printGrid(updatedState.gridState, updatedState.gridBoundsState, updatedState.subWaypoints, updatedState.presentCharLocation, updatedState.currentWaypointLocation)
-//      // Update lastDirection in ProcessorState after moving
-//      updatedState = updatedState.copy(lastDirection = direction)
-//
-//      direction.foreach { dir =>
-//        actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(dir)))
-//        logs :+= Log(s"Moving closer to the subWaypoint in direction: $dir")
-//      }
-//    } else {
-//      printInColor(ANSI_RED, f"[DEBUG] subWaypoints are empty")
-//
-//    }
+
 
     val endTime = System.nanoTime()
-    val duration = (endTime - startTime) / 1e6d
-    printInColor(ANSI_GREEN, f"[INFO] Processing computeCaveBotActions took $duration%.3f ms")
+    val duration = (endTime - startTime) / 1e9d
+    printInColor(ANSI_GREEN, f"[INFO] Processing computeCaveBotActions took $duration%.6f seconds")
 
     ((actions, logs), updatedState)
   }
@@ -559,7 +341,7 @@ object CaveBot {
     }
   }
 
-  def calculateDirectionOldNew(currentLocation: Vec, nextLocation: Vec, lastDirection: Option[String]): Option[String] = {
+  def calculateDirectionlol(currentLocation: Vec, nextLocation: Vec, lastDirection: Option[String]): Option[String] = {
     // Debugging the inputs directly to ensure they're as expected
     println(s"Debug - Input currentLocation: $currentLocation, nextLocation: $nextLocation")
 
@@ -612,6 +394,74 @@ object CaveBot {
         println("Debug - Matched case: Character is already at the destination.")
         None
       case (0, -1) =>
+        checkForSingleMove("ArrowUp", lastDirection, "ArrowDown")
+      case (0, 1) =>
+        checkForSingleMove("ArrowDown", lastDirection, "ArrowUp")
+      case (-1, 0) =>
+        checkForSingleMove("ArrowLeft", lastDirection, "ArrowRight")
+      case (1, 0) =>
+        checkForSingleMove("ArrowRight", lastDirection, "ArrowLeft")
+      case _ =>
+        println("Debug - Matched case: Diagonal or multiple options available.")
+        // Choose direction avoiding reversal of the last direction
+        lastDirection match {
+          case Some("ArrowRight") if deltaX < 0 =>
+            chooseDirectionBasedOnDeltaY(deltaY)
+          case Some("ArrowLeft") if deltaX > 0 =>
+            chooseDirectionBasedOnDeltaY(deltaY)
+          case Some("ArrowDown") if deltaY < 0 =>
+            chooseDirectionBasedOnDeltaX(deltaX)
+          case Some("ArrowUp") if deltaY > 0 =>
+            chooseDirectionBasedOnDeltaX(deltaX)
+          case _ =>
+            // If not reversing, choose randomly between available directions
+            randomDirectionChoice(deltaX, deltaY)
+        }
+    }
+  }
+
+  def checkForSingleMove(chosenDirection: String, lastDirection: Option[String], oppositeDirection: String): Option[String] = {
+    if (lastDirection.contains(oppositeDirection)) {
+      println(s"Debug - Avoiding reversal from $oppositeDirection to $chosenDirection")
+      None
+    } else {
+      println(s"Debug - Chosen single move direction: $chosenDirection")
+      Some(chosenDirection)
+    }
+  }
+
+  def chooseDirectionBasedOnDeltaX(deltaX: Int): Option[String] = {
+    if (deltaX < 0) Some("ArrowLeft") else Some("ArrowRight")
+  }
+
+  def chooseDirectionBasedOnDeltaY(deltaY: Int): Option[String] = {
+    if (deltaY < 0) Some("ArrowUp") else Some("ArrowDown")
+  }
+
+  def randomDirectionChoice(deltaX: Int, deltaY: Int): Option[String] = {
+    val random = new Random()
+    val decision = if (random.nextBoolean()) {
+      if (deltaX < 0) "ArrowLeft" else "ArrowRight"
+    } else {
+      if (deltaY < 0) "ArrowUp" else "ArrowDown"
+    }
+    println(s"Debug - Randomly chosen direction: $decision based on DeltaX: $deltaX, DeltaY: $deltaY")
+    Some(decision)
+  }
+
+  def calculateDirectionOldOldOld(currentLocation: Vec, nextLocation: Vec, lastDirection: Option[String]): Option[String] = {
+    // Debugging the inputs directly to ensure they're as expected
+    println(s"Debug - Input currentLocation: $currentLocation, nextLocation: $nextLocation")
+
+    val deltaX = nextLocation.x - currentLocation.x
+    val deltaY = nextLocation.y - currentLocation.y
+    println(s"Debug - Calculated DeltaX: $deltaX, DeltaY: $deltaY based on inputs")
+
+    (deltaX.sign, deltaY.sign) match {
+      case (0, 0) =>
+        println("Debug - Matched case: Character is already at the destination.")
+        None
+      case (0, -1) =>
         println("Debug - Matched case: ArrowUp")
         Some("ArrowUp")
       case (0, 1) =>
@@ -643,24 +493,8 @@ object CaveBot {
   }
 
 
-  def chooseDirectionBasedOnDeltaY(deltaY: Int): Option[String] = {
-    if (deltaY < 0) Some("ArrowUp") else Some("ArrowDown")
-  }
 
-  def chooseDirectionBasedOnDeltaX(deltaX: Int): Option[String] = {
-    if (deltaX < 0) Some("ArrowLeft") else Some("ArrowRight")
-  }
-
-  def randomDirectionChoice(deltaX: Int, deltaY: Int): Option[String] = {
-    val random = new Random()
-    if (random.nextBoolean()) {
-      chooseDirectionBasedOnDeltaX(deltaX)
-    } else {
-      chooseDirectionBasedOnDeltaY(deltaY)
-    }
-  }
-
-  def calculateDirectionOld(currentLocation: Vec, nextLocation: Vec, lastDirection: Option[String]): Option[String] = {
+  def calculateDirectionOldOld(currentLocation: Vec, nextLocation: Vec, lastDirection: Option[String]): Option[String] = {
     val deltaX = nextLocation.x - currentLocation.x
     val deltaY = nextLocation.y - currentLocation.y
     //    println(s"DeltaX: $deltaX, DeltaY: $deltaY, LastDirection: $lastDirection")

@@ -17,7 +17,7 @@ object AutoTarget {
     var updatedState = currentState // Initialize updatedState
     val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
 
-
+//    printInColor(ANSI_RED, f"[DEBUG] computeAutoTargetActions process started with status:${updatedState.stateHunting}")
 
     if (settings.autoTargetSettings.enabled && updatedState.stateHunting == "free") {
 
@@ -58,7 +58,7 @@ object AutoTarget {
         case Some(attackedCreatureTarget) =>
 //          println(s"Targeting creature id: $attackedCreatureTarget")
           val targetName = (json \ "attackInfo" \ "Name").asOpt[String].getOrElse("Unknown")
-
+          printInColor(ANSI_RED, f"[DEBUG] computeAutoTargetActions process started. Status:${updatedState.stateHunting}, attacking: $targetName")
           val xPos = (json \ "attackInfo" \ "Position" \ "x").asOpt[Int].getOrElse(0)
           val yPos = (json \ "attackInfo" \ "Position" \ "y").asOpt[Int].getOrElse(0)
           val zPos = (json \ "attackInfo" \ "Position" \ "z").asOpt[Int].getOrElse(0)
@@ -75,8 +75,8 @@ object AutoTarget {
     }
 
     val endTime = System.nanoTime()
-    val duration = (endTime - startTime) / 1e6d
-    printInColor(ANSI_GREEN, f"[INFO] Processing computeAutoTargetActions took $duration%.3f ms")
+    val duration = (endTime - startTime) / 1e9d
+    printInColor(ANSI_GREEN, f"[INFO] Processing computeAutoTargetActions took $duration%.6f seconds")
     ((actions, logs), updatedState)
   }
 
@@ -107,7 +107,7 @@ object AutoTarget {
 
       case None =>
         if (updatedState.stateHunting == "free") {
-          println("attackInfo is null or not present or Id is not an Int")
+
           updatedState = updatedState.copy(creatureTarget = 0)
 
           // Extract monsters, their IDs, and Names
@@ -178,7 +178,7 @@ object AutoTarget {
           // Process the highest priority target
           topFourMonsters.headOption match {
             case Some((id, name)) =>
-              println(s"Attack creature name: $name, and id: $id")
+
               val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ id.toString).asOpt[JsObject]
 
 
@@ -186,18 +186,25 @@ object AutoTarget {
                 case Some(pos) =>
                   val battleCreaturePositionX = (pos \ "PosX").asOpt[Int].getOrElse(0)
                   val battleCreaturePositionY = (pos \ "PosY").asOpt[Int].getOrElse(0)
-                  println(s"Attack creature on battle positionX: $battleCreaturePositionX, and positionY: $battleCreaturePositionY")
 
-                  updatedState = updatedState.copy(lastTargetName = name)
+                  if (updatedState.retryStatus >= updatedState.retryAttempts) {
+                    printInColor(ANSI_RED, f"[DEBUG] Attack creature name: $name, and id: $id ")
+                    updatedState = updatedState.copy(lastTargetName = name)
 
-                  // Perform the mouse actions
-                  val actionsSeq = Seq(
-                    MouseAction(battleCreaturePositionX, battleCreaturePositionY, "move"),
-                    MouseAction(battleCreaturePositionX, battleCreaturePositionY, "pressLeft"),
-                    MouseAction(battleCreaturePositionX, battleCreaturePositionY, "releaseLeft")
-                  )
-                  actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+                    // Perform the mouse actions
+                    val actionsSeq = Seq(
+                      MouseAction(battleCreaturePositionX, battleCreaturePositionY, "move"),
+                      MouseAction(battleCreaturePositionX, battleCreaturePositionY, "pressLeft"),
+                      MouseAction(battleCreaturePositionX, battleCreaturePositionY, "releaseLeft")
+                    )
+                    actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
 
+                    // Reset the state and retryStatus
+                    updatedState = updatedState.copy(stateHunting = "free", retryStatus = 0)
+                  } else {
+                    printInColor(ANSI_RED, f"[DEBUG] Retrying... (Attempt ${updatedState.retryStatus + 1})")
+                    updatedState = updatedState.copy(retryStatus = updatedState.retryStatus + 1)
+                  }
 
                 case None =>
                   println(s"No position information available for monster ID $id")
@@ -262,8 +269,8 @@ object AutoTarget {
 //    }
 
     val endTime = System.nanoTime()
-    val duration = (endTime - startTime) / 1e6d
-//    println(f"[INFO] Processing executeWhenNoMonstersOnScreen took $duration%.3f ms")
+    val duration = (endTime - startTime) / 1e9d
+//    println(f"[INFO] Processing executeWhenNoMonstersOnScreen took $duration%.6f seconds")
     ((actions, logs), updatedState)
   }
 
