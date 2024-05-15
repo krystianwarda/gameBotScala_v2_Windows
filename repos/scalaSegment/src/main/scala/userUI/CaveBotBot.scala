@@ -7,6 +7,7 @@ import main.scala.MainApp.{functionExecutorActorRef, periodicFunctionActorRef}
 import play.api.libs.json.JsValue
 import player.Player
 import play.api.libs.json._
+import userUI.SettingsUtils.CaveBotSettings
 
 import scala.util.{Failure, Success}
 import java.awt.{Color, Dimension, GridBagConstraints, GridBagLayout, GridLayout, Insets}
@@ -20,6 +21,7 @@ import utils.ExecuteFunction
 import scala.concurrent.ExecutionContext.Implicits.global
 import java.io.{BufferedWriter, File, FileWriter}
 import javax.swing.event.{ListSelectionEvent, ListSelectionListener}
+
 
 class GridTile(val accessible: Boolean, val color: Color) {
   override def toString: String = s"Accessible: $accessible, Color: $color"
@@ -51,9 +53,31 @@ class GridInfo(val grid: Array[Array[GridTile]]) {
       println(s"Invalid tile coordinates: $x, $y")
     }
   }
+
+  def serialize: String = {
+    grid.map(row => row.map(tile => s"${tile.accessible}:${tile.color.getRGB}").mkString(",")).mkString(";")
+  }
+
+  def this(serialized: String) = {
+    this(serialized.split(";").map(row => row.split(",").map { cell =>
+      val parts = cell.split(":")
+      new GridTile(parts(0).toBoolean, new Color(parts(1).toInt))
+    }))
+  }
+
+
 }
 
 
+object CaveBotSettings {
+  implicit val gridInfoWrites: Writes[GridInfo] = new Writes[GridInfo] {
+    def writes(gridInfo: GridInfo): JsValue = JsString(gridInfo.serialize)
+  }
+
+  implicit val gridInfoReads: Reads[GridInfo] = JsPath.read[String].map(new GridInfo(_))
+
+  implicit val caveBotSettingsFormat: Format[CaveBotSettings] = Json.format[CaveBotSettings]
+}
 
 
 class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: ActorRef) {
@@ -73,12 +97,15 @@ class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
 
   // Simplified for clarity: Directly manage waypoints with a DefaultListModel
   val waypointListModel = new DefaultListModel[String]()
-  // Now, you can use this model in a JList
   val waypointsList = new JList[String](waypointListModel)
   waypointsList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
 
+
   val gridPlaceholder = createGridPlaceholder()
+
   val gridInfoListModel = new DefaultListModel[GridInfo]()
+  val gridInfoList = new JList[GridInfo](gridInfoListModel)
+  gridInfoList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
 
   val waypointName = new TextField("not saved", 30)
   // Add button to add waypoints
@@ -336,6 +363,17 @@ class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
       }
     }
   })
+
+  // Method to convert gridInfoListModel to gridInfoList
+  def getGridInfoList: Seq[String] = {
+    (0 until gridInfoListModel.size()).map(i => gridInfoListModel.get(i).serialize)
+  }
+
+  // Method to load gridInfoList into gridInfoListModel
+  def setGridInfoList(grids: Seq[String]): Unit = {
+    gridInfoListModel.clear()
+    grids.map(new GridInfo(_)).foreach(gridInfoListModel.addElement)
+  }
 
   def updateGridDisplay(gridInfo: GridInfo): Unit = {
     val gridPanel = gridPlaceholder.getViewport.getView.asInstanceOf[JPanel]

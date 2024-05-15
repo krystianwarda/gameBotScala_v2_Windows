@@ -90,7 +90,10 @@ case class ProcessorState(
                            presentCharLocation: Vec = Vec(0, 0),
                            alreadyLootedIds: List[Int] = List(),
                            retryStatus: Int = 0,
-                           retryAttempts: Int = 3,
+                           slowWalkStatus: Int = 0,
+                           antiCaveBotStuckStatus: Int = 0,
+                           chaseSwitchStatus: Int = 0,
+                           retryAttempts: Int = 2,
                          )
 case class UpdateSettings(settings: UISettings)
 
@@ -158,7 +161,7 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     case InitializeProcessor(p, s) =>
       // Update state with new settings
       state = state.copy(settings = Some(s))
-      println(s"Processor initialized with player: ${p.characterName} and settings: $s")
+//      println(s"Processor initialized with player: ${p.characterName} and settings: $s")
 
 
     case ActionCompleted(actionType) =>

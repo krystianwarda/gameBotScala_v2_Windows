@@ -278,9 +278,28 @@ object AutoLoot {
                 // Function to generate position keys with padding on z-coordinate
                 def generatePositionKey(x: Int, y: Int, z: Int): String = f"$x$y${z}%02d"
 
+                def checkForBloodAndContainerAndGetIndexOld(positionKey: String): Option[String] = {
+                  (json \ "areaInfo" \ "tiles" \ positionKey).asOpt[JsObject] match {
+                    case Some(tileInfo) =>
+                      val items = (tileInfo \ "items").as[JsObject]
+                      val itemsList = items.values.toList.reverse // reverse to access the last items first
+
+                      val hasBlood = itemsList.exists { item =>
+                        val id = (item \ "id").as[Int]
+                        id == 2886 || id == 2887
+                      }
+
+                      val isLastContainer = (itemsList.head \ "isContainer").as[Boolean]
+
+                      if (hasBlood && isLastContainer) (tileInfo \ "index").asOpt[String]
+                      else None
+
+                    case None => None // No tile information found
+                  }
+                }
 
                 // Function to check for blood and container, and return the index if conditions are met
-                def checkForBloodAndContainerAndGetIndex(positionKey: String): Option[String] = {
+                def checkForBloodAndContainerAndGetIndex_GoodButCanBeBetter(positionKey: String): Option[String] = {
                   (json \ "areaInfo" \ "tiles" \ positionKey).asOpt[JsObject] match {
                     case Some(tileInfo) =>
                       val topThingId = (tileInfo \ "topThingId").as[Int]
@@ -297,25 +316,28 @@ object AutoLoot {
                 }
 
 
+
                 // Function to check for blood and container, and return the index if conditions are met
-                def checkForBloodAndContainerAndGetIndexOld(positionKey: String): Option[String] = {
+                def checkForBloodAndContainerAndGetIndex(positionKey: String): Option[String] = {
                   (json \ "areaInfo" \ "tiles" \ positionKey).asOpt[JsObject] match {
                     case Some(tileInfo) =>
+                      val topThingId = (tileInfo \ "topThingId").as[Int]
                       val items = (tileInfo \ "items").as[JsObject]
-                      val itemsList = items.values.toList.reverse.filterNot { item =>
-                        val id = (item \ "id").as[Int]
-                        id == 1900 || id == 1899
-                      }
-                      printInColor(ANSI_RED, f"[DEBUG] checkForBloodAndContainerAndGetIndex, itemsList: $itemsList")
+                      val itemsList = items.values.toList.reverse // reverse to access the last items first
 
+                      // Check if there's any blood in itemsList
                       val hasBlood = itemsList.exists { item =>
                         val id = (item \ "id").as[Int]
                         id == 2886 || id == 2887
                       }
 
-                      val isLastContainer = (itemsList.head \ "isContainer").as[Boolean]
+                      // Find the item in items that corresponds to topThingId
+                      val isContainer = items.keys.flatMap { key =>
+                        val item = (items \ key).asOpt[JsObject]
+                        item.filter(i => (i \ "id").as[Int] == topThingId).map(i => (i \ "isContainer").as[Boolean])
+                      }.headOption.getOrElse(false)
 
-                      if (hasBlood && isLastContainer) (tileInfo \ "index").asOpt[String]
+                      if (hasBlood && isContainer) (tileInfo \ "index").asOpt[String]
                       else None
 
                     case None => None // No tile information found

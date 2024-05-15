@@ -87,7 +87,8 @@ class SwingApp(playerClassList: List[Player],
 
   def collectCaveBotSettings(): CaveBotSettings = CaveBotSettings(
     enabled = caveBotCheckbox.selected,
-    waypointsList = jListToSeq(caveBotBot.waypointsList)
+    waypointsList = jListToSeq(caveBotBot.waypointsList),
+    gridInfoList = caveBotBot.getGridInfoList
   )
 
   def collectAutoLootSettings(): AutoLootSettings = AutoLootSettings(
@@ -191,6 +192,7 @@ class SwingApp(playerClassList: List[Player],
     applyHealingSettings(settings.healingSettings)
     applyCaveBotSettings(settings.caveBotSettings)
     applyAutoTargetSettings(settings.autoTargetSettings)
+    applyAutoLootSettings(settings.autoLootSettings)
 
   }
 
@@ -216,6 +218,7 @@ class SwingApp(playerClassList: List[Player],
   def applyCaveBotSettings(caveBotSettings: CaveBotSettings): Unit = {
     caveBotCheckbox.selected = caveBotSettings.enabled
     setListModel(caveBotBot.waypointsList, caveBotSettings.waypointsList)
+    setListModelFromGridInfos(caveBotBot.gridInfoList, caveBotSettings.gridInfoList)
   }
 
 
@@ -225,35 +228,11 @@ class SwingApp(playerClassList: List[Player],
     autoTargetBot.targetMonstersOnBattleCheckbox.selected = autoTargetSettings.targetMonstersOnBattle
   }
 
+  def applyAutoLootSettings(autoLootSettings: AutoLootSettings): Unit = {
+    autoLootCheckbox.selected = autoLootSettings.enabled
+    setListModel(autoLootBot.lootList, autoLootSettings.lootList)
+  }
 
-  //    // CheckBox settings
-//    autoHealCheckbox.selected = settings.healingSettings.enabled
-//    runeMakerCheckbox.selected = settings.runeMakingSettings.enabled
-//
-//    protectionZoneCheckbox.selected = settings.protectionZoneSettings.enabled
-//    protectionZoneBot.playerOnScreenAlertCheckbox.selected = settings.protectionZoneSettings.playerOnScreenAlert
-//    protectionZoneBot.escapeToProtectionZoneCheckbox.selected = settings.protectionZoneSettings.escapeToProtectionZone
-//    protectionZoneBot.setIgnoredCreatures(settings.protectionZoneSettings.ignoredCreatures)
-//    fishingCheckbox.selected = settings.fishingSettings.enabled
-//    autoResponderCheckbox.selected = settings.autoResponderSettings.enabled
-//    trainingCheckbox.selected = settings.trainingSettings.enabled
-//    trainingBot.pickAmmunitionCheckbox.selected = settings.trainingSettings.pickAmmunition
-//    trainingBot.refillAmmunitionCheckbox.selected = settings.trainingSettings.refillAmmunition
-//    trainingBot.doNotKillTargetCheckbox.selected = settings.trainingSettings.doNotKillTarget
-//    trainingBot.switchAttackModeToEnsureDamageCheckbox.selected = settings.trainingSettings.switchAttackModeToEnsureDamage
-//    trainingBot.switchWeaponToEnsureDamageCheckbox.selected = settings.trainingSettings.switchWeaponToEnsureDamage
-//    caveBotCheckbox.selected = settings.caveBotSettings.enabled
-//    autoTargetCheckbox.selected = settings.autoTargetSettings.enabled
-//    autoTargetBot.targetMonstersOnBattleCheckbox.selected = settings.autoTargetSettings.targetMonstersOnBattle
-////    autoTargetBot.setTargetPriority(settings.autoTargetSettings.creatureList)
-//
-//
-//
-//
-//    // TextField settings for HealingSettings
-//
-//    // Apply other settings fields if necessary
-//  }
 
   def applyRuneMakingSettings(runeMakingSettings: RuneMakingSettings): Unit = {
     runeMakerCheckbox.selected = runeMakingSettings.enabled
@@ -507,9 +486,18 @@ class SwingApp(playerClassList: List[Player],
     }
   }
 
-
-
-
+  def setListModelFromGridInfos(jList: JList[GridInfo], seq: Seq[String]): Unit = {
+//    println(s"Setting list model from grid infos: $seq")
+    val model = new DefaultListModel[GridInfo]()
+    seq.foreach { serializedGrid =>
+//      println(s"Deserializing grid: $serializedGrid")
+      val gridInfo = new GridInfo(serializedGrid)
+//      println(s"Deserialized GridInfo: ${gridInfo.serialize}")
+      model.addElement(gridInfo)
+    }
+    jList.setModel(model)
+//    println(s"Model set with ${model.getSize} grid infos.")
+  }
 
 }
 

@@ -25,7 +25,7 @@ object Process {
     println(s"Container Info: $containerInfo") // Log the container information for debugging
 
     val screenInfoPath = (json \ "screenInfo" \ "inventoryPanelLoc" \ updatedState.uhRuneContainerName \ "contentsPanel").as[JsObject]
-    println(s"Screen Info Path: $screenInfoPath") // Log the screen info path for debugging
+    println(s"Screen Info Path: $screenInfoPath")
 
     // Iterate over slots 1 to 4 to find the item
     val itemInContainer = (0 until 4).flatMap { slotIndex =>

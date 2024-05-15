@@ -32,6 +32,7 @@ object CaveBot {
     var logs: Seq[Log] = Seq.empty
     var updatedState = currentState // Initialize updatedState
     printInColor(ANSI_RED, f"[DEBUG] computeAutoLootActions process started with status:${updatedState.stateHunting}")
+    val currentTime = currentTimeMillis()
 
     if (settings.caveBotSettings.enabled) {
 
@@ -61,64 +62,96 @@ object CaveBot {
         updatedState = updatedState.copy(currentWaypointIndex = closestWaypointIndex, subWaypoints = List.empty)
       }
 
-      val currentTime = currentTimeMillis()
 
 
-      // DEBUGING if character went level up or down by mistake
+      // DEBUGGING if character went level up or down by mistake
       val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
-//      println(s"Debug: Looking for character positionZ: $presentCharLocationZ in ${updatedState.caveBotLevelsList}")
       if (!updatedState.caveBotLevelsList.contains(presentCharLocationZ)) {
-        printInColor(ANSI_BLUE, f"[WRONG FLOOR] Character is on wrong floor.")
+//        printInColor(ANSI_BLUE, "[WRONG FLOOR] Character is on wrong floor.")
         updatedState = updatedState.copy(lastDirection = Option(""))
         if (currentTime - updatedState.antiOverpassDelay >= 1000) {
           updatedState = updatedState.copy(antiOverpassDelay = currentTime)
 
-
           val levelMovementEnablersIdsList: List[Int] = List(414, 369, 469, 1977, 1947, 1948)
-          printInColor(ANSI_BLUE, f"[WRONG FLOOR] Level movement enablers: $levelMovementEnablersIdsList")
+//          printInColor(ANSI_BLUE, f"[WRONG FLOOR] Level movement enablers: $levelMovementEnablersIdsList")
 
           val presentCharLocationX = (json \ "characterInfo" \ "PositionX").as[Int]
           val presentCharLocationY = (json \ "characterInfo" \ "PositionY").as[Int]
           val presentCharLocation = Vec(presentCharLocationX, presentCharLocationY)
           updatedState = updatedState.copy(presentCharLocation = presentCharLocation)
-          printInColor(ANSI_BLUE, f"[WRONG FLOOR] Character position - X: $presentCharLocationX, Y: $presentCharLocationY")
+//          printInColor(ANSI_BLUE, f"[WRONG FLOOR] Character position - X: $presentCharLocationX, Y: $presentCharLocationY")
 
           val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
 
-          val currentWaypointLocationOpt = tiles.collectFirst {
-            case (key, value) if (value \ "items").validate[Map[String, JsObject]].asOpt.exists(items =>
-              items.values.exists(item => (item \ "id").asOpt[Int].exists(id => levelMovementEnablersIdsList.contains(id)))) =>
-              // Extracting x and y from the key considering the first 5 digits for x and the next 5 for y
-              val x = key.take(5).toInt
-              val y = key.drop(5).take(5).toInt
-              val tileLocation = Vec(x, y)
-              val distance = manhattanDistance(presentCharLocation, tileLocation)
-              if (distance <= 4) {
-                printInColor("ANSI_BLUE", s"[WRONG FLOOR] Found matching item in tile - X: $x, Y: $y, Key: $key, Distance: $distance")
-                tileLocation
+//
+//          val nearbyTiles = tiles.collect {
+//            case (key, value) if key.length >= 10 =>
+//              val x = key.take(5).toInt
+//              val y = key.substring(5, 10).toInt
+//              val distance = Math.abs(x - presentCharLocationX) + Math.abs(y - presentCharLocationY)
+//              if (distance <= 5) {
+////                printInColor(ANSI_BLUE, s"Checking tile at X: $x, Y: $y, Key: $key, Distance: $distance")
+//                val itemsOpt = (value \ "items").validate[Map[String, JsObject]].asOpt
+//                val hasMovementEnabler = itemsOpt.exists(items =>
+//                  items.exists { case (itemKey, itemValue) =>
+//                    val idOpt = (itemValue \ "id").asOpt[Int]
+//                    val isEnabler = idOpt.exists(id => levelMovementEnablersIdsList.contains(id))
+//                    if (isEnabler) {
+//                      printInColor(ANSI_BLUE, s"[WRONG FLOOR] Found level movement enabler ID: $idOpt at X: $x, Y: $y. Character position - X: $presentCharLocationX, Y: $presentCharLocationY.")
+//                    }
+//                    isEnabler
+//                  })
+//
+//                if (hasMovementEnabler) Some(Vec(x, y)) else None
+//              } else None
+//          }.flatten
+
+
+          // Identify a nearby tile with a movement enabler
+          val nearbyEnablerTileOpt = tiles.collectFirst {
+            case (tileId, tileData) if (tileData \ "items").as[Map[String, JsObject]].exists {
+              case (_, itemData) =>
+                levelMovementEnablersIdsList.contains((itemData \ "id").as[Int])
+            } =>
+              // Calculate distance if the structure of tileId encodes coordinates directly
+              val x = tileId.take(5).toInt  // Extract X assuming tileId encodes coordinates
+              val y = tileId.substring(5, 10).toInt  // Extract Y
+              val distance = Math.abs(x - presentCharLocationX) + Math.abs(y - presentCharLocationY)
+              if (distance <= 5) Some(tileId) else None
+          }.flatten
+
+          // Fetch the screen coordinates for the nearby enabler tile
+          nearbyEnablerTileOpt.flatMap { tileId =>
+            (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]].collectFirst {
+              case (screenIndex, screenData) if (screenData \ "id").as[String] == tileId =>
+                val x = (screenData \ "x").as[Int]
+                val y = (screenData \ "y").as[Int]
+                Some(x, y)
+            }
+          }.flatten match {
+            case Some((stairsTileX, stairsTileY)) =>
+              printInColor(ANSI_BLUE, s"[WRONG FLOOR] slowWalkStatus: ${updatedState.slowWalkStatus}")
+              if (updatedState.slowWalkStatus >= updatedState.retryAttempts) {
+                printInColor(ANSI_BLUE, f"[WRONG FLOOR] Clicking on stairs at X: $stairsTileX, Y: $stairsTileY.")
+
+                val actionsSeq = Seq(
+                  MouseAction(stairsTileX, stairsTileY, "move"),
+                  MouseAction(stairsTileX, stairsTileY, "pressLeft"),
+                  MouseAction(stairsTileX, stairsTileY, "releaseLeft"),
+                )
+                actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+
+                updatedState = updatedState.copy(slowWalkStatus = 0)
               } else {
-                null
+                printInColor(ANSI_BLUE, s"[WRONG FLOOR] Before slowWalkStatus: (${updatedState.slowWalkStatus})")
+                updatedState = updatedState.copy(slowWalkStatus = updatedState.slowWalkStatus + 1)
+                printInColor(ANSI_BLUE, s"[WRONG FLOOR] After slowWalkStatus: ${updatedState.slowWalkStatus}")
               }
-          }.filter(_ != null)
 
-          currentWaypointLocationOpt match {
-            case Some(currentWaypointLocation) =>
-              printInColor(ANSI_BLUE, s"[WRONG FLOOR] Found current waypoint location: $currentWaypointLocation")
-
-              // Set the found waypoint as the next waypoint
-              val nextWaypoint = currentWaypointLocation
-
-              val direction = calculateDirection(presentCharLocation, nextWaypoint, updatedState.lastDirection)
-              updatedState = updatedState.copy(lastDirection = direction)
-              println(s"Direction $direction")
-
-              direction.foreach { dir =>
-                actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(dir)))
-                logs :+= Log(s"Moving closer to the subWaypoint in direction: $dir")
-              }
             case None =>
-              printInColor("ANSI_BLUE", "[WRONG FLOOR] No valid waypoint found based on level movement enablers.")
+              printInColor(ANSI_BLUE, "[WRONG FLOOR] No valid waypoint found within range.")
           }
+
         }
       } else {
         // character is on good floor  - proceeding
@@ -195,13 +228,41 @@ object CaveBot {
     val presentCharLocationY = (json \ "characterInfo" \ "PositionY").as[Int]
     val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
     val presentCharLocation = Vec(presentCharLocationX, presentCharLocationY)
-    updatedState = updatedState.copy(presentCharLocation = presentCharLocation)
+
+    // Check if the character's location is the same as the last update
+    if (updatedState.presentCharLocation == presentCharLocation) {
+      if (updatedState.antiCaveBotStuckStatus >= 20) {
+        // Reset if the counter is 20 or more
+        printInColor(ANSI_BLUE, "[ANTI CAVEBOT STUCK] Character has been in one place for too long. Finding new waypoint")
+
+        // Find the closest waypoint
+        val (closestWaypointIndex, _) = updatedState.fixedWaypoints
+          .zipWithIndex
+          .map { case (waypoint, index) =>
+            (index, presentCharLocation.manhattanDistance(Vec(waypoint.waypointX, waypoint.waypointY)))
+          }
+          .minBy(_._2) // Find the minimum by distance
+
+        // Reset the state
+        updatedState = updatedState.copy(currentWaypointIndex = closestWaypointIndex, subWaypoints = List.empty, antiCaveBotStuckStatus = 0, presentCharLocation = presentCharLocation)
+      } else {
+        // Increment the counter if not yet reached 20
+        if (updatedState.antiCaveBotStuckStatus >= 5) {
+          printInColor(ANSI_BLUE, s"[ANTI CAVEBOT STUCK] COUNT STUCK ${updatedState.antiCaveBotStuckStatus}")
+        }
+        updatedState = updatedState.copy(antiCaveBotStuckStatus = updatedState.antiCaveBotStuckStatus + 1, presentCharLocation = presentCharLocation)
+      }
+    } else {
+      updatedState = updatedState.copy(antiCaveBotStuckStatus = 0, presentCharLocation = presentCharLocation)
+    }
 
     printInColor(ANSI_RED, f"[DEBUG] Character PositionX: $presentCharLocationX, PositionY: $presentCharLocationY, PositionZ: $presentCharLocationZ")
 
+
+
     ////////// START //////////
     // Define thresholdDistance with the specified value
-    val thresholdDistance = 35
+    val thresholdDistance = 25
 
     // Calculate the distance from the current character position to the current waypoint
 
@@ -412,6 +473,46 @@ object CaveBot {
           case Some("ArrowDown") if deltaY < 0 =>
             chooseDirectionBasedOnDeltaX(deltaX)
           case Some("ArrowUp") if deltaY > 0 =>
+            chooseDirectionBasedOnDeltaX(deltaX)
+          case _ =>
+            // If not reversing, choose randomly between available directions
+            randomDirectionChoice(deltaX, deltaY)
+        }
+    }
+  }
+
+
+  def calculateDirectionSlow(currentLocation: Vec, nextLocation: Vec, lastDirection: Option[String]): Option[String] = {
+    // Debugging the inputs directly to ensure they're as expected
+//    println(s"Debug - Input currentLocation: $currentLocation, nextLocation: $nextLocation")
+
+    val deltaX = nextLocation.x - currentLocation.x
+    val deltaY = nextLocation.y - currentLocation.y
+//    println(s"Debug - Calculated DeltaX: $deltaX, DeltaY: $deltaY based on inputs")
+
+    (deltaX.sign, deltaY.sign) match {
+      case (0, 0) =>
+//        println("Debug - Matched case: Character is already at the destination.")
+        None
+      case (0, -1) =>
+        checkForSingleMove("ArrowUpSingle", lastDirection, "ArrowDownSingle")
+      case (0, 1) =>
+        checkForSingleMove("ArrowDownSingle", lastDirection, "ArrowUpSingle")
+      case (-1, 0) =>
+        checkForSingleMove("ArrowLeftSingle", lastDirection, "ArrowRightSingle")
+      case (1, 0) =>
+        checkForSingleMove("ArrowRightSingle", lastDirection, "ArrowLeftSingle")
+      case _ =>
+//        println("Debug - Matched case: Diagonal or multiple options available.")
+        // Choose direction avoiding reversal of the last direction
+        lastDirection match {
+          case Some("ArrowRightSingle") if deltaX < 0 =>
+            chooseDirectionBasedOnDeltaY(deltaY)
+          case Some("ArrowLeftSingle") if deltaX > 0 =>
+            chooseDirectionBasedOnDeltaY(deltaY)
+          case Some("ArrowDownSingle") if deltaY < 0 =>
+            chooseDirectionBasedOnDeltaX(deltaX)
+          case Some("ArrowUpSingle") if deltaY > 0 =>
             chooseDirectionBasedOnDeltaX(deltaX)
           case _ =>
             // If not reversing, choose randomly between available directions
@@ -916,6 +1017,8 @@ object CaveBot {
 
     printGrid(grid, gridBounds, presentPath, presentCharLocation, currentWaypointLocation)
   }
+
+
 
   implicit val timeout: Timeout = Timeout(1000.milliseconds)  // Set a timeout for 300 milliseconds
 }

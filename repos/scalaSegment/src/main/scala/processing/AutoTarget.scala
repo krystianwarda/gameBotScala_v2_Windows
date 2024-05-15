@@ -6,6 +6,7 @@ import play.api.libs.json._
 import processing.CaveBot.executeWhenNoMonstersOnScreen
 import userUI.SettingsUtils.UISettings
 import utils.consoleColorPrint.{ANSI_GREEN, ANSI_RED, printInColor}
+import utils.consoleColorPrint._
 
 object AutoTarget {
   def computeAutoTargetActions(json: JsValue, settings: UISettings, currentState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
@@ -22,9 +23,10 @@ object AutoTarget {
     if (settings.autoTargetSettings.enabled && updatedState.stateHunting == "free") {
 
       // After handling monsters, update chase mode if necessary
-      val chaseModeUpdateResult = updateChaseModeIfNecessary(json, actions, logs)
-      actions = chaseModeUpdateResult._1
-      logs = chaseModeUpdateResult._2
+      val (newUpdatedState, newActions, newLogs) = updateChaseModeIfNecessary(json, updatedState, actions, logs)
+      updatedState = newUpdatedState // update the state
+      actions = newActions // update actions
+      logs = newLogs // update logs
 
       val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
       if (((settings.caveBotSettings.enabled && updatedState.caveBotLevelsList.contains(presentCharLocationZ)) || !settings.caveBotSettings.enabled)) {
@@ -50,9 +52,12 @@ object AutoTarget {
       // Safely attempt to extract the attacked creature's target ID
 
       // After handling monsters, update chase mode if necessary
-      val chaseModeUpdateResult = updateChaseModeIfNecessary(json, actions, logs)
-      actions = chaseModeUpdateResult._1
-      logs = chaseModeUpdateResult._2
+
+      val (newUpdatedState, newActions, newLogs) = updateChaseModeIfNecessary(json, updatedState, actions, logs)
+      updatedState = newUpdatedState // update the state
+      actions = newActions // update actions
+      logs = newLogs // update logs
+
 
       (json \ "attackInfo" \ "Id").asOpt[Int] match {
         case Some(attackedCreatureTarget) =>
@@ -275,24 +280,68 @@ object AutoTarget {
   }
 
 
-  def updateChaseModeIfNecessary(json: JsValue, initialActions: Seq[FakeAction], initialLogs: Seq[Log]): (Seq[FakeAction], Seq[Log]) = {
+  def updateChaseModeIfNecessary(
+                                  json: JsValue,
+                                  initialState: ProcessorState,
+                                  initialActions: Seq[FakeAction],
+                                  initialLogs: Seq[Log]
+                                ): (ProcessorState, Seq[FakeAction], Seq[Log]) = {
     var actions = initialActions
     var logs = initialLogs
+    var updatedState = initialState
 
-    val currentChaseMode = (json \ "characterInfo" \ "ChaseMode").as[Int]
-    if (currentChaseMode == 0) {
-      val chaseModeBoxPosition = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "chaseModeBox").as[JsObject]
-      val chaseModeBoxX = (chaseModeBoxPosition \ "x").as[Int]
-      val chaseModeBoxY = (chaseModeBoxPosition \ "y").as[Int]
+    if (updatedState.chaseSwitchStatus >= updatedState.retryAttempts) {
+      printInColor(ANSI_RED, "[DEBUG] Changing the chase mode.")
+      updatedState = updatedState.copy(chaseSwitchStatus = 0)
+      val currentChaseMode = (json \ "characterInfo" \ "ChaseMode").as[Int]
+      if (currentChaseMode == 0) {
+        val chaseModeBoxPosition = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "chaseModeBox").as[JsObject]
+        val chaseModeBoxX = (chaseModeBoxPosition \ "x").as[Int]
+        val chaseModeBoxY = (chaseModeBoxPosition \ "y").as[Int]
 
-      val actionsSeq = Seq(
-        MouseAction(chaseModeBoxX, chaseModeBoxY, "move"),
-        MouseAction(chaseModeBoxX, chaseModeBoxY, "pressLeft"),
-        MouseAction(chaseModeBoxX, chaseModeBoxY, "releaseLeft"),
-      )
+        val actionsSeq = Seq(
+          MouseAction(chaseModeBoxX, chaseModeBoxY, "move"),
+          MouseAction(chaseModeBoxX, chaseModeBoxY, "pressLeft"),
+          MouseAction(chaseModeBoxX, chaseModeBoxY, "releaseLeft")
+        )
 
-      logs :+= Log("Move mouse to switch to follow chase mode.")
-      actions :+= FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+        logs :+= Log("Move mouse to switch to follow chase mode.")
+        actions :+= FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+      }
+    } else {
+      printInColor(ANSI_RED, "[DEBUG] Looping until changing chase mode!")
+      updatedState = updatedState.copy(chaseSwitchStatus = updatedState.chaseSwitchStatus + 1)
+    }
+    (updatedState, actions, logs)
+  }
+
+
+  def updateChaseModeIfNecessaryOld(json: JsValue, initialState: ProcessorState, initialActions: Seq[FakeAction], initialLogs: Seq[Log]): (Seq[FakeAction], Seq[Log]) = {
+    var actions = initialActions
+    var logs = initialLogs
+    var updatedState = initialState
+
+    if (updatedState.chaseSwitchStatus >= updatedState.retryAttempts) {
+      printInColor(ANSI_BLUE, f"[WRONG FLOOR] Making a slow move.")
+//      updatedState = updatedState.copy(chaseSwitchStatus = 0)
+      val currentChaseMode = (json \ "characterInfo" \ "ChaseMode").as[Int]
+      if (currentChaseMode == 0) {
+        val chaseModeBoxPosition = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "chaseModeBox").as[JsObject]
+        val chaseModeBoxX = (chaseModeBoxPosition \ "x").as[Int]
+        val chaseModeBoxY = (chaseModeBoxPosition \ "y").as[Int]
+
+        val actionsSeq = Seq(
+          MouseAction(chaseModeBoxX, chaseModeBoxY, "move"),
+          MouseAction(chaseModeBoxX, chaseModeBoxY, "pressLeft"),
+          MouseAction(chaseModeBoxX, chaseModeBoxY, "releaseLeft"),
+        )
+
+        logs :+= Log("Move mouse to switch to follow chase mode.")
+        actions :+= FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+      }
+    } else {
+      printInColor(ANSI_BLUE, f"[WRONG FLOOR] Move hold - force slow walk")
+      updatedState = updatedState.copy(chaseSwitchStatus = updatedState.chaseSwitchStatus + 1)
     }
 
     (actions, logs)

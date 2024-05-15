@@ -63,7 +63,9 @@ object SettingsUtils {
   case class CaveBotSettings(
                               enabled: Boolean,
                               waypointsList: Seq[String],
+                              gridInfoList: Seq[String]
                             )
+
 
   case class AutoLootSettings(
                               enabled: Boolean,
