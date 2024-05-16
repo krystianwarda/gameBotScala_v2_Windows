@@ -106,34 +106,116 @@ object CaveBot {
 //              } else None
 //          }.flatten
 
+//
+//          // Assuming you've defined `presentCharLocationX` and `presentCharLocationY` correctly elsewhere in your code
+//          println(s"Character location: ($presentCharLocationX, $presentCharLocationY)")
+//
+//          // Identify a nearby tile with a movement enabler
+//          val nearbyEnablerTileOpt = tiles.collectFirst {
+//            case (tileId, tileData) if (tileData \ "items").as[Map[String, JsObject]].exists {
+//              case (_, itemData) =>
+//                val itemIdInt = (itemData \ "id").as[Int]
+//                val containsEnabler = levelMovementEnablersIdsList.contains(itemIdInt)
+//                println(s"Checking item with ID $itemIdInt: containsEnabler = $containsEnabler")
+//                containsEnabler
+//            } =>
+//              // Extract game coordinates directly from tileId
+//              val gameX = tileId.substring(0, 5).toInt
+//              val gameY = tileId.substring(5, 10).toInt
+//              val distance = Math.abs(gameX - presentCharLocationX) + Math.abs(gameY - presentCharLocationY)
+//              println(s"Calculated game distance: $distance for tile at ($gameX, $gameY)")
+//              if (distance <= 5) Some(tileId) else None
+//          }.flatten
+//
+//          // Fetch the screen coordinates for the nearby enabler tile
+//          nearbyEnablerTileOpt.flatMap { tileId =>
+//            println(s"Nearby enabler tile ID: $tileId")
+//            // Get the index from the areaInfo to use in screenInfo lookup
+//            (tiles(tileId) \ "index").asOpt[String].flatMap { index =>
+//              (json \ "screenInfo" \ "mapPanelLoc" \ index).asOpt[JsObject].flatMap { screenData =>
+//                val x = (screenData \ "x").asOpt[Int]
+//                val y = (screenData \ "y").asOpt[Int]
+//                (x, y) match {
+//                  case (Some(x), Some(y)) =>
+//                    println(s"Screen coordinates found: ($x, $y)")
+//                    Some(x, y)
+//                  case _ =>
+//                    println("Screen coordinates not found")
+//                    None
+//                }
+//              }
+//            }
+//          } match {
+//            case Some((stairsTileX, stairsTileY)) =>
+//              println(s"Found valid tile on screen at ($stairsTileX, $stairsTileY)")
+//              printInColor(ANSI_BLUE, s"[WRONG FLOOR] slowWalkStatus: ${updatedState.slowWalkStatus}")
+//              if (updatedState.slowWalkStatus >= updatedState.retryAttempts) {
+//                printInColor(ANSI_BLUE, f"[WRONG FLOOR] Clicking on stairs at X: $stairsTileX, Y: $stairsTileY.")
+//
+//                val actionsSeq = Seq(
+//                  MouseAction(stairsTileX, stairsTileY, "move"),
+//                  MouseAction(stairsTileX, stairsTileY, "pressLeft"),
+//                  MouseAction(stairsTileX, stairsTileY, "releaseLeft"),
+//                )
+//                actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+//
+//                updatedState = updatedState.copy(slowWalkStatus = 0)
+//              } else {
+//                printInColor(ANSI_BLUE, s"[WRONG FLOOR] Before slowWalkStatus: (${updatedState.slowWalkStatus})")
+//                updatedState = updatedState.copy(slowWalkStatus = updatedState.slowWalkStatus + 1)
+//                printInColor(ANSI_BLUE, s"[WRONG FLOOR] After slowWalkStatus: ${updatedState.slowWalkStatus}")
+//              }
+//
+//            case None =>
+//              println("No valid waypoint found within range.")
+//              printInColor(ANSI_BLUE, "[WRONG FLOOR] No valid waypoint found within range.")
+//          }
+          // Assuming you've defined `presentCharLocationX` and `presentCharLocationY` correctly elsewhere in your code
+//          println(s"Character location: ($presentCharLocationX, $presentCharLocationY)")
 
-          // Identify a nearby tile with a movement enabler
-          val nearbyEnablerTileOpt = tiles.collectFirst {
+          // Identify all tiles with a movement enabler and their distances
+          val potentialTiles = tiles.collect {
             case (tileId, tileData) if (tileData \ "items").as[Map[String, JsObject]].exists {
               case (_, itemData) =>
-                levelMovementEnablersIdsList.contains((itemData \ "id").as[Int])
+                val itemIdInt = (itemData \ "id").as[Int]
+                val containsEnabler = levelMovementEnablersIdsList.contains(itemIdInt)
+//                println(s"Checking item with ID $itemIdInt: containsEnabler = $containsEnabler")
+                containsEnabler
             } =>
-              // Calculate distance if the structure of tileId encodes coordinates directly
-              val x = tileId.take(5).toInt  // Extract X assuming tileId encodes coordinates
-              val y = tileId.substring(5, 10).toInt  // Extract Y
-              val distance = Math.abs(x - presentCharLocationX) + Math.abs(y - presentCharLocationY)
-              if (distance <= 5) Some(tileId) else None
-          }.flatten
+              // Extract game coordinates directly from tileId
+              val gameX = tileId.substring(0, 5).toInt
+              val gameY = tileId.substring(5, 10).toInt
+              val distance = Math.abs(gameX - presentCharLocationX) + Math.abs(gameY - presentCharLocationY)
+//              println(s"Calculated game distance: $distance for tile at ($gameX, $gameY)")
+              (tileId, distance)
+          }.toList
+
+          // Find the closest tile within range
+          val nearbyEnablerTileOpt = potentialTiles.filter(_._2 <= 5).sortBy(_._2).headOption.map(_._1)
 
           // Fetch the screen coordinates for the nearby enabler tile
           nearbyEnablerTileOpt.flatMap { tileId =>
-            (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]].collectFirst {
-              case (screenIndex, screenData) if (screenData \ "id").as[String] == tileId =>
-                val x = (screenData \ "x").as[Int]
-                val y = (screenData \ "y").as[Int]
-                Some(x, y)
+//            println(s"Nearby enabler tile ID: $tileId")
+            // Get the index from the areaInfo to use in screenInfo lookup
+            (tiles(tileId) \ "index").asOpt[String].flatMap { index =>
+              (json \ "screenInfo" \ "mapPanelLoc" \ index).asOpt[JsObject].flatMap { screenData =>
+                val x = (screenData \ "x").asOpt[Int]
+                val y = (screenData \ "y").asOpt[Int]
+                (x, y) match {
+                  case (Some(x), Some(y)) =>
+//                    println(s"Screen coordinates found: ($x, $y)")
+                    Some(x, y)
+                  case _ =>
+                    println("Screen coordinates not found")
+                    None
+                }
+              }
             }
-          }.flatten match {
+          } match {
             case Some((stairsTileX, stairsTileY)) =>
-              printInColor(ANSI_BLUE, s"[WRONG FLOOR] slowWalkStatus: ${updatedState.slowWalkStatus}")
+              printInColor(ANSI_BLUE, s"[WRONG FLOOR] slowWalkStatus: ${updatedState.slowWalkStatus}, Found valid tile on screen at ($stairsTileX, $stairsTileY), Character location: ($presentCharLocationX, $presentCharLocationY)")
               if (updatedState.slowWalkStatus >= updatedState.retryAttempts) {
                 printInColor(ANSI_BLUE, f"[WRONG FLOOR] Clicking on stairs at X: $stairsTileX, Y: $stairsTileY.")
-
                 val actionsSeq = Seq(
                   MouseAction(stairsTileX, stairsTileY, "move"),
                   MouseAction(stairsTileX, stairsTileY, "pressLeft"),

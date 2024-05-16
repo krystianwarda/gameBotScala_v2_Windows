@@ -46,7 +46,7 @@ object AutoLoot {
 
                       if (updatedState.retryStatus >= updatedState.retryAttempts) {
                         printInColor(ANSI_RED, f"[DEBUG] Items field is 'empty'. No items to process.")
-                        updatedState = updatedState.copy(stateHunting = "free")
+                        updatedState = updatedState.copy(stateHunting = "free", retryStatus=0)
                       } else {
                         printInColor(ANSI_RED, f"[DEBUG] Retrying - Items field is 'empty'. No items to process (Attempt ${updatedState.retryStatus + 1})")
                         updatedState = updatedState.copy(retryStatus = updatedState.retryStatus + 1)
@@ -56,7 +56,7 @@ object AutoLoot {
 
                       if (updatedState.retryStatus >= updatedState.retryAttempts) {
                         printInColor(ANSI_RED, f"[DEBUG] No items field present or it is not in expected format")
-                        updatedState = updatedState.copy(stateHunting = "free")
+                        updatedState = updatedState.copy(stateHunting = "free", retryStatus=0)
                       } else {
                         printInColor(ANSI_RED, f"[DEBUG] Retrying - no items field present or it is not in expected format (Attempt ${updatedState.retryStatus + 1})")
                         updatedState = updatedState.copy(retryStatus = updatedState.retryStatus + 1)
@@ -66,7 +66,7 @@ object AutoLoot {
 
                       if (updatedState.retryStatus >= updatedState.retryAttempts) {
                         printInColor(ANSI_RED, f"[DEBUG] Unexpected string in items field: $other")
-                        updatedState = updatedState.copy(stateHunting = "free")
+                        updatedState = updatedState.copy(stateHunting = "free", retryStatus=0)
                       } else {
                         printInColor(ANSI_RED, f"[DEBUG] Retrying - unexpected string in items field (Attempt ${updatedState.retryStatus + 1})")
                         updatedState = updatedState.copy(retryStatus = updatedState.retryStatus + 1)
@@ -201,14 +201,21 @@ object AutoLoot {
                             actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
                           case None =>
                             printInColor(ANSI_RED, f"[DEBUG] No container ( and no items to loot) detected within the items, setting the state to free")
-                            updatedState = updatedState.copy(stateHunting = "free")
+                            if (updatedState.retryStatus >= updatedState.retryAttempts) {
+                              printInColor(ANSI_RED, f"[DEBUG] No container nor items to loot")
+                              updatedState = updatedState.copy(stateHunting = "free", retryStatus=0)
+                            } else {
+                              printInColor(ANSI_RED, f"[DEBUG] Retrying - No container nor items to loot. (Attempt ${updatedState.retryStatus + 1})")
+                              updatedState = updatedState.copy(retryStatus = updatedState.retryStatus + 1)
+                            }
+
                         }
                     }
                   } else {
 
                     if (updatedState.retryStatus >= updatedState.retryAttempts) {
                       printInColor(ANSI_RED, f"[DEBUG] No new backpack has been found. Finishing looting")
-                      updatedState = updatedState.copy(stateHunting = "free")
+                      updatedState = updatedState.copy(stateHunting = "free", retryStatus=0)
                     } else {
                       printInColor(ANSI_RED, f"[DEBUG] Retrying - No new backpack has been found. (Attempt ${updatedState.retryStatus + 1})")
                       updatedState = updatedState.copy(retryStatus = updatedState.retryStatus + 1)
