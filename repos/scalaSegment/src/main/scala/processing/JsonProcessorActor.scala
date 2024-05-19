@@ -97,6 +97,12 @@ case class ProcessorState(
                            extraWidowLootStatus: Int = 0,
                            lootingRestryStatus: Int = 0,
                            retryAttempts: Int = 2,
+                           retryAttemptsLong: Int = 30,
+                           targetFreezeStatus: Int = 0,
+                           targetFreezeHealthStatus: Int = 0,
+                           targetFreezeHealthPoints: Int = 0,
+                           targetFreezeCreatureId: Int = 0,
+
                          )
 case class UpdateSettings(settings: UISettings)
 

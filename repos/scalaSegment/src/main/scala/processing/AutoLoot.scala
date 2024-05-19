@@ -16,6 +16,14 @@ object AutoLoot {
 //    printInColor(ANSI_RED, f"[DEBUG] autoLoot: ${settings.autoTargetSettings.enabled}, autoLoot: ${settings.autoLootSettings.enabled}")
     if (settings.autoTargetSettings.enabled && settings.autoLootSettings.enabled) {
 
+      if (updatedState.staticContainersList.isEmpty) {
+        // Assuming `json` is already defined as JsValue containing the overall data
+        val containersInfo = (json \ "containersInfo").as[JsObject]
+        // Extracting keys as a list of container names
+        val containerKeys = containersInfo.keys.toList
+        printInColor(ANSI_RED, f"[DEBUG] Static containers loaded!")
+        updatedState = updatedState.copy(staticContainersList = containerKeys)
+      }
 
       // Assuming 'json' is your input JsValue
       val containersInfoOpt: Option[JsObject] = (json \ "containersInfo").asOpt[JsObject]
@@ -32,10 +40,11 @@ object AutoLoot {
               printInColor(ANSI_RED, f"[DEBUG] Looting process started")
               val containersInfo = (json \ "containersInfo").as[JsObject]
               val screenInfo = (json \ "screenInfo").as[JsObject]
+              println(containersInfo)
               // Get the last container from containersInfo
               val lastContainerIndex = containersInfo.keys.maxBy(_.replace("container", "").toInt)
               val lastContainer = (containersInfo \ lastContainerIndex).as[JsObject]
-//              println(s"gate4 - Last Container: $lastContainer")  // Added debug print for lastContainer
+              println(s"gate4 - Last Container: $lastContainer")  // Added debug print for lastContainer
 
 
 
@@ -79,7 +88,7 @@ object AutoLoot {
 
 
 
-                  printInColor(ANSI_RED, f"[DEBUG] Considering looting from from $lastContainerIndex")
+                  printInColor(ANSI_RED, f"[DEBUG] Considering looting from from $lastContainerIndex (statics: ${updatedState.staticContainersList})")
 
                   // Check if the last container is not already in the updatedState.staticContainersList
                   if (!updatedState.staticContainersList.contains(lastContainerIndex)) {

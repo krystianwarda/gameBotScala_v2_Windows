@@ -2,6 +2,7 @@ package processing
 import mouse.FakeAction
 import play.api.libs.json.Format.GenericFormat
 import play.api.libs.json.JsValue
+import play.api.libs.json.OFormat.oFormatFromReadsAndOWrites
 import play.api.libs.json._
 import processing.CaveBot.executeWhenNoMonstersOnScreen
 import userUI.SettingsUtils.UISettings
@@ -29,8 +30,8 @@ object AutoTarget {
       logs = newLogs // update logs
 
       val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
-      if (((settings.caveBotSettings.enabled && updatedState.caveBotLevelsList.contains(presentCharLocationZ)) || !settings.caveBotSettings.enabled)) {
-//        println(s"AutoTarget is ON")
+      if ((settings.caveBotSettings.enabled && updatedState.caveBotLevelsList.contains(presentCharLocationZ)) || !(settings.caveBotSettings.enabled)) {
+        println(s"AutoTarget is ON, status ${updatedState.stateHunting}")
         (json \ "battleInfo").validate[Map[String, JsValue]] match {
           case JsSuccess(battleInfo, _) =>
             val hasMonsters = battleInfo.exists { case (_, creature) =>
@@ -50,7 +51,7 @@ object AutoTarget {
       }
     } else if (settings.autoTargetSettings.enabled && updatedState.stateHunting == "attacking") {
       // Safely attempt to extract the attacked creature's target ID
-
+      println(s"AutoTarget is ON, (ELSE) status ${updatedState.stateHunting}")
       // After handling monsters, update chase mode if necessary
 
       val (newUpdatedState, newActions, newLogs) = updateChaseModeIfNecessary(json, updatedState, actions, logs)
@@ -62,6 +63,45 @@ object AutoTarget {
       (json \ "attackInfo" \ "Id").asOpt[Int] match {
         case Some(attackedCreatureTarget) =>
 //          println(s"Targeting creature id: $attackedCreatureTarget")
+          val tempTargetFreezeHealthPoints = (json \ "attackInfo" \ "HealthPercent").as[Int]
+
+          if (updatedState.targetFreezeHealthStatus >= updatedState.retryAttemptsLong && updatedState.targetFreezeHealthPoints == tempTargetFreezeHealthPoints) {
+            printInColor(ANSI_BLUE, f"[DEBUG] Changing target due to health freeze")
+
+            val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ attackedCreatureTarget.toString).asOpt[JsObject]
+            battleCreaturePosition match {
+              case Some(pos) =>
+                val battleCreaturePositionX = (pos \ "PosX").asOpt[Int].getOrElse(0)
+                val battleCreaturePositionY = (pos \ "PosY").asOpt[Int].getOrElse(0)
+
+                if (updatedState.retryStatus >= updatedState.retryAttempts) {
+                  printInColor(ANSI_RED, f"[DEBUG] Unselecting creature id: $attackedCreatureTarget ")
+
+                  // Perform the mouse actions
+                  val actionsSeq = Seq(
+                    MouseAction(battleCreaturePositionX, battleCreaturePositionY, "move"),
+                    MouseAction(battleCreaturePositionX, battleCreaturePositionY, "pressLeft"),
+                    MouseAction(battleCreaturePositionX, battleCreaturePositionY, "releaseLeft")
+                  )
+                  actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+
+                  // Reset the state and retryStatus
+                  updatedState = updatedState.copy(stateHunting = "free", retryStatus = 0, targetFreezeCreatureId=attackedCreatureTarget)
+                } else {
+                  printInColor(ANSI_RED, f"[DEBUG] Retrying... (Attempt ${updatedState.retryStatus + 1})")
+                  updatedState = updatedState.copy(retryStatus = updatedState.retryStatus + 1)
+                }
+
+              case None =>
+                println(s"No position information available for monster ID $attackedCreatureTarget")
+            }
+
+
+          } else if (updatedState.targetFreezeHealthPoints == tempTargetFreezeHealthPoints) {
+            printInColor(ANSI_BLUE, f"[DEBUG] Target is freezed. (Attempt ${updatedState.targetFreezeHealthStatus + 1})")
+            updatedState = updatedState.copy(targetFreezeHealthStatus = updatedState.targetFreezeHealthStatus + 1)
+          }
+
           val targetName = (json \ "attackInfo" \ "Name").asOpt[String].getOrElse("Unknown")
           printInColor(ANSI_RED, f"[DEBUG] computeAutoTargetActions process started. Status:${updatedState.stateHunting}, attacking: $targetName")
           val xPos = (json \ "attackInfo" \ "Position" \ "x").asOpt[Int].getOrElse(0)
@@ -71,11 +111,13 @@ object AutoTarget {
 //          printInColor(ANSI_RED, f"[DEBUG] Updating position of attacked creature $targetName in game position $xPos, $yPos, $zPos")
 
           updatedState = updatedState.copy(lastTargetName = targetName)
+          updatedState = updatedState.copy(targetFreezeHealthPoints = tempTargetFreezeHealthPoints)
           updatedState = updatedState.copy(lastTargetPos = (xPos, yPos, zPos))
           updatedState = updatedState.copy(creatureTarget = attackedCreatureTarget)
 
         case None =>
-          println(s"Attack Info is empty")
+          println(s"Attack Info is empty. Switching to free")
+          updatedState = updatedState.copy(stateHunting = "free")
       }
     }
 
@@ -96,6 +138,7 @@ object AutoTarget {
     // Safely attempt to extract the attacked creature's target ID
     (json \ "attackInfo" \ "Id").asOpt[Int] match {
       case Some(attackedCreatureTarget) =>
+        updatedState = updatedState.copy(stateHunting = "attacking")
         println(s"attackInfo is not null, target Id: $attackedCreatureTarget")
         val targetName = (json \ "attackInfo" \ "Name").asOpt[String].getOrElse("Unknown")
 
@@ -115,7 +158,7 @@ object AutoTarget {
         if (updatedState.stateHunting == "free") {
 
           updatedState = updatedState.copy(creatureTarget = 0)
-          updatedState = updatedState.copy(alreadyLootedIds = List(), lootingStatus=0,extraWidowLootStatus=0, lootingRestryStatus=0)
+          updatedState = updatedState.copy(alreadyLootedIds = List(), lootingStatus=0,extraWidowLootStatus=0, lootingRestryStatus=0, targetFreezeHealthPoints=0)
 
           // Extract monsters, their IDs, and Names
           val monsters: Seq[(Long, String)] = (json \ "battleInfo").as[JsObject].values.flatMap { creature =>
@@ -148,14 +191,6 @@ object AutoTarget {
             updatedState = updatedState.copy(monstersListToLoot = monstersWithLoot)
           }
 
-          if (updatedState.staticContainersList.isEmpty) {
-            // Assuming `json` is already defined as JsValue containing the overall data
-            val containersInfo = (json \ "containersInfo").as[JsObject]
-            // Extracting keys as a list of container names
-            val containerKeys = containersInfo.keys.toList
-
-            updatedState = updatedState.copy(staticContainersList = containerKeys)
-          }
 
           // Filter and sort based on the danger level, sorting by descending danger
           var sortedMonsters = monsters
@@ -177,9 +212,27 @@ object AutoTarget {
               battleCreaturePosition.flatMap(pos => (pos \ "PosY").asOpt[Int]).getOrElse(Int.MaxValue)
             }
 
-          // Take top 4 elements and re-sort
-          val topFourMonsters = sortedMonsters.take(4)
+          var topFourMonsters = sortedMonsters.take(4)
             .sortBy { case (_, name) => -creatureDangerMap(name) }
+
+          printInColor(ANSI_BLUE, f"[DEBUG] Before reshuffling monster list: ${updatedState.targetFreezeHealthStatus} / ${updatedState.retryAttemptsLong}")
+
+          if (updatedState.targetFreezeHealthStatus >= updatedState.retryAttemptsLong) {
+            println(s"[DEBUG] Reshuffling monster list: $topFourMonsters")
+
+            // Remove monster with targetFreezeCreatureId from the list
+            val filteredMonsters = topFourMonsters.filter { case (id, _) => id != updatedState.targetFreezeCreatureId }
+
+            // Shuffle the filtered list
+            val shuffledMonsters = scala.util.Random.shuffle(filteredMonsters)
+              .sortBy { case (_, name) => -creatureDangerMap(name) }
+
+            println(s"[DEBUG] Reshuffling monster list: $shuffledMonsters")
+
+            // Update topFourMonsters with the shuffled list
+            topFourMonsters = shuffledMonsters
+
+          }
 
 
           // Process the highest priority target
@@ -187,8 +240,6 @@ object AutoTarget {
             case Some((id, name)) =>
 
               val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ id.toString).asOpt[JsObject]
-
-
               battleCreaturePosition match {
                 case Some(pos) =>
                   val battleCreaturePositionX = (pos \ "PosX").asOpt[Int].getOrElse(0)
@@ -207,7 +258,8 @@ object AutoTarget {
                     actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
 
                     // Reset the state and retryStatus
-                    updatedState = updatedState.copy(stateHunting = "free", retryStatus = 0)
+                    updatedState = updatedState.copy(retryStatus = 0,targetFreezeHealthStatus = 0, targetFreezeCreatureId=0)
+
                   } else {
                     printInColor(ANSI_RED, f"[DEBUG] Retrying... (Attempt ${updatedState.retryStatus + 1})")
                     updatedState = updatedState.copy(retryStatus = updatedState.retryStatus + 1)
@@ -290,29 +342,32 @@ object AutoTarget {
     var actions = initialActions
     var logs = initialLogs
     var updatedState = initialState
+    val currentChaseMode = (json \ "characterInfo" \ "ChaseMode").as[Int]
+    if (!(currentChaseMode == 1)) {
+      if (updatedState.chaseSwitchStatus >= updatedState.retryAttempts) {
+        printInColor(ANSI_RED, "[DEBUG] Changing the chase mode.")
+        updatedState = updatedState.copy(chaseSwitchStatus = 0)
 
-    if (updatedState.chaseSwitchStatus >= updatedState.retryAttempts) {
-      printInColor(ANSI_RED, "[DEBUG] Changing the chase mode.")
-      updatedState = updatedState.copy(chaseSwitchStatus = 0)
-      val currentChaseMode = (json \ "characterInfo" \ "ChaseMode").as[Int]
-      if (currentChaseMode == 0) {
-        val chaseModeBoxPosition = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "chaseModeBox").as[JsObject]
-        val chaseModeBoxX = (chaseModeBoxPosition \ "x").as[Int]
-        val chaseModeBoxY = (chaseModeBoxPosition \ "y").as[Int]
+        if (currentChaseMode == 0) {
+          val chaseModeBoxPosition = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "chaseModeBox").as[JsObject]
+          val chaseModeBoxX = (chaseModeBoxPosition \ "x").as[Int]
+          val chaseModeBoxY = (chaseModeBoxPosition \ "y").as[Int]
 
-        val actionsSeq = Seq(
-          MouseAction(chaseModeBoxX, chaseModeBoxY, "move"),
-          MouseAction(chaseModeBoxX, chaseModeBoxY, "pressLeft"),
-          MouseAction(chaseModeBoxX, chaseModeBoxY, "releaseLeft")
-        )
+          val actionsSeq = Seq(
+            MouseAction(chaseModeBoxX, chaseModeBoxY, "move"),
+            MouseAction(chaseModeBoxX, chaseModeBoxY, "pressLeft"),
+            MouseAction(chaseModeBoxX, chaseModeBoxY, "releaseLeft")
+          )
 
-        logs :+= Log("Move mouse to switch to follow chase mode.")
-        actions :+= FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+          logs :+= Log("Move mouse to switch to follow chase mode.")
+          actions :+= FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+        }
+      } else {
+        printInColor(ANSI_RED, "[DEBUG] Looping until changing chase mode!")
+        updatedState = updatedState.copy(chaseSwitchStatus = updatedState.chaseSwitchStatus + 1)
       }
-    } else {
-      printInColor(ANSI_RED, "[DEBUG] Looping until changing chase mode!")
-      updatedState = updatedState.copy(chaseSwitchStatus = updatedState.chaseSwitchStatus + 1)
     }
+
     (updatedState, actions, logs)
   }
 

@@ -72,7 +72,18 @@ object CaveBot {
         if (currentTime - updatedState.antiOverpassDelay >= 1000) {
           updatedState = updatedState.copy(antiOverpassDelay = currentTime)
 
-          val levelMovementEnablersIdsList: List[Int] = List(414, 369, 469, 1977, 1947, 1948)
+          val levelMovementEnablersIdsList: List[Int] = List(
+            414,
+            433,
+            369,
+            469,
+            1977,
+            1947,
+            1948,
+            386,
+            594,
+          )
+          //593, shovel closed
 //          printInColor(ANSI_BLUE, f"[WRONG FLOOR] Level movement enablers: $levelMovementEnablersIdsList")
 
           val presentCharLocationX = (json \ "characterInfo" \ "PositionX").as[Int]
@@ -337,9 +348,12 @@ object CaveBot {
 
     } else {
       printInColor(ANSI_RED, f"[DEBUG] Proceeding the path")
+
+      printInColor(ANSI_BLUE, f"[DEBUG] PATH BEFORE: ${updatedState.subWaypoints}")
+      updatedState = updatedState.copy(subWaypoints = pruneWaypoints(updatedState.subWaypoints))
+      printInColor(ANSI_BLUE, f"[DEBUG] PATH AFTER: ${updatedState.subWaypoints}")
       controlPath(currentWaypoint, updatedState, json)
     }
-
 
     if (updatedState.subWaypoints.nonEmpty) {
       val nextWaypoint = updatedState.subWaypoints.head
@@ -714,8 +728,39 @@ object CaveBot {
   }
 
 
-
   def createBooleanGrid(tiles: Map[String, JsObject], min_x: Int, min_y: Int): (Array[Array[Boolean]], (Int, Int)) = {
+    val levelMovementEnablersIdsList: List[Int] = List(414, 433, 369, 469, 1977, 1947, 1948, 386, 594)
+
+    val maxX = tiles.keys.map(key => key.take(5).trim.toInt).max
+    val maxY = tiles.keys.map(key => key.drop(5).take(5).trim.toInt).max
+    val width = maxX - min_x + 1
+    val height = maxY - min_y + 1
+
+    println(s"Creating boolean grid with dimensions: width=$width, height=$height, maxX=$maxX, maxY=$maxY, min_x=$min_x, min_y=$min_y")
+
+    val grid = Array.fill(height, width)(false)
+
+    tiles.foreach { case (key, tileObj) =>
+      val x = key.take(5).trim.toInt - min_x
+      val y = key.drop(5).take(5).trim.toInt - min_y
+      try {
+        val tileItems = (tileObj \ "items").as[JsObject]
+        val hasBlockingItem = tileItems.values.exists(item =>
+          levelMovementEnablersIdsList.contains((item \ "id").as[Int])
+        )
+
+        grid(y)(x) = (tileObj \ "isWalkable").asOpt[Boolean].getOrElse(false) && !hasBlockingItem
+      } catch {
+        case e: ArrayIndexOutOfBoundsException =>
+          println(s"Exception accessing grid position: x=$x, y=$y, width=$width, height=$height")
+          throw e
+      }
+    }
+
+    (grid, (min_x, min_y))
+  }
+
+  def createBooleanGridOldButGood(tiles: Map[String, JsObject], min_x: Int, min_y: Int): (Array[Array[Boolean]], (Int, Int)) = {
     val maxX = tiles.keys.map(key => key.take(5).trim.toInt).max
     val maxY = tiles.keys.map(key => key.drop(5).take(5).trim.toInt).max
     val width = maxX - min_x + 1
@@ -902,6 +947,7 @@ object CaveBot {
     if (presentCharLocation != currentWaypointLocation) {
       // Make sure to include min_x and min_y when calling aStarSearch
       newPath = aStarSearch(presentCharLocation, currentWaypointLocation, grid, min_x, min_y)
+      printInColor(ANSI_BLUE, f"[WAYPOINTS] Path: $newPath.")
     } else {
       println("[DEBUG] Current location matches the current waypoint, moving to the next waypoint.")
       // Increment the waypoint index safely with modulo to cycle through the list
@@ -975,6 +1021,7 @@ object CaveBot {
 
     // Make sure to include min_x and min_y when calling aStarSearch
     val newPath = aStarSearch(presentCharLocation, currentWaypointLocation, grid, min_x, min_y)
+    printInColor(ANSI_BLUE, f"[WAYPOINTS] Path: $newPath.")
 
     println(s"[DEBUG] Path: ${newPath.mkString(" -> ")}")
     println(s"[DEBUG] Char loc: $presentCharLocation")
@@ -1007,11 +1054,42 @@ object CaveBot {
 
     // Instead of finding a path, prepare a dummy path list for visual demonstration
     val presentPath = initialState.subWaypoints // This would typically show an empty path or a preset static path for illustration
-
+    println(f"Present path: $presentPath")
     printGrid(grid, gridBounds, presentPath, presentCharLocation, currentWaypointLocation)
   }
 
 
+  def pruneWaypoints(path: List[Vec]): List[Vec] = {
+    // Helper function to check if two waypoints are horizontally or vertically contiguous
+    def areContiguous(v1: Vec, v2: Vec): Boolean = {
+      val dx = (v1.x - v2.x).abs
+      val dy = (v1.y - v2.y).abs
+      (dx == 1 && dy == 0) || (dx == 0 && dy == 1)
+    }
+
+    // Function to find the longest contiguous subpath from any starting point
+    @scala.annotation.tailrec
+    def findLongestContiguousSubPath(remainingPath: List[Vec], currentPath: List[Vec], longestPath: List[Vec]): List[Vec] = remainingPath match {
+      case first :: second :: rest if areContiguous(first, second) =>
+        findLongestContiguousSubPath(second :: rest, currentPath :+ first, longestPath)
+      case last :: Nil if currentPath.nonEmpty && areContiguous(currentPath.last, last) =>
+        val newPath = currentPath :+ last
+        if (newPath.length > longestPath.length) newPath else longestPath
+      case _ :: rest =>
+        if (currentPath.nonEmpty && currentPath.length > longestPath.length)
+          findLongestContiguousSubPath(rest, List(rest.head), currentPath)
+        else
+          findLongestContiguousSubPath(rest, List(rest.head), longestPath)
+      case Nil =>
+        longestPath
+    }
+
+    if (path.nonEmpty && path.tail.nonEmpty) {
+      findLongestContiguousSubPath(path.tail, List(path.head), List.empty)
+    } else {
+      path // Return the path as is if it's too short to have disconnections
+    }
+  }
 
   implicit val timeout: Timeout = Timeout(1000.milliseconds)  // Set a timeout for 300 milliseconds
 }
