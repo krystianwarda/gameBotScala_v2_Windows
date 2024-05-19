@@ -111,9 +111,11 @@ object AutoTarget {
 
 
       case None =>
+
         if (updatedState.stateHunting == "free") {
 
           updatedState = updatedState.copy(creatureTarget = 0)
+          updatedState = updatedState.copy(alreadyLootedIds = List(), lootingStatus=0,extraWidowLootStatus=0, lootingRestryStatus=0)
 
           // Extract monsters, their IDs, and Names
           val monsters: Seq[(Long, String)] = (json \ "battleInfo").as[JsObject].values.flatMap { creature =>
@@ -125,7 +127,7 @@ object AutoTarget {
 
           // Use the existing creatureList from settings
           val jsonResult = transformToJSON(settings.autoTargetSettings.creatureList)
-//          println(Json.prettyPrint(Json.toJson(jsonResult)))
+          //          println(Json.prettyPrint(Json.toJson(jsonResult)))
 
           // Now use Reads from the Creature object
           val creatureDangerMap = jsonResult.map { json =>
@@ -220,7 +222,6 @@ object AutoTarget {
         } else {
           println(s"Autotarget condition is met, but state is not ready: ${updatedState.stateHunting}")
         }
-
     }
 
 

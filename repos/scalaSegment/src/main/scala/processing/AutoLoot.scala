@@ -5,6 +5,7 @@ import play.api.libs.json.{JsError, JsObject, JsValue}
 import userUI.SettingsUtils.UISettings
 import play.api.libs.json._
 import utils.consoleColorPrint.{ANSI_GREEN, ANSI_RED, printInColor}
+import scala.util.Random
 
 object AutoLoot {
   def computeAutoLootActions(json: JsValue, settings: UISettings, currentState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
@@ -44,54 +45,56 @@ object AutoLoot {
                   (lastContainer \ "items").asOpt[String] match {
                     case Some("empty") =>
 
-                      if (updatedState.retryStatus >= updatedState.retryAttempts) {
+                      if (updatedState.lootingRestryStatus >= updatedState.retryAttempts) {
                         printInColor(ANSI_RED, f"[DEBUG] Items field is 'empty'. No items to process.")
-                        updatedState = updatedState.copy(stateHunting = "free", retryStatus=0)
+                        updatedState = updatedState.copy(stateHunting = "free", lootingRestryStatus=0)
                       } else {
-                        printInColor(ANSI_RED, f"[DEBUG] Retrying - Items field is 'empty'. No items to process (Attempt ${updatedState.retryStatus + 1})")
-                        updatedState = updatedState.copy(retryStatus = updatedState.retryStatus + 1)
+                        printInColor(ANSI_RED, f"[DEBUG] Retrying - Items field is 'empty'. No items to process (Attempt ${updatedState.lootingRestryStatus + 1})")
+                        updatedState = updatedState.copy(lootingRestryStatus = updatedState.lootingRestryStatus + 1)
                       }
 
                     case None =>
 
-                      if (updatedState.retryStatus >= updatedState.retryAttempts) {
+                      if (updatedState.lootingRestryStatus >= updatedState.retryAttempts) {
                         printInColor(ANSI_RED, f"[DEBUG] No items field present or it is not in expected format")
-                        updatedState = updatedState.copy(stateHunting = "free", retryStatus=0)
+                        updatedState = updatedState.copy(stateHunting = "free", lootingRestryStatus=0)
                       } else {
-                        printInColor(ANSI_RED, f"[DEBUG] Retrying - no items field present or it is not in expected format (Attempt ${updatedState.retryStatus + 1})")
-                        updatedState = updatedState.copy(retryStatus = updatedState.retryStatus + 1)
+                        printInColor(ANSI_RED, f"[DEBUG] Retrying - no items field present or it is not in expected format (Attempt ${updatedState.lootingRestryStatus + 1})")
+                        updatedState = updatedState.copy(lootingRestryStatus = updatedState.lootingRestryStatus + 1)
                       }
 
                     case Some(other) =>
 
-                      if (updatedState.retryStatus >= updatedState.retryAttempts) {
+                      if (updatedState.lootingRestryStatus >= updatedState.retryAttempts) {
                         printInColor(ANSI_RED, f"[DEBUG] Unexpected string in items field: $other")
-                        updatedState = updatedState.copy(stateHunting = "free", retryStatus=0)
+                        updatedState = updatedState.copy(stateHunting = "free", lootingRestryStatus=0)
                       } else {
-                        printInColor(ANSI_RED, f"[DEBUG] Retrying - unexpected string in items field (Attempt ${updatedState.retryStatus + 1})")
-                        updatedState = updatedState.copy(retryStatus = updatedState.retryStatus + 1)
+                        printInColor(ANSI_RED, f"[DEBUG] Retrying - unexpected string in items field (Attempt ${updatedState.lootingRestryStatus + 1})")
+                        updatedState = updatedState.copy(lootingRestryStatus = updatedState.lootingRestryStatus + 1)
                       }
 
                   }
 
                 case JsSuccess(itemsInContainer, _) =>
 
-                  val itemsInContainerInitial = (lastContainer \ "items").as[JsObject]
-                  printInColor(ANSI_RED, f"[DEBUG] Items in container detected: $itemsInContainerInitial")
 
-                  val itemsInContainer = JsObject(itemsInContainerInitial.fields.filterNot { case (_, itemInfo) =>
-                    val itemId = (itemInfo \ "itemId").as[Int]
-                    updatedState.alreadyLootedIds.contains(itemId)
-                  })
-                  printInColor(ANSI_RED, f"[DEBUG] Filtered items excluding already looted: $itemsInContainer")
 
                   printInColor(ANSI_RED, f"[DEBUG] Considering looting from from $lastContainerIndex")
-//                  printInColor(ANSI_RED, f"[DEBUG] Statis container list ${updatedState.staticContainersList}")
 
                   // Check if the last container is not already in the updatedState.staticContainersList
                   if (!updatedState.staticContainersList.contains(lastContainerIndex)) {
-
                     printInColor(ANSI_RED, f"[DEBUG] Looting from $lastContainerIndex")
+                    val itemsInContainerInitial = (lastContainer \ "items").as[JsObject]
+//                    printInColor(ANSI_RED, f"[DEBUG] Items in container detected: $itemsInContainerInitial")
+
+                    val itemsInContainer = JsObject(itemsInContainerInitial.fields.filterNot { case (_, itemInfo) =>
+                      val itemId = (itemInfo \ "itemId").as[Int]
+                      updatedState.alreadyLootedIds.contains(itemId)
+                    })
+//                    printInColor(ANSI_RED, f"[DEBUG] Items already looted: ${updatedState.alreadyLootedIds}")
+//                    printInColor(ANSI_RED, f"[DEBUG] Filtered items excluding already looted: $itemsInContainer")
+
+
                     // Prepare a set of item IDs from lootList
                     val lootItems = settings.autoLootSettings.lootList.map(_.trim.split(",\\s*")(0).toInt).toSet
                     printInColor(ANSI_RED, f"[DEBUG] Available Loot Items: ${lootItems.mkString(", ")}")
@@ -111,8 +114,6 @@ object AutoLoot {
 
                         val itemId = (item \ "itemId").as[Int]
                         val itemCount = (item \ "itemCount").as[Int]
-                        printInColor(ANSI_RED, f"[DEBUG] Item to loot has been found: $itemId")
-                        updatedState = updatedState.copy(alreadyLootedIds = updatedState.alreadyLootedIds :+ itemId)
 
                         // Assuming lastContainerIndex and slot are already defined
                         val itemSlot = slot.replace("slot", "item") // Convert "slot2" to "item2"
@@ -141,17 +142,50 @@ object AutoLoot {
 
                                 action match {
                                   case "g" => // Handle ground placement
-                                    val mapTarget = (screenInfo \ "mapPanelLoc" \ "8x6").as[JsObject]
-                                    val (targetX, targetY) = ((mapTarget \ "x").as[Int], (mapTarget \ "y").as[Int])
+//                                    val mapTarget = (screenInfo \ "mapPanelLoc" \ "8x6").as[JsObject]
+//                                    val (targetX, targetY) = ((mapTarget \ "x").as[Int], (mapTarget \ "y").as[Int])
+                                    printInColor(ANSI_RED, f"[DEBUG] Item: $itemId, is planned to be put on the ground")
+                                    // Define the list of potential tiles around "8x6"
+                                    val possibleTiles = List("7x5", "7x6", "7x7", "8x5", "8x6", "8x7", "9x5", "9x6", "9x7")
 
-                                    if (itemCount == 1) {
-                                      val actionsSeq = moveSingleItem(x, y, targetX, targetY)
-                                      actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-                                    } else {
-                                      val actionsSeq = moveMultipleItems(x, y, targetX, targetY)
-                                      actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+                                    val areaInfo = (json \ "areaInfo").as[JsObject]
+                                    // Usage: Get the index of a random walkable tile
+//                                    println(f"AreaInfo: $areaInfo")
+//                                    val walkableTileIndices  = findRandomWalkableTile(areaInfo, possibleTiles)
+//                                    val shuffledWalkableIndices = Random.shuffle(walkableTileIndices)
+
+                                    val walkableTileIndex = findRandomWalkableTile(areaInfo, possibleTiles)
+                                    println(walkableTileIndex)
+
+                                    walkableTileIndex match {
+                                      case Some(tileIndex) =>
+                                        printInColor(ANSI_RED, f"[DEBUG] Trying to find screen info about item")
+                                        // Extract x and y coordinates for the selected walkable tile from screenInfo
+                                        val mapTarget = (screenInfo \ "mapPanelLoc" \ tileIndex).as[JsObject]
+                                        val (targetX, targetY) = ((mapTarget \ "x").as[Int], (mapTarget \ "y").as[Int])
+
+                                        printInColor(ANSI_RED, f"[DEBUG] Item to loot has been found: $itemId")
+                                        updatedState = updatedState.copy(alreadyLootedIds = updatedState.alreadyLootedIds :+ itemId)
+                                        printInColor(ANSI_RED, f"[DEBUG] Adding $itemId to already looted items: ${updatedState.alreadyLootedIds}")
+
+                                        if (itemCount == 1) {
+                                          val actionsSeq = moveSingleItem(x, y, targetX, targetY)
+                                          actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+                                        } else {
+                                          val actionsSeq = moveMultipleItems(x, y, targetX, targetY)
+                                          actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+                                        }
+                                        printInColor(ANSI_RED, f"[DEBUG] Move item to ground at $tileIndex ($targetX, $targetY)")
+
+
+                                      case None =>
+                                        println("No tile found for placing loot.")
                                     }
-                                    printInColor(ANSI_RED, f"[DEBUG] Move item to ground at ($targetX, $targetY)")
+
+
+
+
+
 
                                   case containerIndex if containerIndex.forall(_.isDigit) => // Check if action is a digit, indicating a container
                                     val containerName = s"container$containerIndex"
@@ -201,24 +235,24 @@ object AutoLoot {
                             actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
                           case None =>
                             printInColor(ANSI_RED, f"[DEBUG] No container ( and no items to loot) detected within the items, setting the state to free")
-                            if (updatedState.retryStatus >= updatedState.retryAttempts) {
+                            if (updatedState.lootingStatus >= updatedState.retryAttempts) {
                               printInColor(ANSI_RED, f"[DEBUG] No container nor items to loot")
-                              updatedState = updatedState.copy(stateHunting = "free", retryStatus=0)
+                              updatedState = updatedState.copy(stateHunting = "free", lootingStatus=0)
                             } else {
-                              printInColor(ANSI_RED, f"[DEBUG] Retrying - No container nor items to loot. (Attempt ${updatedState.retryStatus + 1})")
-                              updatedState = updatedState.copy(retryStatus = updatedState.retryStatus + 1)
+                              printInColor(ANSI_RED, f"[DEBUG] Retrying - No container nor items to loot. (Attempt ${updatedState.lootingStatus + 1})")
+                              updatedState = updatedState.copy(lootingStatus= updatedState.lootingStatus + 1)
                             }
 
                         }
                     }
                   } else {
-
-                    if (updatedState.retryStatus >= updatedState.retryAttempts) {
+                    printInColor(ANSI_RED, f"[DEBUG] Backpack ($lastContainerIndex) is from static opened backpacks: ${updatedState.staticContainersList}")
+                    if (updatedState.lootingStatus >= updatedState.retryAttempts) {
                       printInColor(ANSI_RED, f"[DEBUG] No new backpack has been found. Finishing looting")
-                      updatedState = updatedState.copy(stateHunting = "free", retryStatus=0)
+                      updatedState = updatedState.copy(stateHunting = "free", lootingStatus=0)
                     } else {
-                      printInColor(ANSI_RED, f"[DEBUG] Retrying - No new backpack has been found. (Attempt ${updatedState.retryStatus + 1})")
-                      updatedState = updatedState.copy(retryStatus = updatedState.retryStatus + 1)
+                      printInColor(ANSI_RED, f"[DEBUG] Retrying - No new backpack has been found. (Attempt ${updatedState.lootingStatus + 1})")
+                      updatedState = updatedState.copy(lootingStatus = updatedState.lootingStatus + 1)
                     }
                   }
               }
@@ -250,7 +284,7 @@ object AutoLoot {
                   actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
                   updatedState = updatedState.copy(stateHunting = "looting") // looting later
                 case None =>
-                  if (updatedState.retryStatus >= updatedState.retryAttempts) {
+                  if (updatedState.extraWidowLootStatus >= updatedState.retryAttempts) {
                     printInColor(ANSI_RED, f"[DEBUG] Miss-clicked the carcass body. Resetting.")
                     val presentCharLocation = (json \ "screenInfo" \ "mapPanelLoc" \ "10x3").as[JsObject]
                     val presentCharLocationX = (presentCharLocation \ "x").as[Int]
@@ -262,10 +296,10 @@ object AutoLoot {
                       MouseAction(presentCharLocationX, presentCharLocationY, "releaseLeft")
                     )
                     actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-                    updatedState = updatedState.copy(stateHunting = "free", retryStatus = 0) // looting later and reset retryStatus
+                    updatedState = updatedState.copy(stateHunting = "free", extraWidowLootStatus = 0) // looting later and reset retryStatus
                   } else {
-                    printInColor(ANSI_RED, f"[DEBUG] No Open position available or extraWindowLoc is null. Retrying... (Attempt ${updatedState.retryStatus + 1})")
-                    updatedState = updatedState.copy(retryStatus = updatedState.retryStatus + 1) // increment retryStatus
+                    printInColor(ANSI_RED, f"[DEBUG] No Open position available or extraWindowLoc is null. Retrying... (Attempt ${updatedState.extraWidowLootStatus + 1})")
+                    updatedState = updatedState.copy(extraWidowLootStatus = updatedState.extraWidowLootStatus + 1) // increment retryStatus
                   }
               }
 
@@ -368,7 +402,7 @@ object AutoLoot {
                     // Define the sequence of mouse actions based on retrieved screen coordinates
                     val (xPositionScreen, yPositionScreen) = screenCoordsOpt
                     printInColor(ANSI_RED, f"[DEBUG] Opening creature carcass on screen position $xPositionScreen, $yPositionScreen")
-                    updatedState = updatedState.copy(alreadyLootedIds = List.empty)
+                    updatedState = updatedState.copy(alreadyLootedIds = List())
                     val actionsSeq = Seq(
                       MouseAction(xPositionScreen, yPositionScreen, "move"),
                       MouseAction(xPositionScreen, yPositionScreen, "pressCtrl"),
@@ -408,7 +442,7 @@ object AutoLoot {
                         // Define the sequence of mouse actions based on retrieved screen coordinates
                         val (xPositionScreen, yPositionScreen) = screenCoordsOpt
                         println(s"Creature body screen position $xPositionScreen, $yPositionScreen")
-                        updatedState = updatedState.copy(alreadyLootedIds = List.empty)
+                        updatedState = updatedState.copy(alreadyLootedIds = List())
                         val actionsSeq = Seq(
                           MouseAction(xPositionScreen, yPositionScreen, "move"),
                           MouseAction(xPositionScreen, yPositionScreen, "pressCtrl"),
@@ -457,6 +491,26 @@ object AutoLoot {
       MouseAction(xDestPos, yDestPos, "releaseCtrl")
     )
 
+  // Function to find a random walkable tile
+
+  // Assume this function is corrected to return List[String]
+
+  def findRandomWalkableTile(areaInfo: JsObject, possibleTiles: List[String]): Option[String] = {
+    println("Inside findRandomWalkableTile")
+
+    // Extract the tiles information from the area info JSON object
+    val tilesInfo = (areaInfo \ "tiles").as[JsObject]
+
+    // Collect all indices of walkable tiles
+    val allWalkableIndices = tilesInfo.fields.collect {
+      case (tileId, jsValue) if possibleTiles.contains((jsValue \ "index").asOpt[String].getOrElse("")) &&
+        (jsValue \ "isWalkable").asOpt[Boolean].getOrElse(false) =>
+        (jsValue \ "index").as[String]
+    }.toList
+
+    // Shuffle the list of all walkable indices and return one at random
+    Random.shuffle(allWalkableIndices).headOption
+  }
 
 }
 

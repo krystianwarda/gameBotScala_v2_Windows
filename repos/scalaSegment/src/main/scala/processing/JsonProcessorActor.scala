@@ -93,6 +93,9 @@ case class ProcessorState(
                            slowWalkStatus: Int = 0,
                            antiCaveBotStuckStatus: Int = 0,
                            chaseSwitchStatus: Int = 0,
+                           lootingStatus: Int = 0,
+                           extraWidowLootStatus: Int = 0,
+                           lootingRestryStatus: Int = 0,
                            retryAttempts: Int = 2,
                          )
 case class UpdateSettings(settings: UISettings)
