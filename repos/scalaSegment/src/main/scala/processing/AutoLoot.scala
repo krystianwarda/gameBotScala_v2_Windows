@@ -25,8 +25,28 @@ object AutoLoot {
         updatedState = updatedState.copy(staticContainersList = containerKeys)
       }
 
-      // Assuming 'json' is your input JsValue
-      val containersInfoOpt: Option[JsObject] = (json \ "containersInfo").asOpt[JsObject]
+
+      // Extracting and using the position
+      extractOkButtonPosition(json) match {
+        case Some((posX, posY)) =>
+          if (updatedState.extraWidowLootStatus >= updatedState.retryAttempts) {
+            val actionsSeq = Seq(
+              MouseAction(posX, posY, "move"),
+              MouseAction(posX, posY, "pressLeft"),
+              MouseAction(posX, posY, "releaseLeft")
+            )
+            printInColor(ANSI_RED, "[DEBUG] Closing object movement window.")
+            actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+            updatedState = updatedState.copy(extraWidowLootStatus = 0)
+          } else {
+            printInColor(ANSI_RED, f"[DEBUG] Closing object movement window. Retrying... (Attempt ${updatedState.extraWidowLootStatus + 1})")
+            updatedState = updatedState.copy(extraWidowLootStatus = updatedState.extraWidowLootStatus + 1)
+          }
+        case None => // Do nothing
+      }
+
+//      val screenInfoExtraWindowOpt: Option[JsObject] = (json \ "screenInfo" \ "extraWindowLoc" ).asOpt[JsObject]
+
 
       (json \ "attackInfo" \ "Id").asOpt[Int] match {
         case Some(attackedCreatureTarget) =>
@@ -520,6 +540,24 @@ object AutoLoot {
     // Shuffle the list of all walkable indices and return one at random
     Random.shuffle(allWalkableIndices).headOption
   }
+
+
+  // Function to safely extract posX and posY if the 'Ok' button exists
+  def extractOkButtonPosition(json: JsValue): Option[(Int, Int)] = {
+    (json \ "screenInfo" \ "extraWindowLoc").validate[JsObject] match {
+      case JsSuccess(extraWindowLoc, _) =>
+        (extraWindowLoc \ "Ok").validate[JsObject] match {
+          case JsSuccess(okButton, _) =>
+            for {
+              posX <- (okButton \ "posX").validate[Int].asOpt
+              posY <- (okButton \ "posY").validate[Int].asOpt
+            } yield (posX, posY)
+          case _ => None // No 'Ok' button or invalid format
+        }
+      case _ => None // No 'extraWindowLoc' or it's not an object
+    }
+  }
+
 
 }
 
