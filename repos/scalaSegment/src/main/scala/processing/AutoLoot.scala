@@ -19,9 +19,13 @@ object AutoLoot {
       if (updatedState.staticContainersList.isEmpty) {
         // Assuming `json` is already defined as JsValue containing the overall data
         val containersInfo = (json \ "containersInfo").as[JsObject]
-        // Extracting keys as a list of container names
-        val containerKeys = containersInfo.keys.toList
-        printInColor(ANSI_RED, f"[DEBUG] Static containers loaded!")
+
+        // Extracting keys as a list of container names, but only include those which have "bag", "backpack", or "ring" in their names
+        val containerKeys = containersInfo.keys.toList.filter { key =>
+          val name = (containersInfo \ key \ "name").asOpt[String].getOrElse("")
+          name.contains("bag") || name.contains("backpack") || name.contains("ring")
+        }
+        printInColor(ANSI_RED, f"[DEBUG] Static containers loaded: $containerKeys")
         updatedState = updatedState.copy(staticContainersList = containerKeys)
       }
 
@@ -29,7 +33,9 @@ object AutoLoot {
       // Extracting and using the position
       extractOkButtonPosition(json) match {
         case Some((posX, posY)) =>
-          if (updatedState.extraWidowLootStatus >= updatedState.retryAttempts) {
+          // Now use this stored current time for all time checks
+          val timeExtraWindowLoot = updatedState.currentTime - updatedState.lastExtraWindowLoot
+          if (timeExtraWindowLoot >= updatedState.longTimeLimit) {
             val actionsSeq = Seq(
               MouseAction(posX, posY, "move"),
               MouseAction(posX, posY, "pressLeft"),
@@ -37,11 +43,32 @@ object AutoLoot {
             )
             printInColor(ANSI_RED, "[DEBUG] Closing object movement window.")
             actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-            updatedState = updatedState.copy(extraWidowLootStatus = 0)
+
+            // Update the extraWidowLootStatus with the current time to mark this execution
+            updatedState = updatedState.copy(lastExtraWindowLoot = updatedState.currentTime)
           } else {
-            printInColor(ANSI_RED, f"[DEBUG] Closing object movement window. Retrying... (Attempt ${updatedState.extraWidowLootStatus + 1})")
-            updatedState = updatedState.copy(extraWidowLootStatus = updatedState.extraWidowLootStatus + 1)
+            printInColor(ANSI_RED, f"[DEBUG] Closing object movement window. Not enough time has passed since the last execution: ${updatedState.lastExtraWindowLoot}ms ago.")
           }
+/*          if (updatedState.extraWidowLootStatus == 0) {
+            val actionsSeq = Seq(
+              MouseAction(posX, posY, "move"),
+              MouseAction(posX, posY, "pressLeft"),
+              MouseAction(posX, posY, "releaseLeft")
+            )
+            printInColor(ANSI_RED, "[DEBUG] Closing object movement window.")
+            actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+            // Increment the status to prevent execution in the next loops
+            updatedState = updatedState.copy(extraWidowLootStatus = updatedState.extraWidowLootStatus + 1)
+          } else {
+            // Check if it's time to reset the status for the next possible execution cycle
+            if (updatedState.extraWidowLootStatus >= updatedState.retryAttempts) {
+              updatedState = updatedState.copy(extraWidowLootStatus = 0)
+            } else {
+              printInColor(ANSI_RED, f"[DEBUG] Closing object movement window. Skipping... (Status ${updatedState.extraWidowLootStatus})")
+              // Increment to continue preventing execution until reaching the retry attempts limit
+              updatedState = updatedState.copy(extraWidowLootStatus = updatedState.extraWidowLootStatus + 1)
+            }
+          }*/
         case None => // Do nothing
       }
 

@@ -41,18 +41,18 @@ class ActionStateManager extends Actor {
   }
 
   override def receive: Receive = {
-    case MouseMoveCommand(actions, mouseMovementsEnabled) =>
-      //      println(s"Received MouseMoveCommand with actions: ${actions.length} and mouseMovementsEnabled: $mouseMovementsEnabled")
-      val actionType = extractActionType(actions)
-      val currentTime = System.currentTimeMillis()
-      val (state, lastExecutionTime, _) = actionStates(actionType)
-      //      println(s"Current state for actionType $actionType: $state")
+    case MouseMoveCommand(actions, movementsEnabled, actionType) =>
+      println(s"Received MouseMoveCommand with actionType: $actionType and actions: $actions")
+    //      val actionType = extractActionType(actions)
+    //      val currentTime = System.currentTimeMillis()
+    //      val (state, lastExecutionTime, _) = actionStates(actionType)
+    //      println(s"Current state for actionType $actionType: $state")
 
-      if (state == "free" && isPriorityMet(actionType)) {
-        //        println(s"Action $actionType is set to 'in progress'")
-        actionStates(actionType) = ("in progress", currentTime, calculateNextExecutionTime(actionType, currentTime))
-        mouseMovementActorRef ! MouseMoveCommand(actions, mouseMovementsEnabled)
-      }
+    //      if (state == "free" ) {   //&& isPriorityMet(actionType)
+    //        println(s"Action $actionType is set to 'in progress'")
+    //        actionStates(actionType) = ("in progress", currentTime, calculateNextExecutionTime(actionType, currentTime))
+//  }
+      mouseMovementActorRef ! MouseMoveCommand(actions, mouseMovementsEnabled, actionType)
 
     case ActionCompleted(actionType) =>
       //      println(s"ActionCompleted received for actionType: $actionType")
@@ -61,13 +61,13 @@ class ActionStateManager extends Actor {
     //      println(s"Action $actionType is now free")
   }
 
-  def extractActionType(actions: Seq[MouseAction]): ActionTypes.Value = {
-    // Example logic to determine action type
-    // This is highly simplified and should be replaced with your actual logic
-    if (actions.exists(_.action == "heal")) ActionTypes.Heal
-    else if (actions.exists(_.action == "attack")) ActionTypes.AttackMonster
-    else ActionTypes.Move // Default to Move as a simple example
-  }
+//  def extractActionType(actions: Seq[MouseAction]): ActionTypes.Value = {
+//    // Example logic to determine action type
+//    // This is highly simplified and should be replaced with your actual logic
+//    if (actions.exists(_.action == "heal")) ActionTypes.Heal
+//    else if (actions.exists(_.action == "attack")) ActionTypes.AttackMonster
+//    else ActionTypes.Move // Default to Move as a simple example
+//  }
 
   def handleActionCompleted(actionType: ActionTypes.Value): Unit = {
     val currentTime = System.currentTimeMillis()

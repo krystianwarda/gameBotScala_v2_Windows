@@ -21,7 +21,7 @@ object AutoHeal {
     val startTime = System.nanoTime()
 
     if (settings.healingSettings.enabled) {
-//      println(s"Status autoheal : ${updatedState.statusOfRuneAutoheal}")
+      println(s"Status stateHealingWithRune : ${updatedState.stateHealingWithRune}")
 //      println(s"Status runeContainer : ${updatedState.uhRuneContainerName}")
 
       if (updatedState.statusOfRuneAutoheal == "open_new_backpack") {
@@ -130,7 +130,7 @@ object AutoHeal {
       }
 
 
-    if (((currentTime - currentState.lastHealingTime) >= 1300) && (updatedState.statusOfRuneAutoheal == "ready")) {
+      if (((currentState.currentTime - currentState.lastHealingTime) >= updatedState.healingSpellCooldown) && (updatedState.statusOfRuneAutoheal == "ready") && (updatedState.stateHealingWithRune == "free")) {
         val health = (json \ "characterInfo" \ "Health").as[Int]
         val mana = (json \ "characterInfo" \ "Mana").as[Int]
         // UH RUNE 3160
@@ -138,7 +138,7 @@ object AutoHeal {
           logs = logs :+ Log("I need to use UH!")
           if (settings.mouseMovements) {
             logs = logs :+ Log("use UH with mouse")
-            findItemInContainerSlot14(json,updatedState, 3160, 1).foreach { runePosition =>
+            findItemInContainerSlot14(json, updatedState, 3160, 1).foreach { runePosition =>
               val runeX = (runePosition \ "x").as[Int]
               val runeY = (runePosition \ "y").as[Int]
 
@@ -147,21 +147,39 @@ object AutoHeal {
               val targetX = (mapTarget \ "x").as[Int]
               val targetY = (mapTarget \ "y").as[Int]
 
-              val actionsSeq = Seq(
-                MouseAction(runeX, runeY, "move"),
-                MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
-                MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
-                MouseAction(targetX, targetY, "move"), // Move to target position
-                MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
-                MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
-              )
-              updatedState = updatedState.copy(lastHealingTime = currentTime)
-              actions = actions :+ FakeAction("useMouse", Some(ItemInfo(3160, None)), Some(MouseActions(actionsSeq)))
-              logs = logs :+ Log(s"Using item 3160 at position ($runeX, $runeY) - Actions: $actionsSeq")
+              if (updatedState.healingRestryStatus  == 0) {
+                printInColor(ANSI_RED, f"[DEBUG] HEAL")
+
+                val actionsSeq = Seq(
+                  MouseAction(runeX, runeY, "move"),
+                  MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
+                  MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
+                  MouseAction(targetX, targetY, "move"), // Move to target position
+                  MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
+                  MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
+                )
+                // Update the last healing time right after scheduling the action
+                updatedState = updatedState.copy(lastHealingTime = currentState.currentTime, stateHealingWithRune = "healing")
+                actions = actions :+ FakeAction("useMouse", Some(ItemInfo(3160, None)), Some(MouseActions(actionsSeq)))
+//                logs = logs :+ Log(s"Using item 3160 at position ($runeX, $runeY) - Actions: $actionsSeq")
+
+                updatedState = updatedState.copy(healingRestryStatus = updatedState.healingRestryStatus + 1)
+              } else if (updatedState.healingRestryStatus < updatedState.healingRetryAttempts) {
+                printInColor(ANSI_RED, f"[DEBUG] Refrain from healing. Loop without action (Attempt ${updatedState.healingRestryStatus + 1})")
+                updatedState = updatedState.copy(healingRestryStatus = updatedState.healingRestryStatus + 1)
+              } else if (updatedState.healingRestryStatus >= updatedState.healingRetryAttempts) {
+                printInColor(ANSI_RED, f"[DEBUG] Next loop, heal will be available. Reseting healingRestryStatus. (Attempt ${updatedState.healingRestryStatus + 1})")
+                updatedState = updatedState.copy(healingRestryStatus = 0)
+              }
+
+
+
             }
           } else {
             logs = logs :+ Log("use UH with function")
             actions = actions :+ FakeAction("useOnYourselfFunction", Some(ItemInfo(3160, None)), None)
+            // Update the last healing time when using function as well
+            updatedState = updatedState.copy(lastHealingTime = currentState.currentTime)
           }
         }
 

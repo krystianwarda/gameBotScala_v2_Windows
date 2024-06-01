@@ -3,7 +3,7 @@ package mouse
 import akka.actor.{Actor, ActorRef, Cancellable}
 import play.api.libs.json.{JsValue, Json, Writes}
 import mouse.ActionTypes
-import processing.{ActionDetail, JsonActionDetails, KeyboardText, MouseAction, MouseActions}
+import processing.{ActionDetail, HealingComplete, JsonActionDetails, KeyboardText, MouseAction, MouseActions}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import java.awt.{MouseInfo, Robot}
@@ -34,7 +34,11 @@ object ItemInfo {
 //case class FakeAction(command: String, itemInfo: Option[ItemInfo], actionDetail: Option[JsValue])
 case class FakeAction(command: String, itemInfo: Option[ItemInfo], actionDetail: Option[ActionDetail])
 
-case class MouseMoveCommand(actions: Seq[MouseAction], mouseMovementsEnabled: Boolean)
+//case class MouseMoveCommand(actions: Seq[MouseAction], mouseMovementsEnabled: Boolean)
+case class MouseMoveCommand(actions: Seq[MouseAction], mouseMovementsEnabled: Boolean, source: Option[String])
+
+
+
 
 case class MouseMovementSettings(x: Int, y: Int, action: String)
 
@@ -44,7 +48,7 @@ object MouseMovementSettings {
 }
 
 
-class MouseMovementActor(actionStateManager: ActorRef) extends Actor {
+class MouseMovementActor(actionStateManager: ActorRef, jsonProcessorActor: ActorRef) extends Actor {
   val robotInstance = new Robot()
 //  val c = new Random()
   // Schedule idle mouse movement simulation every 5 to 10 seconds
@@ -106,41 +110,72 @@ class MouseMovementActor(actionStateManager: ActorRef) extends Actor {
 
 
   // This method simulates typing a string using the Robot class.
-  def performMouseAction(mouseAction: MouseAction): Unit = {
-    //    println(s"Performing mouse action: ${mouseAction.action} at (${mouseAction.x}, ${mouseAction.y})")
+//  def performMouseAction(mouseAction: MouseAction): Unit = {
+//    //    println(s"Performing mouse action: ${mouseAction.action} at (${mouseAction.x}, ${mouseAction.y})")
+//    mouseAction.action match {
+//      case "move" =>
+//        //        println(s"Moving mouse to (${mouseAction.x}, ${mouseAction.y})")
+//        Mouse.mouseMoveSmooth(robotInstance, Some((mouseAction.x, mouseAction.y)), simulateHumanBehavior = true)
+//      case "pressLeft" =>
+//        //        println("Pressing left mouse button")
+//        robotInstance.mousePress(InputEvent.BUTTON1_DOWN_MASK)
+//      case "releaseLeft" =>
+//        //        println("Releasing left mouse button")
+//        robotInstance.mouseRelease(InputEvent.BUTTON1_DOWN_MASK)
+//      case "pressRight" =>
+//        //        println("Pressing right mouse button")
+//        robotInstance.mousePress(InputEvent.BUTTON3_DOWN_MASK)
+//      case "releaseRight" =>
+//        robotInstance.mouseRelease(InputEvent.BUTTON3_DOWN_MASK)
+//      case "pressCtrl" =>
+//        robotInstance.keyPress(KeyEvent.VK_CONTROL)
+//      case "releaseCtrl" =>
+//        robotInstance.keyRelease(KeyEvent.VK_CONTROL)
+//      case _ =>
+//        println(s"Invalid mouse action: ${mouseAction.action}")
+//    }
+//    actionStateManager ! ActionCompleted(ActionTypes.Move) // Adjust ActionTypes.Move as necessary
+//  }
+
+def performMouseAction(mouseAction: MouseAction, actions: Seq[MouseAction], source: Option[String]): Unit = {
+    println(s"Performing mouse action: ${mouseAction.action} at (${mouseAction.x}, ${mouseAction.y})")
     mouseAction.action match {
-      case "move" =>
-        //        println(s"Moving mouse to (${mouseAction.x}, ${mouseAction.y})")
-        Mouse.mouseMoveSmooth(robotInstance, Some((mouseAction.x, mouseAction.y)), simulateHumanBehavior = true)
-      case "pressLeft" =>
-        //        println("Pressing left mouse button")
-        robotInstance.mousePress(InputEvent.BUTTON1_DOWN_MASK)
-      case "releaseLeft" =>
-        //        println("Releasing left mouse button")
-        robotInstance.mouseRelease(InputEvent.BUTTON1_DOWN_MASK)
-      case "pressRight" =>
-        //        println("Pressing right mouse button")
-        robotInstance.mousePress(InputEvent.BUTTON3_DOWN_MASK)
-      case "releaseRight" =>
-        robotInstance.mouseRelease(InputEvent.BUTTON3_DOWN_MASK)
-      case "pressCtrl" =>
-        robotInstance.keyPress(KeyEvent.VK_CONTROL)
-      case "releaseCtrl" =>
-        robotInstance.keyRelease(KeyEvent.VK_CONTROL)
-      case _ =>
-        println(s"Invalid mouse action: ${mouseAction.action}")
+      case "move" => Mouse.mouseMoveSmooth(robotInstance, Some((mouseAction.x, mouseAction.y)), simulateHumanBehavior = true)
+      case "pressLeft" => robotInstance.mousePress(InputEvent.BUTTON1_DOWN_MASK)
+      case "releaseLeft" => robotInstance.mouseRelease(InputEvent.BUTTON1_DOWN_MASK)
+      case "pressRight" => robotInstance.mousePress(InputEvent.BUTTON3_DOWN_MASK)
+      case "releaseRight" => robotInstance.mouseRelease(InputEvent.BUTTON3_DOWN_MASK)
+      case "pressCtrl" => robotInstance.keyPress(KeyEvent.VK_CONTROL)
+      case "releaseCtrl" => robotInstance.keyRelease(KeyEvent.VK_CONTROL)
+      case _ => println(s"Invalid mouse action: ${mouseAction.action}")
     }
-    actionStateManager ! ActionCompleted(ActionTypes.Move) // Adjust ActionTypes.Move as necessary
+
+    // Check if the source indicates a healing action and if it's the last action in the series
+    if (source.contains("autohealing") && mouseAction == actions.last) {
+      println(s"autohealing finished. Sending message to jsonProcessorActor.")
+      jsonProcessorActor ! HealingComplete // Send the case object without parentheses
+    }
   }
 
-  override def receive: Receive = {
-    case MouseMoveCommand(actions, movementsEnabled) =>
-      stopIdleMovement() // Stop idle movements when a new command is received
-      activeTaskCount += actions.length
-      actions.foreach(performMouseAction)
-      activeTaskCount -= actions.length
-      startIdleMovement() // Restart idle movements if still appropriate
 
+  override def receive: Receive = {
+
+//    case MouseMoveCommand(actions, movementsEnabled, actionType) =>
+//      println(s"Received MouseMoveCommand with actionType: $actionType and actions: $actions")
+//      stopIdleMovement() // Stop idle movements when a new command is received
+//      activeTaskCount += actions.length
+//      actions.foreach(performMouseAction)
+//      activeTaskCount -= actions.length
+//      startIdleMovement() // Restart idle movements if still appropriate
+
+
+    case MouseMoveCommand(actions, movementsEnabled, source) =>
+      println(s"Received MouseMoveCommand with source: $source and actions: $actions")
+      stopIdleMovement() // Stop idle movements when a new command is received
+      activeTaskCount += actions.size
+      actions.foreach(action => performMouseAction(action, actions, source))
+      activeTaskCount -= actions.size
+      startIdleMovement()
 
     case "simulateIdleMovement" =>
       if (mouseMovementsEnabled && activeTaskCount == 0) simulateIdleMouseMovement()

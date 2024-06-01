@@ -66,6 +66,12 @@ object SettingsUtils {
                               gridInfoList: Seq[String]
                             )
 
+  case class TeamHuntSettings(
+                              enabled: Boolean,
+                              followBlocker: Boolean,
+                              blockerName: String,
+                            )
+
 
   case class AutoLootSettings(
                               enabled: Boolean,
@@ -98,7 +104,7 @@ object SettingsUtils {
   implicit val autoTargetSettingsFormat: Format[AutoTargetSettings] = Json.format[AutoTargetSettings]
   implicit val caveBotSettingsFormat: Format[CaveBotSettings] = Json.format[CaveBotSettings]
   implicit val autoLootSettingsFormat: Format[AutoLootSettings] = Json.format[AutoLootSettings]
-
+  implicit val teamHuntSettingsFormat: Format[TeamHuntSettings] = Json.format[TeamHuntSettings]
   // Now define the UISettings case class
   case class UISettings(
                          healingSettings: HealingSettings,
@@ -111,6 +117,7 @@ object SettingsUtils {
                          caveBotSettings: CaveBotSettings,
                          autoLootSettings: AutoLootSettings,
                          autoTargetSettings: AutoTargetSettings,
+                         teamHuntSettings: TeamHuntSettings,
                          // Add other settings or groups of settings as needed
                        )
 

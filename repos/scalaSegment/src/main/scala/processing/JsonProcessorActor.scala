@@ -19,13 +19,16 @@ import userUI.SettingsUtils
 import userUI.SettingsUtils.UISettings
 import keyboard.AutoResponderCommand
 import processing.CaveBot.{Vec, computeCaveBotActions}
-import processing.AutoTarget.{computeAutoTargetActions}
-import processing.AutoLoot.{computeAutoLootActions}
+import processing.AutoTarget.computeAutoTargetActions
+import processing.AutoLoot.computeAutoLootActions
+import processing.TeamHunt.computeTeamHuntActions
+
 import java.awt.event.{InputEvent, KeyEvent}
 import java.awt.{Robot, Toolkit}
 import java.io.{DataInputStream, DataOutputStream, IOException}
 import java.net.{InetAddress, Socket, SocketException}
 import java.nio.{ByteBuffer, ByteOrder}
+import java.time.Instant
 import java.util.concurrent.TimeUnit
 import javax.swing.JList
 import scala.concurrent.duration.Duration
@@ -55,7 +58,18 @@ case class WaypointInfo(
                        )
 
 case class ProcessorState(
+                           stateHealingWithRune: String = "free",
+                           healingRestryStatus: Int = 0,
+                           healingRetryAttempts: Int = 1,
+                           currentTime: Long = 0,
+                           healingSpellCooldown: Long = 1200,
+                           shortTimeLimit: Long = 1000,
+                           normalTimeLimit: Long = 2000,
+                           longTimeLimit: Long = 5000,
+                           delayTimeLimit: Long = 10000,
                            lastFishingCommandSent: Long = 0,
+                           lastExtraWindowLoot: Long = 0,
+                           extraWidowLootStatus: Int = 0,
                            fixedWaypoints: List[WaypointInfo] = List(),
                            currentWaypointLocation: Vec = Vec(0, 0),
                            lastHealingTime: Long = 0,
@@ -67,6 +81,7 @@ case class ProcessorState(
                            settings: Option[UISettings],
                            lastAutoResponderCommandSend: Long = 0,
                            lastCaveBotCommandSend: Long = 0,
+                           lastTeamHuntCommandSend: Long = 0,
                            currentWaypointIndex: Int = 0,
                            currentTargetIndex: Int = 0,
                            subWaypoints: List[Vec] = List(),
@@ -94,7 +109,6 @@ case class ProcessorState(
                            antiCaveBotStuckStatus: Int = 0,
                            chaseSwitchStatus: Int = 0,
                            lootingStatus: Int = 0,
-                           extraWidowLootStatus: Int = 0,
                            lootingRestryStatus: Int = 0,
                            retryAttempts: Int = 2,
                            retryAttemptsLong: Int = 30,
@@ -109,6 +123,8 @@ case class UpdateSettings(settings: UISettings)
 // Adjust the Action class to include the new field
 
 case class Log(message: String)
+case object HealingComplete
+
 
 case class BackPosition(x: Int, y: Int, z: Int)
 
@@ -117,6 +133,8 @@ object BackPosition {
 }
 
 //class JsonProcessorActor(var mouseMovementActor: ActorRef) extends Actor {
+
+
 class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: ActorRef, actionKeyboardManager: ActorRef) extends Actor {
   // Mutable state
   var player: Option[Player] = None
@@ -176,8 +194,13 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     case ActionCompleted(actionType) =>
       println("Action completed.")
 
+    case HealingComplete => // Make sure this matches exactly how the case object is defined
+      state = state.copy(stateHealingWithRune = "free")
+      println("Healing process completed, ready for new commands.")
+
     case msg =>
       println(s"JsonProcessorActor received an unhandled message type: $msg")
+
 
   }
 
@@ -198,7 +221,8 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
 
   private def handleOkStatus(json: JsValue, initialState: ProcessorState): ProcessorState = {
     // Sequentially apply action handlers, each updating the state based on its own logic
-    val afterFishingState = performFishing(json, initialState)
+    val updatedState = initialState.copy(currentTime = Instant.now().toEpochMilli())
+    val afterFishingState = performFishing(json, updatedState)
     val afterHealingState = performAutoHealing(json, afterFishingState)
     val afterRuneMakingState = performRuneMaking(json, afterHealingState)
     val afterTrainingState = performTraining(json, afterRuneMakingState)
@@ -207,8 +231,51 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     val afterAutoLootState = performAutoLoot(json, afterAutoResponderState)
     val afterAutoTargetState = performAutoTarget(json, afterAutoLootState)
     val afterCaveBotState = performCaveBot(json, afterAutoTargetState)
+    val afterTeamHuntState = performTeamHunt(json, afterCaveBotState)
     // The final state after all updates
-    afterCaveBotState
+    afterTeamHuntState
+  }
+
+
+
+  def executeActionsAndLogsNew(actions: Seq[FakeAction], logs: Seq[Log], settingsOption: Option[SettingsUtils.UISettings], source: Option[String] = None): Unit = {
+    logs.foreach(log => println(log.message))
+
+    settingsOption.foreach { settings =>
+      actions.foreach {
+        case FakeAction("pressKey", _, Some(actionDetail: PushTheButton)) =>
+          println(s"Fake action - use keyboard - press and release key: ${actionDetail.key}")
+          actionKeyboardManager ! actionDetail
+
+        case FakeAction("typeText", _, Some(actionDetail: KeyboardText)) =>
+          println("Fake action - use keyboard - type text")
+          actionKeyboardManager ! TypeText(actionDetail.text)
+
+        case FakeAction("useOnYourselfFunction", Some(itemInfo), None) =>
+          // Handle function-based actions: sendJson with itemInfo for specific use
+          sendJson(Json.obj("__command" -> "useOnYourself", "itemInfo" -> Json.toJson(itemInfo)))
+
+        case FakeAction("useMouse", _, Some(actionDetail: MouseActions)) =>
+          println("Fake action - use mouse")
+          actionStateManager ! MouseMoveCommand(actionDetail.actions, settings.mouseMovements, source)
+      }
+    }
+  }
+
+  def performAutoHealing(json: JsValue, currentState: ProcessorState): ProcessorState = {
+    val currentTime = System.currentTimeMillis()
+    currentState.settings.flatMap { settings =>
+      if (settings.healingSettings.enabled && currentTime - currentState.lastSpellCastTime >= 1000) {
+        //        println("Performing healing action.")
+
+        val ((actions, logs), updatedState) = computeHealingActions(json, settings, currentState)
+        // Execute actions and logs if necessary
+        executeActionsAndLogsNew(actions, logs, Some(settings), Some("autohealing"))
+
+        // Return the updated state from computeCaveBotActions, wrapped in an Option
+        Some(updatedState)
+      } else None // Here, None is explicitly an Option[ProcessorState], matching the expected return type
+    }.getOrElse(currentState) // If the settings flatMap results in None, return the original currentState
   }
 
 
@@ -222,8 +289,8 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
         val ((actions, logs), updatedState) = computeAutoLootActions(json, settings, currentState.copy(lastCaveBotCommandSend = currentTime))
 
         // Execute actions and logs if necessary
-        executeActionsAndLogs(actions, logs, Some(settings))
-
+//        executeActionsAndLogs(actions, logs, Some(settings))
+        executeActionsAndLogsNew(actions, logs, Some(settings), Some("autoloot"))
         // Return the updated state from computeCaveBotActions, wrapped in an Option
         Some(updatedState)
       } else None // Here, None is explicitly an Option[ProcessorState], matching the expected return type
@@ -235,7 +302,8 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     currentState.settings.flatMap { settings =>
       if (settings.protectionZoneSettings.enabled) {
         val (actions, logs) = computeProtectionZoneActions(json, settings)
-        executeActionsAndLogs(actions, logs, Some(settings))
+//        executeActionsAndLogs(actions, logs, Some(settings))
+        executeActionsAndLogsNew(actions, logs, Some(settings), Some("protectionZone"))
         Some(currentState.copy(lastProtectionZoneCommandSend = currentTime))
       } else None
     }.getOrElse(currentState)
@@ -251,8 +319,8 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
         val ((actions, logs), updatedState) = computeAutoTargetActions(json, settings, currentState.copy(lastAutoTargetCommandSend = currentTime))
 
         // Execute actions and logs if necessary
-        executeActionsAndLogs(actions, logs, Some(settings))
-
+//        executeActionsAndLogs(actions, logs, Some(settings))
+        executeActionsAndLogsNew(actions, logs, Some(settings), Some("autotarget"))
         // Return the updated state from computeCaveBotActions, wrapped in an Option
         Some(updatedState)
       } else None // Here, None is explicitly an Option[ProcessorState], matching the expected return type
@@ -263,27 +331,41 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     val currentTime = System.currentTimeMillis()
     currentState.settings.flatMap { settings =>
       if (settings.caveBotSettings.enabled) {
-//        println("Performing cave bot action.")
 
         // Call computeCaveBotActions with currentState
         val ((actions, logs), updatedState) = computeCaveBotActions(json, settings, currentState.copy(lastCaveBotCommandSend = currentTime))
 
         // Execute actions and logs if necessary
-        executeActionsAndLogs(actions, logs, Some(settings))
-
+        executeActionsAndLogsNew(actions, logs, Some(settings), Some("cavebot"))
         // Return the updated state from computeCaveBotActions, wrapped in an Option
         Some(updatedState)
       } else None // Here, None is explicitly an Option[ProcessorState], matching the expected return type
     }.getOrElse(currentState) // If the settings flatMap results in None, return the original currentState
   }
 
+  def performTeamHunt(json: JsValue, currentState: ProcessorState): ProcessorState = {
+    val currentTime = System.currentTimeMillis()
+    currentState.settings.flatMap { settings =>
+      if (settings.teamHuntSettings.enabled) {
+
+        // Call computeCaveBotActions with currentState
+        val ((actions, logs), updatedState) = computeTeamHuntActions(json, settings, currentState.copy(lastTeamHuntCommandSend = currentTime))
+
+        // Execute actions and logs if necessary
+        executeActionsAndLogsNew(actions, logs, Some(settings), Some("teamhunt"))
+        // Return the updated state from computeCaveBotActions, wrapped in an Option
+        Some(updatedState)
+      } else None // Here, None is explicitly an Option[ProcessorState], matching the expected return type
+    }.getOrElse(currentState) // If the settings flatMap results in None, return the original currentState
+  }
 
   def performAutoResponder(json: JsValue, currentState: ProcessorState): ProcessorState = {
     val currentTime = System.currentTimeMillis()
     currentState.settings.flatMap { settings =>
       if (settings.autoResponderSettings.enabled) {
         val (actions, logs) = computeAutoRespondActions(json, settings)
-        executeActionsAndLogs(actions, logs, Some(settings))
+//        executeActionsAndLogs(actions, logs, Some(settings))
+        executeActionsAndLogsNew(actions, logs, Some(settings), Some("autoresponder"))
         Some(currentState.copy(lastAutoResponderCommandSend = currentTime))
       } else None
     }.getOrElse(currentState)
@@ -295,7 +377,8 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
       if (settings.trainingSettings.enabled) {
         println("Performing training action.")
         val (actions, logs) = computeTrainingActions(json, settings)
-        executeActionsAndLogs(actions, logs, Some(settings))
+//        executeActionsAndLogs(actions, logs, Some(settings))
+        executeActionsAndLogsNew(actions, logs, Some(settings), Some("training"))
         Some(currentState.copy(lastTrainingCommandSend = currentTime))
       } else None
     }.getOrElse(currentState)
@@ -307,27 +390,13 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
       if (settings.fishingSettings.enabled && currentTime - currentState.lastFishingCommandSent >= 2000) {
         println("Performing fishing action.")
         val (actions, logs) = computeFishingActions(json, settings)
-        executeActionsAndLogs(actions, logs, Some(settings))
+//        executeActionsAndLogs(actions, logs, Some(settings))
+        executeActionsAndLogsNew(actions, logs, Some(settings), Some("fishing"))
         Some(currentState.copy(lastFishingCommandSent = currentTime))
       } else None
     }.getOrElse(currentState)
   }
 
-  def performAutoHealing(json: JsValue, currentState: ProcessorState): ProcessorState = {
-    val currentTime = System.currentTimeMillis()
-    currentState.settings.flatMap { settings =>
-      if (settings.healingSettings.enabled && currentTime - currentState.lastSpellCastTime >= 1000) {
-//        println("Performing healing action.")
-
-        val ((actions, logs), updatedState) = computeHealingActions(json, settings, currentState)
-        // Execute actions and logs if necessary
-        executeActionsAndLogs(actions, logs, Some(settings))
-
-        // Return the updated state from computeCaveBotActions, wrapped in an Option
-        Some(updatedState)
-      } else None // Here, None is explicitly an Option[ProcessorState], matching the expected return type
-    }.getOrElse(currentState) // If the settings flatMap results in None, return the original currentState
-  }
 
 
   def performRuneMaking(json: JsValue, currentState: ProcessorState): ProcessorState = {
@@ -336,68 +405,68 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
       if (settings.runeMakingSettings.enabled && currentTime - currentState.lastRuneMakingTime >= 3000) {
         println("Performing runemaking action.")
         val (actions, logs) = computeRuneMakingActions(json, settings)
-        executeActionsAndLogs(actions, logs, Some(settings))
+//        executeActionsAndLogs(actions, logs, Some(settings))
+        executeActionsAndLogsNew(actions, logs, Some(settings), Some("runemaking"))
         Some(currentState.copy(lastRuneMakingTime = currentTime))
       } else None
     }.getOrElse(currentState)
   }
 
-  def executeActionsAndLogs(actions: Seq[FakeAction], logs: Seq[Log], settingsOption: Option[SettingsUtils.UISettings]): Unit = {
-    logs.foreach(log => println(log.message))
-
-    settingsOption.foreach { settings =>
-      actions.foreach {
-
-        case FakeAction("pressKey", _, Some(actionDetail: PushTheButton)) =>
-          println(s"Fake action - use keyboard - press and release key: ${actionDetail.key}")
-          actionKeyboardManager ! actionDetail
-
-        case FakeAction("typeText", _, Some(actionDetail: KeyboardText)) =>
-          println("Fake action - use keyboard - type text")
-          // Direct the text to ActionKeyboardManager for typing
-          actionKeyboardManager ! TypeText(actionDetail.text)
-
-        case FakeAction("useOnYourselfFunction", Some(itemInfo), None) =>
-          // Handle function-based actions: sendJson with itemInfo for specific use
-          sendJson(Json.obj("__command" -> "useOnYourself", "itemInfo" -> Json.toJson(itemInfo)))
-
-        case FakeAction("useMouse", _, Some(actionDetail: MouseActions)) =>
-          // Handle mouse sequence actions: mouse movement to ActionStateManager
-          println("Fake action - use mouse")
-          actionStateManager ! MouseMoveCommand(actionDetail.actions, settings.mouseMovements)
-
-
-        case FakeAction("autoResponderFunction", _, Some(ListOfJsons(jsons))) =>
-          // Example: Print each JSON to console. Modify as needed.
-//          jsons.foreach(json => println(json))
-          // Correctly sending the Seq[JsValue] as a single message to the AutoResponderManager actor instance
-          autoResponderManagerRef ! AutoResponderCommand(jsons)
-
-
-
-        case FakeAction("sayText", _, Some(actionDetail: KeyboardText)) =>
-          // Function sayText for spells to TCP
-          sendJson(Json.obj("__command" -> "sayText", "text" -> actionDetail.text))
-
-        case FakeAction("moveBlankRuneBackFunction", None, Some(backPosition)) =>
-          // Assuming backPosition is of type JsObject or has been correctly converted to JsObject
-          sendJson(Json.obj("__command" -> "moveBlankRuneBack", "backPosition" -> backPosition))
-
-        case FakeAction("setBlankRuneFunction", None, None) =>
-          // Handle function-based actions: sendJson with itemInfo for specific use
-          sendJson(Json.obj("__command" -> "setBlankRune"))
-
-        case FakeAction("fishingFunction", None, Some(positionInfo)) =>
-          sendJson(Json.obj("__command" -> "useFishingRod", "tilePosition" -> positionInfo))
-
-        case FakeAction("switchAttackModeFunction", None, Some(attackModeInfo)) =>
-          sendJson(Json.obj("__command" -> "switchAttackMode", "attackMode" -> attackModeInfo))
-
-        case _ =>
-          println("Unhandled action or log error")
-      }
-    }
-  }
+//  def executeActionsAndLogs(actions: Seq[FakeAction], logs: Seq[Log], settingsOption: Option[SettingsUtils.UISettings]): Unit = {
+//    logs.foreach(log => println(log.message))
+//
+//    settingsOption.foreach { settings =>
+//      actions.foreach {
+//
+//        case FakeAction("pressKey", _, Some(actionDetail: PushTheButton)) =>
+//          println(s"Fake action - use keyboard - press and release key: ${actionDetail.key}")
+//          actionKeyboardManager ! actionDetail
+//
+//        case FakeAction("typeText", _, Some(actionDetail: KeyboardText)) =>
+//          println("Fake action - use keyboard - type text")
+//          // Direct the text to ActionKeyboardManager for typing
+//          actionKeyboardManager ! TypeText(actionDetail.text)
+//
+//        case FakeAction("useOnYourselfFunction", Some(itemInfo), None) =>
+//          // Handle function-based actions: sendJson with itemInfo for specific use
+//          sendJson(Json.obj("__command" -> "useOnYourself", "itemInfo" -> Json.toJson(itemInfo)))
+//
+//        case FakeAction("useMouse", _, Some(actionDetail: MouseActions)) =>
+//          // Handle mouse sequence actions: mouse movement to ActionStateManager
+//          println("Fake action - use mouse")
+//          actionStateManager ! MouseMoveCommand(actionDetail.actions, settings.mouseMovements)
+//
+//
+//        case FakeAction("autoResponderFunction", _, Some(ListOfJsons(jsons))) =>
+//          // Example: Print each JSON to console. Modify as needed.
+////          jsons.foreach(json => println(json))
+//          // Correctly sending the Seq[JsValue] as a single message to the AutoResponderManager actor instance
+//          autoResponderManagerRef ! AutoResponderCommand(jsons)
+//
+//
+//        case FakeAction("sayText", _, Some(actionDetail: KeyboardText)) =>
+//          // Function sayText for spells to TCP
+//          sendJson(Json.obj("__command" -> "sayText", "text" -> actionDetail.text))
+//
+//        case FakeAction("moveBlankRuneBackFunction", None, Some(backPosition)) =>
+//          // Assuming backPosition is of type JsObject or has been correctly converted to JsObject
+//          sendJson(Json.obj("__command" -> "moveBlankRuneBack", "backPosition" -> backPosition))
+//
+//        case FakeAction("setBlankRuneFunction", None, None) =>
+//          // Handle function-based actions: sendJson with itemInfo for specific use
+//          sendJson(Json.obj("__command" -> "setBlankRune"))
+//
+//        case FakeAction("fishingFunction", None, Some(positionInfo)) =>
+//          sendJson(Json.obj("__command" -> "useFishingRod", "tilePosition" -> positionInfo))
+//
+//        case FakeAction("switchAttackModeFunction", None, Some(attackModeInfo)) =>
+//          sendJson(Json.obj("__command" -> "switchAttackMode", "attackMode" -> attackModeInfo))
+//
+//        case _ =>
+//          println("Unhandled action or log error")
+//      }
+//    }
+//  }
 
 
   // Assuming necessary imports and context are available
