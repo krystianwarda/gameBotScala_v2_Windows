@@ -152,7 +152,7 @@ object AutoHeal {
 
                 val actionsSeq = Seq(
                   MouseAction(runeX, runeY, "move"),
-                  MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
+                  MouseAction(runeX, runeY, "pressRight"), // Right-click on the runemichal
                   MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
                   MouseAction(targetX, targetY, "move"), // Move to target position
                   MouseAction(targetX, targetY, "pressLeft"), // Press left at target position

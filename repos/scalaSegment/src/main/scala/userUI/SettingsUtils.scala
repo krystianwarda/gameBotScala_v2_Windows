@@ -25,9 +25,13 @@ object SettingsUtils {
                               lightHealSpell: String,
                               lightHealHealth: Int,
                               lightHealMana: Int,
+                              lightHealHotkeyEnabled: Boolean,
+                              lightHealHotkey: String,
                               strongHealSpell: String,
                               strongHealHealth: Int,
                               strongHealMana: Int,
+                              strongHealHotkeyEnabled: Boolean,
+                              strongHealHotkey: String,
                               ihHealHealth: Int,
                               ihHealMana: Int,
                               uhHealHealth: Int,
@@ -35,6 +39,40 @@ object SettingsUtils {
                               hPotionHealHealth: Int,
                               hPotionHealMana: Int,
                               mPotionHealManaMin: Int,
+//                              friend1HealSpell: String,
+//                              friend1Name: String,
+//                              friend1HealHealth: Int,
+//                              friend1HealMana: Int,
+//                              friend1HealHotkeyEnabled: Boolean,
+//                              friend1HealHotkey: String,
+//                              friend2HealSpell: String,
+//                              friend2Name: String,
+//                              friend2HealHealth: Int,
+//                              friend2HealMana: Int,
+//                              friend2HealHotkeyEnabled: Boolean,
+//                              friend2HealHotkey: String,
+//                              friend3HealSpell: String,
+//                              friend3Name: String,
+//                              friend3HealHealth: Int,
+//                              friend3HealMana: Int,
+//                              friend3HealHotkeyEnabled: Boolean,
+//                              friend3HealHotkey: String,
+                            )
+
+  case class HotkeysSettings(
+                              enabled: Boolean,
+                              hF1Field: String,
+                              hF2Field: String,
+                              hF3Field: String,
+                              hF4Field: String,
+                              hF5Field: String,
+                              hF6Field: String,
+                              hF7Field: String,
+                              hF8Field: String,
+                              hF9Field: String,
+                              hF10Field: String,
+                              hF11Field: String,
+                              hF12Field: String,
                             )
 
   case class RuneMakingSettings(
@@ -105,10 +143,13 @@ object SettingsUtils {
   implicit val caveBotSettingsFormat: Format[CaveBotSettings] = Json.format[CaveBotSettings]
   implicit val autoLootSettingsFormat: Format[AutoLootSettings] = Json.format[AutoLootSettings]
   implicit val teamHuntSettingsFormat: Format[TeamHuntSettings] = Json.format[TeamHuntSettings]
+  implicit val hotkeysSettingsFormat: Format[HotkeysSettings] = Json.format[HotkeysSettings]
+
   // Now define the UISettings case class
   case class UISettings(
                          healingSettings: HealingSettings,
                          runeMakingSettings: RuneMakingSettings,
+                         hotkeysSettings: HotkeysSettings,
                          protectionZoneSettings: ProtectionZoneSettings,
                          fishingSettings: FishingSettings,
                          autoResponderSettings: AutoResponderSettings,

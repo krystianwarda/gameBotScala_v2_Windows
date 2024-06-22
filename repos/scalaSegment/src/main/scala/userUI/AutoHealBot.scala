@@ -3,10 +3,13 @@ package userUI
 
 import akka.actor.ActorRef
 import player.Player
+import scala.swing.event.ButtonClicked
 
 import scala.swing._
+import scala.swing.event._
+import scala.swing._
 import java.awt.{Dimension, GridBagConstraints, GridBagLayout, Insets}
-import javax.swing.{JLabel, JPanel}
+import javax.swing.{DefaultComboBoxModel, JComboBox, JLabel, JPanel, JScrollPane}
 
 
 class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: ActorRef) {
@@ -25,6 +28,75 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
   val hPotionHealManaField = new TextField()
   val mPotionHealManaMinField = new TextField()
 
+  val friend1HealSpellField = new TextField()
+  val friend1NameField = new TextField()
+  val friend1HealHealthField = new TextField()
+  val friend1HealManaField = new TextField()
+
+  val friend2HealSpellField = new TextField()
+  val friend2NameField = new TextField()
+  val friend2HealHealthField = new TextField()
+  val friend2HealManaField = new TextField()
+
+  val friend3HealSpellField = new TextField()
+  val friend3NameField = new TextField()
+  val friend3HealHealthField = new TextField()
+  val friend3HealManaField = new TextField()
+
+  val lightHealHotkeyCheckbox = new CheckBox("Use hotkey")
+  val strongHealHotkeyCheckbox = new CheckBox("Use hotkey")
+  val ihHealHotkeyCheckbox = new CheckBox("Use hotkey")
+  val uhHealHotkeyCheckbox = new CheckBox("Use hotkey")
+  val hPotionHealHotkeyCheckbox = new CheckBox("Use hotkey")
+  val mPotionHotkeyCheckbox = new CheckBox("Use hotkey")
+  val friend1HealHotkeyCheckbox = new CheckBox("Use hotkey")
+  val friend2HealHotkeyCheckbox = new CheckBox("Use hotkey")
+  val friend3HealHotkeyCheckbox = new CheckBox("Use hotkey")
+
+  val funcButtons = Array("F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12")
+  val lightHealHotkeyDropdown = new JComboBox[String]()
+  lightHealHotkeyDropdown.setModel(new DefaultComboBoxModel(funcButtons))
+
+  lightHealHotkeyCheckbox.reactions += {
+    case ButtonClicked(`lightHealHotkeyCheckbox`) =>
+      val selectedKey = lightHealHotkeyDropdown.getSelectedItem.toString
+      val spellText = lightHealSpellField.text
+      if (lightHealHotkeyCheckbox.selected) {
+        SharedSettingsModel.assignKey(selectedKey, spellText)
+      } else {
+        SharedSettingsModel.unassignKey(selectedKey)
+      }
+  }
+
+
+  val strongHealHotkeyDropdown = new JComboBox[String]()
+  strongHealHotkeyDropdown.setModel(new DefaultComboBoxModel(funcButtons))
+
+  strongHealHotkeyCheckbox.reactions += {
+    case ButtonClicked(`strongHealHotkeyCheckbox`) =>
+      val selectedKey = strongHealHotkeyDropdown.getSelectedItem.toString
+      val spellText = strongHealSpellField.text
+      if (strongHealHotkeyCheckbox.selected) {
+        SharedSettingsModel.assignKey(selectedKey, spellText)
+      } else {
+        SharedSettingsModel.unassignKey(selectedKey)
+      }
+  }
+
+  val ihHealHotkeyDropdown = new JComboBox[String]()
+  ihHealHotkeyDropdown.setModel(new DefaultComboBoxModel(funcButtons))
+  val uhHealHotkeyDropdown = new JComboBox[String]()
+  uhHealHotkeyDropdown.setModel(new DefaultComboBoxModel(funcButtons))
+  val hPotionHealHotkeyDropdown = new JComboBox[String]()
+  hPotionHealHotkeyDropdown.setModel(new DefaultComboBoxModel(funcButtons))
+  val mPotionHotkeyDropdown = new JComboBox[String]()
+  mPotionHotkeyDropdown.setModel(new DefaultComboBoxModel(funcButtons))
+  val friend1HealHotkeyDropdown = new JComboBox[String]()
+  friend1HealHotkeyDropdown.setModel(new DefaultComboBoxModel(funcButtons))
+  val friend2HealHotkeyDropdown = new JComboBox[String]()
+  friend2HealHotkeyDropdown.setModel(new DefaultComboBoxModel(funcButtons))
+  val friend3HealHotkeyDropdown = new JComboBox[String]()
+  friend3HealHotkeyDropdown.setModel(new DefaultComboBoxModel(funcButtons))
 
   // The AutoHeal tab component
   val autoHealTab: Component = Component.wrap(new JPanel(new GridBagLayout) {
@@ -32,25 +104,40 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
     c.insets = new Insets(5, 5, 5, 5)
 
     // Define the preferred width for each text field
-    val spellFieldWidth = 150
-    val healthManaFieldWidth = 70
+    val spellFieldWidth = 140
+    val standardFieldWidth = 70
 
     // Add components to the layout
     // Light Heal
     addComponent(new Label("LoSpell"), 0, 0)
-    addTextField(lightHealSpellField, 1, 0, spellFieldWidth)
+    c.gridwidth = 2
+    addTextField(lightHealSpellField, 1, 0, 2, spellFieldWidth)
+    c.gridwidth = 1
     addComponent(new Label("Health"), 3, 0)
-    addTextField(lightHealHealthField, 4, 0, healthManaFieldWidth)
+    addTextField(lightHealHealthField, 4, 0, 1, standardFieldWidth)
     addComponent(new Label("Mana"), 5, 0)
-    addTextField(lightHealManaField, 6, 0, healthManaFieldWidth)
+    addTextField(lightHealManaField, 6, 0, 1, standardFieldWidth)
+
+
+    // Add checkbox for using a hotkey connected with lightHeal
+    addComponent(lightHealHotkeyCheckbox, 7, 0) // Adjust the row index as needed
+    c.gridx = c.gridx + 1
+    add(new JScrollPane(lightHealHotkeyDropdown), c)
 
     // Strong Heal
     addComponent(new Label("HiSpell"), 0, 1)
-    addTextField(strongHealSpellField, 1, 1, spellFieldWidth)
+    c.gridwidth = 2
+    addTextField(strongHealSpellField, 1, 1,2 ,spellFieldWidth)
+    c.gridwidth = 1
     addComponent(new Label("Health"), 3, 1)
-    addTextField(strongHealHealthField, 4, 1, healthManaFieldWidth)
+    addTextField(strongHealHealthField, 4, 1, 1, standardFieldWidth)
     addComponent(new Label("Mana"), 5, 1)
-    addTextField(strongHealManaField, 6, 1, healthManaFieldWidth)
+    addTextField(strongHealManaField, 6, 1, 1, standardFieldWidth)
+
+
+    addComponent(strongHealHotkeyCheckbox, 7, 1)
+    c.gridx = c.gridx + 1
+    add(new JScrollPane(strongHealHotkeyDropdown), c)
 
     // IH Rune
     c.gridx = 0
@@ -76,7 +163,7 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
     c.gridy = 2
     c.gridwidth = 1
     c.fill = GridBagConstraints.HORIZONTAL
-    ihHealHealthField.peer.setPreferredSize(new Dimension(healthManaFieldWidth, ihHealHealthField.peer.getPreferredSize.height))
+    ihHealHealthField.peer.setPreferredSize(new Dimension(standardFieldWidth, ihHealHealthField.peer.getPreferredSize.height))
     addComponent(ihHealHealthField, 4, 2)
 
     c.gridx = 5
@@ -85,17 +172,24 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
     c.fill = GridBagConstraints.NONE
     addComponent(new Label("Mana"), 5, 2)
 
+
+
     c.gridx = 6
     c.gridy = 2
     c.gridwidth = 1
     c.fill = GridBagConstraints.HORIZONTAL
-    ihHealManaField.peer.setPreferredSize(new Dimension(healthManaFieldWidth, ihHealManaField.peer.getPreferredSize.height))
+    ihHealManaField.peer.setPreferredSize(new Dimension(standardFieldWidth, ihHealManaField.peer.getPreferredSize.height))
     addComponent(ihHealManaField, 6, 2)
+
+//    addComponent(ihHealHotkeyCheckbox, 7, 2)
+//    c.gridx = c.gridx + 1
+//    add(new JScrollPane(ihHealHotkeyDropdown), c)
 
     // UH Rune
     c.gridx = 0
     c.gridy = 3
     addComponent(new Label("UH Rune"), 0, 3)
+
 
     // Empty column for alignment
     c.gridx = 1
@@ -109,7 +203,7 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
     c.gridx = 4
     c.gridy = 3
     c.fill = GridBagConstraints.HORIZONTAL
-    uhHealHealthField.peer.setPreferredSize(new Dimension(healthManaFieldWidth, uhHealHealthField.peer.getPreferredSize.height))
+    uhHealHealthField.peer.setPreferredSize(new Dimension(standardFieldWidth, uhHealHealthField.peer.getPreferredSize.height))
     addComponent(uhHealHealthField, 4, 3)
 
     c.gridx = 5
@@ -119,8 +213,12 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
     c.gridx = 6
     c.gridy = 3
     c.fill = GridBagConstraints.HORIZONTAL
-    uhHealManaField.peer.setPreferredSize(new Dimension(healthManaFieldWidth, uhHealManaField.peer.getPreferredSize.height))
+    uhHealManaField.peer.setPreferredSize(new Dimension(standardFieldWidth, uhHealManaField.peer.getPreferredSize.height))
     addComponent(uhHealManaField, 6, 3)
+
+//    addComponent(uhHealHotkeyCheckbox, 7, 3)
+//    c.gridx = c.gridx + 1
+//    add(new JScrollPane(uhHealHotkeyDropdown), c)
 
     // H Potion
     c.gridx = 0
@@ -138,7 +236,7 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
     c.gridx = 4
     c.gridy = 4
     c.fill = GridBagConstraints.HORIZONTAL
-    hPotionHealHealthField.peer.setPreferredSize(new Dimension(healthManaFieldWidth, hPotionHealHealthField.peer.getPreferredSize.height))
+    hPotionHealHealthField.peer.setPreferredSize(new Dimension(standardFieldWidth, hPotionHealHealthField.peer.getPreferredSize.height))
     addComponent(hPotionHealHealthField, 4, 4)
 
     c.gridx = 5
@@ -148,8 +246,12 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
     c.gridx = 6
     c.gridy = 4
     c.fill = GridBagConstraints.HORIZONTAL
-    hPotionHealManaField.peer.setPreferredSize(new Dimension(healthManaFieldWidth, hPotionHealManaField.peer.getPreferredSize.height))
+    hPotionHealManaField.peer.setPreferredSize(new Dimension(standardFieldWidth, hPotionHealManaField.peer.getPreferredSize.height))
     addComponent(hPotionHealManaField, 6, 4)
+
+//    addComponent(hPotionHealHotkeyCheckbox, 7, 4)
+//    c.gridx = c.gridx + 1
+//    add(new JScrollPane(hPotionHealHotkeyDropdown), c)
 
     // M Potion
     c.gridx = 0
@@ -167,14 +269,73 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
     c.gridx = 6
     c.gridy = 5
     c.fill = GridBagConstraints.HORIZONTAL
-    mPotionHealManaMinField.peer.setPreferredSize(new Dimension(healthManaFieldWidth, mPotionHealManaMinField.peer.getPreferredSize.height))
+    mPotionHealManaMinField.peer.setPreferredSize(new Dimension(standardFieldWidth, mPotionHealManaMinField.peer.getPreferredSize.height))
     addComponent(mPotionHealManaMinField, 6, 5)
 
-//    // Button row
-//    c.gridy = 6
-//    c.gridx = 3
-//    c.gridwidth = 2
-//    add(updateButton.peer, c)
+//    addComponent(mPotionHotkeyCheckbox, 7, 5)
+//    c.gridx = c.gridx + 1
+//    add(new JScrollPane(mPotionHotkeyDropdown), c)
+
+    // Heal friend 1
+    c.gridx = 0
+    c.gridy = 6
+    addComponent(new Label("Heal F Spell"), 0, c.gridy)
+
+    addTextField(friend1HealSpellField, 1, c.gridy, 1, standardFieldWidth)
+    addTextField(friend1NameField, 2, c.gridy, 1, standardFieldWidth)
+    addComponent(new Label("Health"), 3, c.gridy)
+    addTextField(friend1HealHealthField, 4, c.gridy, 1, standardFieldWidth)
+    addComponent(new Label("Mana"), 5, c.gridy)
+    addTextField(friend1HealManaField, 6, c.gridy, 1, standardFieldWidth)
+
+    addComponent(friend1HealHotkeyCheckbox, 7, c.gridy)
+    c.gridx = c.gridx + 1
+    add(new JScrollPane(friend1HealHotkeyDropdown), c)
+
+    friend1HealHotkeyCheckbox.reactions += {
+      case ButtonClicked(`friend1HealHotkeyCheckbox`) =>
+        val selectedKey = friend1HealHotkeyDropdown.getSelectedItem.toString
+        val spellName = friend1HealSpellField.text.trim  // Ensure no trailing space
+        val characterName = friend1NameField.text.trim   // Trim to remove any extra whitespace
+        val fullSpellText = s"""$spellName$characterName"""
+        if (friend1HealHotkeyCheckbox.selected) {
+          SharedSettingsModel.assignKey(selectedKey, fullSpellText)
+        } else {
+          SharedSettingsModel.unassignKey(selectedKey)
+        }
+    }
+
+    // Heal friend 2
+    c.gridx = 0
+    c.gridy = 7
+    addComponent(new Label("Heal F Spell"), 0, c.gridy)
+
+    addTextField(friend2HealSpellField, 1, c.gridy, 1, standardFieldWidth)
+    addTextField(friend2NameField, 2, c.gridy, 1, standardFieldWidth)
+    addComponent(new Label("Health"), 3, c.gridy)
+    addTextField(friend2HealHealthField, 4, c.gridy, 1, standardFieldWidth)
+    addComponent(new Label("Mana"), 5, c.gridy)
+    addTextField(friend2HealManaField, 6, c.gridy, 1, standardFieldWidth)
+
+    addComponent(friend2HealHotkeyCheckbox, 7, c.gridy)
+    c.gridx = c.gridx + 1
+    add(new JScrollPane(friend2HealHotkeyDropdown), c)
+
+    // Heal friend 3
+    c.gridx = 0
+    c.gridy = 8
+    addComponent(new Label("Heal F Spell"), 0, c.gridy)
+
+    addTextField(friend3HealSpellField, 1, c.gridy, 1, standardFieldWidth)
+    addTextField(friend3NameField, 2, c.gridy, 1, standardFieldWidth)
+    addComponent(new Label("Health"), 3, c.gridy)
+    addTextField(friend3HealHealthField, 4, c.gridy, 1, standardFieldWidth)
+    addComponent(new Label("Mana"), 5, c.gridy)
+    addTextField(friend3HealManaField, 6, c.gridy, 1, standardFieldWidth)
+
+    addComponent(friend3HealHotkeyCheckbox, 7, c.gridy)
+    c.gridx = c.gridx + 1
+    add(new JScrollPane(friend3HealHotkeyDropdown), c)
 
 
     private def addComponent(component: Component, x: Int, y: Int): Unit = {
@@ -185,12 +346,12 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
       add(component.peer, c)
     }
 
-    private def addTextField(textField: TextField, x: Int, y: Int, width: Int): Unit = {
+    private def addTextField(textField: TextField, x: Int, y: Int, width: Int, cellWidth: Int): Unit = {
       c.gridx = x
       c.gridy = y
-      c.gridwidth = 1
+      c.gridwidth = width
       c.fill = GridBagConstraints.HORIZONTAL
-      textField.peer.setPreferredSize(new Dimension(width, textField.peer.getPreferredSize.height))
+      textField.peer.setPreferredSize(new Dimension(cellWidth, textField.peer.getPreferredSize.height))
       add(textField.peer, c)
     }
 

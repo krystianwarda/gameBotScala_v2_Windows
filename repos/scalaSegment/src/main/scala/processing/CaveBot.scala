@@ -834,7 +834,6 @@ object CaveBot {
     def manhattanDistance(other: Vec): Int = (x - other.x).abs + (y - other.y).abs
   }
 
-  def heuristic(a: Vec, b: Vec): Int = a.manhattanDistance(b)
 
 
 
@@ -851,7 +850,86 @@ object CaveBot {
   }
 
   def aStarSearch(start: Vec, goal: Vec, grid: Array[Array[Boolean]], min_x: Int, min_y: Int): List[Vec] = {
-    println(s"Starting aStarSearch with start=$start, goal=$goal")
+    println(s"Starting aStarSearch with start=$start, goal=$goal, min_x=$min_x, min_y=$min_y")
+
+    // Check if start and goal are within the bounds of the grid
+    if ((start.x - min_x) < 0 || (start.y - min_y) < 0 || (start.x - min_x) >= grid(0).length || (start.y - min_y) >= grid.length ||
+      (goal.x - min_x) < 0 || (goal.y - min_y) < 0 || (goal.x - min_x) >= grid(0).length || (goal.y - min_y) >= grid.length) {
+      println(s"Error: Start or goal position out of grid bounds. Start: (${start.x - min_x}, ${start.y - min_y}), Goal: (${goal.x - min_x}, ${goal.y - min_y})")
+      return List()
+    }
+
+    // For testing: Force the start and goal positions to be walkable
+    grid(start.y - min_y)(start.x - min_x) = true
+    grid(goal.y - min_y)(goal.x - min_x) = true
+
+    // Check if start or goal positions are blocked
+    if (!grid(start.y - min_y)(start.x - min_x)) {
+      println("Error: Start position is blocked.")
+      return List()
+    }
+    if (!grid(goal.y - min_y)(goal.x - min_x)) {
+      println("Error: Goal position is blocked.")
+      return List()
+    }
+
+    val frontier = mutable.PriorityQueue.empty[(Int, Vec)](Ordering.by(-_._1))
+    frontier.enqueue((0, start))
+    val cameFrom = mutable.Map[Vec, Vec]()
+    val costSoFar = mutable.Map[Vec, Int](start -> 0)
+
+    while (frontier.nonEmpty) {
+      val (_, current) = frontier.dequeue()
+      println(s"Dequeued: $current")
+
+      if (current == goal) {
+        println("Goal reached")
+        var path = List[Vec]()
+        var temp = current
+        while (temp != start) {
+          path = temp :: path
+          temp = cameFrom.getOrElse(temp, start) // ensure fallback to start to avoid infinite loop
+        }
+        println("Path found: " + (start :: path).mkString(" -> "))
+        return start :: path
+      }
+
+      List(Vec(-1, 0), Vec(1, 0), Vec(0, -1), Vec(0, 1)).foreach { direction =>
+        val next = current + direction
+        if ((next.x - min_x) >= 0 && (next.x - min_x) < grid(0).length && (next.y - min_y) >= 0 && (next.y - min_y) < grid.length) {
+          if (grid(next.y - min_y)(next.x - min_x)) {
+            val newCost = costSoFar(current) + 1
+            if (!costSoFar.contains(next) || newCost < costSoFar(next)) {
+              costSoFar(next) = newCost
+              val priority = newCost + heuristic(next, goal)
+              frontier.enqueue((priority, next))
+              cameFrom(next) = current
+              println(s"Enqueued: $next with priority $priority")
+            } else {
+              println(s"Skipped enqueueing $next due to higher cost or already visited")
+            }
+          } else {
+            println(s"Skipped: $next (blocked)")
+          }
+        } else {
+          println(s"Skipped: $next (out of bounds)")
+        }
+      }
+    }
+
+    println("Path not found")
+    List()
+  }
+
+  def heuristic(a: Vec, b: Vec): Int = {
+    Math.abs(a.x - b.x) + Math.abs(a.y - b.y)
+  }
+
+
+//  def heuristic(a: Vec, b: Vec): Int = a.manhattanDistance(b)
+
+  def aStarSearchOldGood(start: Vec, goal: Vec, grid: Array[Array[Boolean]], min_x: Int, min_y: Int): List[Vec] = {
+    println(s"Starting aStarSearch with start=$start, goal=$goal min_x=$min_x, min_y=$min_y")
 
     // Adjust start and goal coordinates within the grid index without changing their actual values
     val offsetX = min_x
@@ -905,7 +983,7 @@ object CaveBot {
       while (current != start) {
         path = current :: path
         current = cameFrom.getOrElse(current, start)
-//        println(s"Path building: $current")
+        println(s"Path building: $current")
       }
       start :: path
     } else {

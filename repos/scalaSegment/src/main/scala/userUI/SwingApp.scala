@@ -5,7 +5,7 @@ import processing.{ConnectToServer, InitializeProcessor}
 import main.scala.MainApp.{jsonProcessorActorRef, periodicFunctionActorRef}
 import play.api.libs.json.{Format, Json}
 
-import javax.swing.{DefaultListModel, JList}
+import javax.swing.{DefaultListModel, JComboBox, JList}
 //import userUI.SettingsUtils.{HealingSettings, ProtectionZoneSettings, RuneMakingSettings, UISettings, saveSettingsToFile}
 import userUI.SettingsUtils._
 import scala.swing.{Component, Dialog, FileChooser, Insets}
@@ -31,8 +31,9 @@ class SwingApp(playerClassList: List[Player],
   var runningBot = false
 
   // Initialize AutoHeal class
-  val mainBot = new MainBot(currentPlayer, uiAppActor, jsonProcessorActor)
+//  val mainBot = new MainBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val autoHealBot = new AutoHealBot(currentPlayer, uiAppActor, jsonProcessorActor)
+  val hotkeysBot = new HotkeysBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val caveBotBot = new CaveBotBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val autoTargetBot = new AutoTargetBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val autoLootBot = new AutoLootBot(currentPlayer, uiAppActor, jsonProcessorActor)
@@ -55,22 +56,60 @@ class SwingApp(playerClassList: List[Player],
     lightHealSpell = autoHealBot.lightHealSpellField.text,
     lightHealHealth = parseTextFieldToInt(autoHealBot.lightHealHealthField.text),
     lightHealMana = parseTextFieldToInt(autoHealBot.lightHealManaField.text),
+    lightHealHotkeyEnabled = autoHealBot.lightHealHotkeyCheckbox.selected,
+    lightHealHotkey = autoHealBot.lightHealHotkeyDropdown.getSelectedItem.toString,
     strongHealSpell = autoHealBot.strongHealSpellField.text,
     strongHealHealth = parseTextFieldToInt(autoHealBot.strongHealHealthField.text),
     strongHealMana = parseTextFieldToInt(autoHealBot.strongHealManaField.text),
+    strongHealHotkeyEnabled = autoHealBot.lightHealHotkeyCheckbox.selected,
+    strongHealHotkey = autoHealBot.lightHealHotkeyDropdown.getSelectedItem.toString,
     ihHealHealth = parseTextFieldToInt(autoHealBot.ihHealHealthField.text),
     ihHealMana = parseTextFieldToInt(autoHealBot.ihHealManaField.text),
     uhHealHealth = parseTextFieldToInt(autoHealBot.uhHealHealthField.text),
     uhHealMana = parseTextFieldToInt(autoHealBot.uhHealManaField.text),
     hPotionHealHealth = parseTextFieldToInt(autoHealBot.hPotionHealHealthField.text),
     hPotionHealMana = parseTextFieldToInt(autoHealBot.hPotionHealManaField.text),
-    mPotionHealManaMin = parseTextFieldToInt(autoHealBot.mPotionHealManaMinField.text)
+    mPotionHealManaMin = parseTextFieldToInt(autoHealBot.mPotionHealManaMinField.text),
+//    friend1HealSpell = autoHealBot.friend1HealSpellField.text,
+//    friend1Name = autoHealBot.friend1NameField.text,
+//    friend1HealHealth = parseTextFieldToInt(autoHealBot.friend1HealHealthField.text),
+//    friend1HealMana = parseTextFieldToInt(autoHealBot.friend1HealManaField.text),
+//    friend1HealHotkeyEnabled = autoHealBot.friend1HealHotkeyCheckbox.selected,
+//    friend1HealHotkey = autoHealBot.friend1HealHotkeyDropdown.getSelectedItem.toString,
+//    friend2HealSpell = autoHealBot.friend2HealSpellField.text,
+//    friend2Name = autoHealBot.friend2NameField.text,
+//    friend2HealHealth = parseTextFieldToInt(autoHealBot.friend2HealHealthField.text),
+//    friend2HealMana = parseTextFieldToInt(autoHealBot.friend2HealManaField.text),
+//    friend2HealHotkeyEnabled = autoHealBot.friend2HealHotkeyCheckbox.selected,
+//    friend2HealHotkey = autoHealBot.friend2HealHotkeyDropdown.getSelectedItem.toString,
+//    friend3HealSpell = autoHealBot.friend3HealSpellField.text,
+//    friend3Name = autoHealBot.friend3NameField.text,
+//    friend3HealHealth = parseTextFieldToInt(autoHealBot.friend3HealHealthField.text),
+//    friend3HealMana = parseTextFieldToInt(autoHealBot.friend3HealManaField.text),
+//    friend3HealHotkeyEnabled = autoHealBot.friend3HealHotkeyCheckbox.selected,
+//    friend3HealHotkey = autoHealBot.friend3HealHotkeyDropdown.getSelectedItem.toString
   )
 
   def collectRuneMakingSettings(): RuneMakingSettings = RuneMakingSettings(
     enabled = runeMakerCheckbox.selected,
     selectedSpell = runeMakerBot.spellComboBox.selection.item,
     requiredMana = parseTextFieldToInt(runeMakerBot.manaTextField.text)
+  )
+
+  def collectHotkeysSettings(): HotkeysSettings = HotkeysSettings(
+    enabled = hotkeysCheckbox.selected,
+    hF1Field = hotkeysBot.hF1Field.text,
+    hF2Field = hotkeysBot.hF2Field.text,
+    hF3Field = hotkeysBot.hF3Field.text,
+    hF4Field = hotkeysBot.hF4Field.text,
+    hF5Field = hotkeysBot.hF5Field.text,
+    hF6Field = hotkeysBot.hF6Field.text,
+    hF7Field = hotkeysBot.hF7Field.text,
+    hF8Field = hotkeysBot.hF8Field.text,
+    hF9Field = hotkeysBot.hF9Field.text,
+    hF10Field = hotkeysBot.hF10Field.text,
+    hF11Field = hotkeysBot.hF11Field.text,
+    hF12Field = hotkeysBot.hF12Field.text,
   )
 
 
@@ -126,6 +165,7 @@ class SwingApp(playerClassList: List[Player],
 
   def collectSettingsFromUI(): UISettings = UISettings(
     healingSettings = collectHealingSettings(),
+    hotkeysSettings = collectHotkeysSettings(),
     runeMakingSettings = collectRuneMakingSettings(),
     protectionZoneSettings = collectProtectionZoneSettings(),
     fishingSettings = collectFishingSettings(),
@@ -135,7 +175,7 @@ class SwingApp(playerClassList: List[Player],
     autoResponderSettings = collectAutoResponderSettings(),
     trainingSettings = collectTrainingSettings(),
     teamHuntSettings = collectTeamHuntSettings(),
-    mouseMovements = mouseMovementsCheckbox.selected
+    mouseMovements = mouseMovementsCheckbox.selected,
   )
 
 
@@ -207,12 +247,25 @@ class SwingApp(playerClassList: List[Player],
   //   Detailed implementation for each settings group, example:
   def applyHealingSettings(healingSettings: HealingSettings): Unit = {
     autoHealCheckbox.selected = healingSettings.enabled
+    // light spell
     autoHealBot.lightHealSpellField.text = healingSettings.lightHealSpell
     autoHealBot.lightHealHealthField.text = healingSettings.lightHealHealth.toString
     autoHealBot.lightHealManaField.text = healingSettings.lightHealMana.toString
+    autoHealBot.lightHealHotkeyCheckbox.selected = healingSettings.lightHealHotkeyEnabled
+    val lightKeyIndex = autoHealBot.funcButtons.indexOf(healingSettings.lightHealHotkey)
+    if (lightKeyIndex != -1) {
+      autoHealBot.lightHealHotkeyDropdown.setSelectedIndex(lightKeyIndex)
+    }
+
+    // strong spell
     autoHealBot.strongHealSpellField.text = healingSettings.strongHealSpell
     autoHealBot.strongHealHealthField.text = healingSettings.strongHealHealth.toString
     autoHealBot.strongHealManaField.text = healingSettings.strongHealMana.toString
+    val strongKeyIndex = autoHealBot.funcButtons.indexOf(healingSettings.strongHealHotkey)
+    if (strongKeyIndex != -1) {
+      autoHealBot.strongHealHotkeyDropdown.setSelectedIndex(strongKeyIndex)
+    }
+
     autoHealBot.ihHealHealthField.text = healingSettings.ihHealHealth.toString
     autoHealBot.ihHealManaField.text = healingSettings.ihHealMana.toString
     autoHealBot.uhHealHealthField.text = healingSettings.uhHealHealth.toString
@@ -220,7 +273,33 @@ class SwingApp(playerClassList: List[Player],
     autoHealBot.hPotionHealHealthField.text = healingSettings.hPotionHealHealth.toString
     autoHealBot.hPotionHealManaField.text = healingSettings.hPotionHealMana.toString
     autoHealBot.mPotionHealManaMinField.text = healingSettings.mPotionHealManaMin.toString
+
+    // Applying settings for friend 1
+//    autoHealBot.friend1HealSpellField.text = healingSettings.friend1HealSpell
+//    autoHealBot.friend1NameField.text = healingSettings.friend1Name
+//    autoHealBot.friend1HealHealthField.text = healingSettings.friend1HealHealth.toString
+//    autoHealBot.friend1HealManaField.text = healingSettings.friend1HealMana.toString
+//    autoHealBot.friend1HealHotkeyCheckbox.selected = healingSettings.friend1HealHotkeyEnabled
+//    setDropdownSelection(autoHealBot.friend1HealHotkeyDropdown, healingSettings.friend1HealHotkey)
+
+    // Applying settings for friend 2
+//    autoHealBot.friend2HealSpellField.text = healingSettings.friend2HealSpell
+//    autoHealBot.friend2NameField.text = healingSettings.friend2Name
+//    autoHealBot.friend2HealHealthField.text = healingSettings.friend2HealHealth.toString
+//    autoHealBot.friend2HealManaField.text = healingSettings.friend2HealMana.toString
+//    autoHealBot.friend2HealHotkeyCheckbox.selected = healingSettings.friend2HealHotkeyEnabled
+//    setDropdownSelection(autoHealBot.friend2HealHotkeyDropdown, healingSettings.friend2HealHotkey)
+
+    // Applying settings for friend 3
+//    autoHealBot.friend3HealSpellField.text = healingSettings.friend3HealSpell
+//    autoHealBot.friend3NameField.text = healingSettings.friend3Name
+//    autoHealBot.friend3HealHealthField.text = healingSettings.friend3HealHealth.toString
+//    autoHealBot.friend3HealManaField.text = healingSettings.friend3HealMana.toString
+//    autoHealBot.friend3HealHotkeyCheckbox.selected = healingSettings.friend3HealHotkeyEnabled
+//    setDropdownSelection(autoHealBot.friend3HealHotkeyDropdown, healingSettings.friend3HealHotkey)
+
   }
+
 
 
   def applyCaveBotSettings(caveBotSettings: CaveBotSettings): Unit = {
@@ -302,6 +381,7 @@ class SwingApp(playerClassList: List[Player],
 
   // Initialize components here similar to the second snippet...
   val autoHealCheckbox = new CheckBox("Auto Heal")
+  val hotkeysCheckbox = new CheckBox("Hotkeys")
   val runeMakerCheckbox = new CheckBox("Rune Maker")
   val trainingCheckbox = new CheckBox("Training")
   val caveBotCheckbox = new CheckBox("Cave Bot")
@@ -319,12 +399,15 @@ class SwingApp(playerClassList: List[Player],
   listenTo(autoHealCheckbox, runeMakerCheckbox, trainingCheckbox, caveBotCheckbox,
     autoResponderCheckbox, protectionZoneCheckbox, fishingCheckbox,
     mouseMovementsCheckbox, protectionZoneCheckbox, autoTargetCheckbox,
-    autoLootCheckbox,teamHuntCheckbox,
+    autoLootCheckbox,teamHuntCheckbox,hotkeysCheckbox,
   )
   //  exampleDropdown.selection
   reactions += {
     case ButtonClicked(`autoHealCheckbox`) =>
       println("Auto Heal Checkbox clicked")
+
+    case ButtonClicked(`hotkeysCheckbox`) =>
+      println("Hotkeys Checkbox clicked")
 
     case ButtonClicked(`runeMakerCheckbox`) =>
       println("Rune Maker Checkbox clicked")
@@ -381,7 +464,7 @@ class SwingApp(playerClassList: List[Player],
       c.fill = GridBagConstraints.HORIZONTAL
 
       // Adding Checkboxes in the first column
-      val checkBoxComponents = Seq(autoHealCheckbox, runeMakerCheckbox, trainingCheckbox,
+      val checkBoxComponents = Seq(autoHealCheckbox, hotkeysCheckbox, runeMakerCheckbox, trainingCheckbox,
         caveBotCheckbox, teamHuntCheckbox, fishingCheckbox, mouseMovementsCheckbox,autoResponderCheckbox,
         protectionZoneCheckbox, autoTargetCheckbox, autoLootCheckbox)
 
@@ -403,9 +486,11 @@ class SwingApp(playerClassList: List[Player],
       }
     })
 
-    pages += new TabbedPane.Page("Main Tab", mainBot.mainTab)
+//    pages += new TabbedPane.Page("Main Tab", mainBot.mainTab)
 
     pages += new TabbedPane.Page("Auto Heal", autoHealBot.autoHealTab)
+
+    pages += new TabbedPane.Page("Hotkeys", hotkeysBot.hotkeysTab)
 
     pages += new TabbedPane.Page("Cave Bot", caveBotBot.caveBotTab)
 
@@ -511,6 +596,16 @@ class SwingApp(playerClassList: List[Player],
     jList.setModel(model)
 //    println(s"Model set with ${model.getSize} grid infos.")
   }
+
+  // Helper function to handle dropdown selection
+  def setDropdownSelection(dropdown: JComboBox[String], value: String): Unit = {
+    val keyIndex = autoHealBot.funcButtons.indexOf(value)
+    if (keyIndex != -1) {
+      dropdown.setSelectedIndex(keyIndex)
+    }
+  }
+
+
 
 }
 
