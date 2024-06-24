@@ -168,6 +168,7 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
 
 
   def receive: Receive = {
+
     case MainApp.JsonData(json) =>
 
       printInColor(ANSI_CYAN, "[MAIN] JsonProcessorActor received JSON: " + json)

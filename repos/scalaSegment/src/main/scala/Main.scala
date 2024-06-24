@@ -3,12 +3,13 @@ package main.scala
 //import MainApp.periodicFunctionActor
 import akka.actor.TypedActor.context
 import akka.actor.{Actor, ActorRef, ActorSystem, Cancellable, Props}
+import akka.util.ByteString
 import play.api.libs.json.Json.JsValueWrapper
 import player.Player
 import mouse.{ActionStateManager, Mouse, MouseMovementActor}
 import keyboard.{ActionKeyboardManager, AutoResponderManager, KeyboardActor}
 import play.api.libs.json._
-import processing.{JsonProcessorActor}
+import processing.JsonProcessorActor
 import userUI.UIAppActor
 import utils.{FunctionExecutorActor, InitialJsonProcessorActor, InitialRunActor, MainActor, PeriodicFunctionActor}
 
@@ -90,7 +91,7 @@ object MainApp extends App {
   val playerClassList: List[Player] = List(new Player("Player1"))
   case class StartActors(settings: UISettings)
   case class JsonData(json: JsValue)
-
+  case class BinaryData(data: ByteString)
   lazy val jsonProcessorActorRef: ActorRef = system.actorOf(Props(new JsonProcessorActor(mouseMovementActorRef, actionStateManagerRef, actionKeyboardManagerRef)), "jsonProcessor")
 
   val actionStateManagerRef: ActorRef = system.actorOf(Props[ActionStateManager], "actionStateManager")

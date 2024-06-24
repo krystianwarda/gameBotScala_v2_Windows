@@ -44,16 +44,18 @@ object TeamHunt {
                 println(s"Blocker Position: X=$blockerPosX, Y=$blockerPosY")
                 val blockerCharLocation = Vec(blockerPosX, blockerPosY)
 
-
-
-
                 // Calculate the Manhattan distance between the current character location and the blocker position
-                val xDistance = Math.abs(blockerCharLocation.x - presentCharLocation.x)
-                val yDistance = Math.abs(blockerCharLocation.y - presentCharLocation.y)
+//                val xDistance = Math.abs(blockerCharLocation.x - presentCharLocation.x)
+//                val yDistance = Math.abs(blockerCharLocation.y - presentCharLocation.y)
+
+                val chebyshevDistance = Math.max(
+                  Math.abs(blockerCharLocation.x - presentCharLocation.x),
+                  Math.abs(blockerCharLocation.y - presentCharLocation.y)
+                )
 
                 // Check if the conditions are met to update the path and follow the blocker
                 // 5 tiles for horizontal movements and 4 tiles for vertical movements
-                if (xDistance > 4 || yDistance > 3) {
+                if (chebyshevDistance > 2) {
                   updatedState = generateSubwaypointsToBlocker(blockerCharLocation, updatedState, json)
 
                   if (updatedState.subWaypoints.nonEmpty) {
