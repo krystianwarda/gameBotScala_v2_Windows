@@ -58,6 +58,7 @@ object AutoHeal {
 
       // remove bp remove_backpack
       if (updatedState.statusOfRuneAutoheal == "remove_backpack") {
+        println(s"updatedState.statusOfRuneAutoheal set to remove_backpack")
         val presentCharLocation = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
         val presentCharLocationX = (presentCharLocation \ "x").as[Int]
         val presentCharLocationY = (presentCharLocation \ "y").as[Int]
@@ -79,7 +80,7 @@ object AutoHeal {
 
 
       if (updatedState.uhRuneContainerName == "not_set") {
-//        logs = logs :+ Log(s"Checking for UH Rune container..")
+        logs = logs :+ Log(s"Checking for UH Rune container..")
         val containersInfoOpt = (json \ "containersInfo").asOpt[JsObject]
 
         containersInfoOpt.foreach { containersInfo =>
@@ -101,7 +102,7 @@ object AutoHeal {
       }
 
       if (updatedState.uhRuneContainerName != "not_set" && updatedState.statusOfRuneAutoheal == "ready") {
-//        logs = logs :+ Log(s"UH Rune container set to ${updatedState.uhRuneContainerName}. Checking for free space and parent...")
+        logs = logs :+ Log(s"UH Rune container set to ${updatedState.uhRuneContainerName}. Checking for free space and parent...")
         (json \ "containersInfo" \ updatedState.uhRuneContainerName).asOpt[JsObject].foreach { containerInfo =>
           val freeSpace = (containerInfo \ "freeSpace").asOpt[Int]
           val hasParent = (containerInfo \ "hasParent").asOpt[Boolean]
@@ -129,10 +130,50 @@ object AutoHeal {
         }
       }
 
+//    } else if (settings.healingSettings.spellsHeal.length > 1 &&
+//      settings.healingSettings.spellsHeal(1).strongHealHealth > 0 &&
+//      health <= settings.healingSettings.spellsHeal(1).strongHealHealth &&
+//      mana >= settings.healingSettings.spellsHeal(1).strongHealMana) {
+      println(s"settings.healingSettings.spellsHeal.length: ${settings.healingSettings.spellsHeal.length}")
 
+      if (settings.healingSettings.spellsHeal.nonEmpty) {
+        println(s"settings.healingSettings.spellsHeal.head.lightHealSpell: ${settings.healingSettings.spellsHeal.head.lightHealSpell}")
+        println(s"settings.healingSettings.spellsHeal.head.lightHealSpell.length: ${settings.healingSettings.spellsHeal.head.lightHealSpell.length}")
+        println(s"settings.healingSettings.spellsHeal.head.lightHealHealth: ${settings.healingSettings.spellsHeal.head.lightHealHealth}")
+        println(s"settings.healingSettings.spellsHeal.head.lightHealMana: ${settings.healingSettings.spellsHeal.head.lightHealMana}")
+
+
+      }
+
+//      else if (settings.healingSettings.spellsHeal.head.lightHealSpell.length > 1 &&
+//        settings.healingSettings.spellsHeal.head.lightHealHealth > 0 &&
+//        health <= settings.healingSettings.spellsHeal.head.lightHealHealth &&
+//        mana >= settings.healingSettings.spellsHeal.head.lightHealMana) {
+//      else if (settings.healingSettings.spellsHeal.head.lightHealSpell.length > 1 &&
+//        settings.healingSettings.spellsHeal.head.lightHealHealth > 0 &&
+//        health <= settings.healingSettings.spellsHeal.head.lightHealHealth &&
+//        mana >= settings.healingSettings.spellsHeal.head.lightHealMana) {
+
+
+//      if (settings.healingSettings.spellsHeal.length > 1) {
+//        val strongHeal = settings.healingSettings.spellsHeal(0)
+//        println(s"settings.healingSettings.spellsHeal(0).strongHealHealth: ${strongHeal.strongHealHealth}")
+//        println(s"settings.healingSettings.spellsHeal(0).strongHealMana: ${strongHeal.strongHealMana}")
+//      } else {
+//        println("No spell found at index 1 in spellsHeal list.")
+//      }
+
+
+      println(s"updatedState.statusOfRuneAutoheal: ${updatedState.statusOfRuneAutoheal} || Should be ready")
+      println(s"updatedState.stateHealingWithRune: ${updatedState.stateHealingWithRune} || Should be free")
       if (((currentState.currentTime - currentState.lastHealingTime) >= updatedState.healingSpellCooldown) && (updatedState.statusOfRuneAutoheal == "ready") && (updatedState.stateHealingWithRune == "free")) {
+        println(s"Inside healing function")
         val health = (json \ "characterInfo" \ "Health").as[Int]
         val mana = (json \ "characterInfo" \ "Mana").as[Int]
+        println(s"health: ${health}")
+        println(s"mana: ${mana}")
+
+
         // UH RUNE 3160
         if (settings.healingSettings.uhHealHealth > 0 && health <= settings.healingSettings.uhHealHealth && mana <= settings.healingSettings.uhHealMana) {
           logs = logs :+ Log("I need to use UH!")
@@ -278,29 +319,53 @@ object AutoHeal {
             actions = actions :+ FakeAction("useOnYourselfFunction", Some(ItemInfo(2874, Option(7))), None)
           }
         }
+//        else if (settings.healingSettings.spellsHeal.length > 1 &&
+//          settings.healingSettings.spellsHeal(1).strongHealHealth > 0 &&
+//          health <= settings.healingSettings.spellsHeal(1).strongHealHealth &&
+//          mana >= settings.healingSettings.spellsHeal(1).strongHealMana) {
+//
+//          val spellText = settings.healingSettings.spellsHeal(1).strongHealSpell
+//
+//          if (settings.mouseMovements) {
+//
+//            if (settings.healingSettings.spellsHeal(1).lightHealHotkeyEnabled) {
+//              val hotkeyLightHeal = settings.healingSettings.spellsHeal(1).lightHealHotkey
+//              logs = logs :+ Log(s"use hotkey for strong healing spell: ${hotkeyLightHeal}")
+////              actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(dir)))
+//            } else {
+//              logs = logs :+ Log("use keyboard for strong healing spell")
+//              actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(spellText)))
+//            }
+//          } else {
+//
+////            logs = logs :+ Log("use function for strong healing spell")
+////            actions = actions :+ FakeAction("sayText", None, Some(KeyboardText(spellText)))
+//          }
+//        }
+        else if (settings.healingSettings.spellsHeal.head.lightHealSpell.length > 1 &&
+          settings.healingSettings.spellsHeal.head.lightHealHealth > 0 &&
+          health <= settings.healingSettings.spellsHeal.head.lightHealHealth &&
+          mana >= settings.healingSettings.spellsHeal.head.lightHealMana) {
+          println(s"Inside light heal section")
 
-
-        else if (settings.healingSettings.strongHealHealth > 0 && health <= settings.healingSettings.strongHealHealth && mana >= settings.healingSettings.strongHealMana) {
-          val spellText = settings.healingSettings.strongHealSpell
           if (settings.mouseMovements) {
-            logs = logs :+ Log("use keyboard for strong healing spell")
-            actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(spellText)))
+
+            if (settings.healingSettings.spellsHeal.head.lightHealHotkeyEnabled) {
+              val hotkeyHeal = settings.healingSettings.spellsHeal.head.lightHealHotkey
+              logs = logs :+ Log(s"use hotkey for light healing spell: ${hotkeyHeal}")
+              actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(hotkeyHeal)))
+            } else {
+              logs = logs :+ Log("use keyboard for light healing spell")
+              actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(settings.healingSettings.spellsHeal.head.lightHealSpell)))
+            }
           } else {
-            logs = logs :+ Log("use function for strong healing spell")
-            actions = actions :+ FakeAction("sayText", None, Some(KeyboardText(spellText)))
+
+            //            logs = logs :+ Log("use function for strong healing spell")
+            //            actions = actions :+ FakeAction("sayText", None, Some(KeyboardText(spellText)))
           }
         }
 
-        else if (settings.healingSettings.lightHealHealth > 0 && health <= settings.healingSettings.lightHealHealth && mana >= settings.healingSettings.lightHealMana) {
-          val spellText = settings.healingSettings.lightHealSpell
-          if (settings.mouseMovements) {
-            logs = logs :+ Log("use keyboard for light healing spell")
-            actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(spellText)))
-          } else {
-            logs = logs :+ Log("use function for light healing spell")
-            actions = actions :+ FakeAction("sayText", None, Some(KeyboardText(spellText)))
-          }
-        }
+
       }
 
     }

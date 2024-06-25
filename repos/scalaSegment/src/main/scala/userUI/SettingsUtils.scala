@@ -22,16 +22,7 @@ object SettingsUtils {
   // Define the nested case classes
   case class HealingSettings(
                               enabled: Boolean,
-                              lightHealSpell: String,
-                              lightHealHealth: Int,
-                              lightHealMana: Int,
-                              lightHealHotkeyEnabled: Boolean,
-                              lightHealHotkey: String,
-                              strongHealSpell: String,
-                              strongHealHealth: Int,
-                              strongHealMana: Int,
-                              strongHealHotkeyEnabled: Boolean,
-                              strongHealHotkey: String,
+                              spellsHeal: List[HealingSpellsSettings],
                               ihHealHealth: Int,
                               ihHealMana: Int,
                               uhHealHealth: Int,
@@ -39,25 +30,40 @@ object SettingsUtils {
                               hPotionHealHealth: Int,
                               hPotionHealMana: Int,
                               mPotionHealManaMin: Int,
-//                              friend1HealSpell: String,
-//                              friend1Name: String,
-//                              friend1HealHealth: Int,
-//                              friend1HealMana: Int,
-//                              friend1HealHotkeyEnabled: Boolean,
-//                              friend1HealHotkey: String,
-//                              friend2HealSpell: String,
-//                              friend2Name: String,
-//                              friend2HealHealth: Int,
-//                              friend2HealMana: Int,
-//                              friend2HealHotkeyEnabled: Boolean,
-//                              friend2HealHotkey: String,
-//                              friend3HealSpell: String,
-//                              friend3Name: String,
-//                              friend3HealHealth: Int,
-//                              friend3HealMana: Int,
-//                              friend3HealHotkeyEnabled: Boolean,
-//                              friend3HealHotkey: String,
+                              friendsHeal: List[HealingFriendsSettings]
                             )
+  case class HealingSpellsSettings(
+                                    lightHealSpell: String,
+                                    lightHealHealth: Int,
+                                    lightHealMana: Int,
+                                    lightHealHotkeyEnabled: Boolean,
+                                    lightHealHotkey: String,
+                                    strongHealSpell: String,
+                                    strongHealHealth: Int,
+                                    strongHealMana: Int,
+                                    strongHealHotkeyEnabled: Boolean,
+                                    strongHealHotkey: String,
+                                   )
+  case class HealingFriendsSettings(
+                                     friend1HealSpell: String,
+                                     friend1Name: String,
+                                     friend1HealHealth: Int,
+                                     friend1HealMana: Int,
+                                     friend1HealHotkeyEnabled: Boolean,
+                                     friend1HealHotkey: String,
+                                     friend2HealSpell: String,
+                                     friend2Name: String,
+                                     friend2HealHealth: Int,
+                                     friend2HealMana: Int,
+                                     friend2HealHotkeyEnabled: Boolean,
+                                     friend2HealHotkey: String,
+                                     friend3HealSpell: String,
+                                     friend3Name: String,
+                                     friend3HealHealth: Int,
+                                     friend3HealMana: Int,
+                                     friend3HealHotkeyEnabled: Boolean,
+                                     friend3HealHotkey: String
+                                   )
 
   case class HotkeysSettings(
                               enabled: Boolean,
@@ -132,7 +138,10 @@ object SettingsUtils {
                             )
 
   // Define implicit Format instances for the nested case classes
+
   implicit val healingSettingsFormat: Format[HealingSettings] = Json.format[HealingSettings]
+  implicit val healingSpellsSettingsFormat: Format[HealingSpellsSettings] = Json.format[HealingSpellsSettings]
+  implicit val healingFriendsSettingsFormat: Format[HealingFriendsSettings] = Json.format[HealingFriendsSettings]
   implicit val runeMakingSettingsFormat: Format[RuneMakingSettings] = Json.format[RuneMakingSettings]
   implicit val protectionZoneSettingsFormat: Format[ProtectionZoneSettings] = Json.format[ProtectionZoneSettings]
   implicit val autoResponderSettingsFormat: Format[AutoResponderSettings] = Json.format[AutoResponderSettings]

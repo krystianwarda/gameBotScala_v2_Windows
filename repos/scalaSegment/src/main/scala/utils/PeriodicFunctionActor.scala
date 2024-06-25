@@ -267,7 +267,7 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
       while (socket.exists(_.isConnected)) {
         readFromSocket() match {
           case Some(data) =>
-            println(s"Received: ${data.utf8String}") // Print the raw data as a UTF-8 string
+//            println(s"Received: ${data.utf8String}") // Print the raw data as a UTF-8 string
             processData(data) // Process the data, possibly JSON
           case None => // Do nothing, effectively skipping this loop iteration
         }
@@ -328,7 +328,7 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
             }
           }
         case _ =>
-          println(s"Unhandled tag type $tagT at buffer position ${buffer.position()}")
+//          println(s"Unhandled tag type $tagT at buffer position ${buffer.position()}")
           JsString("Error: Unhandled tag type")
       }
 
@@ -362,10 +362,10 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
 
 
   def processData(data: ByteString): Unit = {
-    println(s"Received raw data: ${data.utf8String}")
+//    println(s"Received raw data: ${data.utf8String}")
     try {
       val decodedData = deserialize(data.toArray)
-      println(s"Deserialized data: $decodedData")
+//      println(s"Deserialized data: $decodedData")
       self ! decodedData // Send deserialized data to self
     } catch {
       case e: Exception =>

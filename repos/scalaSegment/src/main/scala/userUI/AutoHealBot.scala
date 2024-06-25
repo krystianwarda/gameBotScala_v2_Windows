@@ -53,32 +53,33 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
   val friend2HealHotkeyCheckbox = new CheckBox("Use hotkey")
   val friend3HealHotkeyCheckbox = new CheckBox("Use hotkey")
 
+
   val funcButtons = Array("F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12")
-  val lightHealHotkeyDropdown = new JComboBox[String]()
-  lightHealHotkeyDropdown.setModel(new DefaultComboBoxModel(funcButtons))
+  val lightHealHotkeyDropdown = new JComboBox[String](funcButtons) // Simplified initialization with items
 
   lightHealHotkeyCheckbox.reactions += {
     case ButtonClicked(`lightHealHotkeyCheckbox`) =>
-      val selectedKey = lightHealHotkeyDropdown.getSelectedItem.toString
-      val spellText = lightHealSpellField.text
       if (lightHealHotkeyCheckbox.selected) {
+        val selectedKey = lightHealHotkeyDropdown.getSelectedItem.toString
+        val spellText = lightHealSpellField.text
         SharedSettingsModel.assignKey(selectedKey, spellText)
       } else {
+        val selectedKey = lightHealHotkeyDropdown.getSelectedItem.toString
         SharedSettingsModel.unassignKey(selectedKey)
       }
   }
 
 
-  val strongHealHotkeyDropdown = new JComboBox[String]()
-  strongHealHotkeyDropdown.setModel(new DefaultComboBoxModel(funcButtons))
+  val strongHealHotkeyDropdown = new JComboBox[String](funcButtons) // Simplified initialization with items
 
   strongHealHotkeyCheckbox.reactions += {
     case ButtonClicked(`strongHealHotkeyCheckbox`) =>
-      val selectedKey = strongHealHotkeyDropdown.getSelectedItem.toString
-      val spellText = strongHealSpellField.text
       if (strongHealHotkeyCheckbox.selected) {
+        val selectedKey = strongHealHotkeyDropdown.getSelectedItem.toString
+        val spellText = strongHealSpellField.text
         SharedSettingsModel.assignKey(selectedKey, spellText)
       } else {
+        val selectedKey = strongHealHotkeyDropdown.getSelectedItem.toString
         SharedSettingsModel.unassignKey(selectedKey)
       }
   }
@@ -288,17 +289,19 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
     addComponent(new Label("Mana"), 5, c.gridy)
     addTextField(friend1HealManaField, 6, c.gridy, 1, standardFieldWidth)
 
+
     addComponent(friend1HealHotkeyCheckbox, 7, c.gridy)
     c.gridx = c.gridx + 1
     add(new JScrollPane(friend1HealHotkeyDropdown), c)
 
+    // Adding action listeners to the friend1HealHotkeyCheckbox
     friend1HealHotkeyCheckbox.reactions += {
       case ButtonClicked(`friend1HealHotkeyCheckbox`) =>
         val selectedKey = friend1HealHotkeyDropdown.getSelectedItem.toString
         val spellName = friend1HealSpellField.text.trim  // Ensure no trailing space
         val characterName = friend1NameField.text.trim   // Trim to remove any extra whitespace
-        val fullSpellText = s"""$spellName$characterName"""
         if (friend1HealHotkeyCheckbox.selected) {
+          val fullSpellText = s"$spellName on $characterName"
           SharedSettingsModel.assignKey(selectedKey, fullSpellText)
         } else {
           SharedSettingsModel.unassignKey(selectedKey)
@@ -317,9 +320,24 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
     addComponent(new Label("Mana"), 5, c.gridy)
     addTextField(friend2HealManaField, 6, c.gridy, 1, standardFieldWidth)
 
+
     addComponent(friend2HealHotkeyCheckbox, 7, c.gridy)
     c.gridx = c.gridx + 1
     add(new JScrollPane(friend2HealHotkeyDropdown), c)
+
+    // Adding action listeners to the friend2HealHotkeyCheckbox
+    friend2HealHotkeyCheckbox.reactions += {
+      case ButtonClicked(`friend2HealHotkeyCheckbox`) =>
+        val selectedKey = friend2HealHotkeyDropdown.getSelectedItem.toString
+        val spellName = friend2HealSpellField.text.trim  // Ensure no trailing space
+        val characterName = friend2NameField.text.trim   // Trim to remove any extra whitespace
+        if (friend2HealHotkeyCheckbox.selected) {
+          val fullSpellText = s"$spellName on $characterName"
+          SharedSettingsModel.assignKey(selectedKey, fullSpellText)
+        } else {
+          SharedSettingsModel.unassignKey(selectedKey)
+        }
+    }
 
     // Heal friend 3
     c.gridx = 0
@@ -333,9 +351,24 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
     addComponent(new Label("Mana"), 5, c.gridy)
     addTextField(friend3HealManaField, 6, c.gridy, 1, standardFieldWidth)
 
+
     addComponent(friend3HealHotkeyCheckbox, 7, c.gridy)
     c.gridx = c.gridx + 1
     add(new JScrollPane(friend3HealHotkeyDropdown), c)
+
+    // Adding action listeners to the friend3HealHotkeyCheckbox
+    friend3HealHotkeyCheckbox.reactions += {
+      case ButtonClicked(`friend3HealHotkeyCheckbox`) =>
+        val selectedKey = friend3HealHotkeyDropdown.getSelectedItem.toString
+        val spellName = friend3HealSpellField.text.trim  // Ensure no trailing space
+        val characterName = friend3NameField.text.trim   // Trim to remove any extra whitespace
+        if (friend3HealHotkeyCheckbox.selected) {
+          val fullSpellText = s"$spellName on $characterName"
+          SharedSettingsModel.assignKey(selectedKey, fullSpellText)
+        } else {
+          SharedSettingsModel.unassignKey(selectedKey)
+        }
+    }
 
 
     private def addComponent(component: Component, x: Int, y: Int): Unit = {
