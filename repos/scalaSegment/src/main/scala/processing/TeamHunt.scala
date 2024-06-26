@@ -22,6 +22,7 @@ object TeamHunt {
 
       val presentCharLocationX = (json \ "characterInfo" \ "PositionX").as[Int]
       val presentCharLocationY = (json \ "characterInfo" \ "PositionY").as[Int]
+      val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
       val presentCharLocation = Vec(presentCharLocationX, presentCharLocationY)
       updatedState = updatedState.copy(presentCharLocation = presentCharLocation)
 
@@ -29,7 +30,7 @@ object TeamHunt {
         val blockerName = settings.teamHuntSettings.blockerName
 
         // Extracting the "battleInfo" object from the root JSON
-        (json \ "battleInfo").validate[JsObject] match {
+        (json \ "spyLevelInfo").validate[JsObject] match {
           case JsSuccess(battleInfo, _) =>
             // Iterating over each entry in the "battleInfo" object
             val maybeBlocker = battleInfo.value.find {
@@ -41,49 +42,106 @@ object TeamHunt {
               case Some((_, blockerInfo)) =>
                 val blockerPosX = (blockerInfo \ "PositionX").as[Int]
                 val blockerPosY = (blockerInfo \ "PositionY").as[Int]
+                val blockerPosZ = (blockerInfo \ "PositionZ").as[Int]
                 println(s"Blocker Position: X=$blockerPosX, Y=$blockerPosY")
                 val blockerCharLocation = Vec(blockerPosX, blockerPosY)
 
-                // Calculate the Manhattan distance between the current character location and the blocker position
-//                val xDistance = Math.abs(blockerCharLocation.x - presentCharLocation.x)
-//                val yDistance = Math.abs(blockerCharLocation.y - presentCharLocation.y)
+                // Check if the blocker is at the same vertical level
+                if (blockerPosZ == presentCharLocationZ) {
+                  println("Blocker is reachable")
+                  val chebyshevDistance = Math.max(
+                    Math.abs(blockerCharLocation.x - presentCharLocation.x),
+                    Math.abs(blockerCharLocation.y - presentCharLocation.y)
+                  )
 
-                val chebyshevDistance = Math.max(
-                  Math.abs(blockerCharLocation.x - presentCharLocation.x),
-                  Math.abs(blockerCharLocation.y - presentCharLocation.y)
-                )
+                  // Process the JSON to extract battle info
+                  val battleInfoResult = (json \ "battleInfo").validate[Map[String, JsValue]]
 
-                // Check if the conditions are met to update the path and follow the blocker
-                // 5 tiles for horizontal movements and 4 tiles for vertical movements
-                if (chebyshevDistance > 2) {
-                  updatedState = generateSubwaypointsToBlocker(blockerCharLocation, updatedState, json)
+                  battleInfoResult match {
+                    case JsSuccess(battleInfo, _) =>
 
-                  if (updatedState.subWaypoints.nonEmpty) {
-                    val nextWaypoint = updatedState.subWaypoints.head
-                    val direction = calculateDirection(presentCharLocation, nextWaypoint, updatedState.lastDirection)
-                    printInColor(ANSI_RED, f"[DEBUG] Calculated Next Direction: $direction")
-                    updatedState = updatedState.copy(lastDirection = direction)
+                      // Check if there are any monsters in the battle info
+                      val hasMonsters = battleInfo.exists { case (_, creature) =>
+                        (creature \ "IsMonster").asOpt[Boolean].getOrElse(false)
+                      }
 
-                    direction.foreach { dir =>
-                      actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(dir)))
-                      logs :+= Log(s"Moving closer to the subWaypoint in direction: $dir")
-                    }
+                      // Determine the required distance based on the presence of monsters
+                      val requiredDistance = if (hasMonsters) 3 else 2
+
+                      // Check if the conditions are met to update the path and follow the blocker
+                      // Adjust distances for movement based on monster presence
+                      if (chebyshevDistance > requiredDistance) {
+                        updatedState = generateSubwaypointsToBlocker(blockerCharLocation, updatedState, json)
+
+                        if (updatedState.subWaypoints.nonEmpty) {
+                          val nextWaypoint = updatedState.subWaypoints.head
+                          val direction = calculateDirection(presentCharLocation, nextWaypoint, updatedState.lastDirection)
+                          printInColor(ANSI_RED, f"[DEBUG] Calculated Next Direction: $direction")
+                          updatedState = updatedState.copy(lastDirection = direction)
+
+                          direction.foreach { dir =>
+                            actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(dir)))
+                            logs :+= Log(s"Moving closer to the subWaypoint in direction: $dir")
+                          }
+                        }
+                      } else {
+                        printInColor(ANSI_YELLOW, "[DEBUG] Too close to blocker, stopping pursuit.")
+                      }
                   }
                 } else {
-                  printInColor(ANSI_YELLOW, "[DEBUG] Too close to blocker, stopping pursuit.")
+                  println("Blocker changed level")
+
+
+                  // Fetch tiles data from JSON
+                  val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+
+                  // Define levelMovementEnablersIdsList
+                  val levelMovementEnablersIdsList: List[Int] = List(
+                    414, 433, 369, 469, 1977, 1947, 1948, 386, 594
+                  )
+
+                  // Corrected collection manipulation
+                  val potentialTiles = tiles.collect {
+                    case (tileId, tileData) if (tileData \ "items").as[Map[String, JsObject]].values.exists(itemData =>
+                      levelMovementEnablersIdsList.contains((itemData \ "id").as[Int])
+                    ) =>
+                      (tileId, (tileData \ "index").as[String]) // Extract the index which is used to find screen coordinates
+                  }
+
+                  // Retrieve screen coordinates from the index and map them
+                  val tileScreenCoordinates = potentialTiles.flatMap { case (tileId, index) =>
+                    (json \ "screenInfo" \ "mapPanelLoc" \ index).asOpt[JsObject].map { screenData =>
+                      val x = (screenData \ "x").as[Int]
+                      val y = (screenData \ "y").as[Int]
+                      printInColor(ANSI_BLUE, s"[WRONG FLOOR] Tile check ID: $tileId ($x, $y)")
+                      (tileId, x, y)
+                    }
+                  }.headOption // Get the first available screen coordinate
+
+                  tileScreenCoordinates match {
+                    case Some((tileId, screenX, screenY)) =>
+                      printInColor(ANSI_BLUE, s"[WRONG FLOOR] Found valid tile on screen at ($screenX, $screenY), Character location: ($presentCharLocationX, $presentCharLocationY)")
+                      val actionsSeq = Seq(
+                        MouseAction(screenX, screenY, "move"),
+                        MouseAction(screenX, screenY, "pressLeft"),
+                        MouseAction(screenX, screenY, "releaseLeft")
+                      )
+                      actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+                      updatedState = updatedState.copy(slowWalkStatus = 0)
+
+                    case None =>
+                      printInColor(ANSI_BLUE, "[WRONG FLOOR] No valid waypoint found within range.")
+                  }
                 }
-
-
               case None =>
                 println("Blocker not on the screen")
             }
 
           case JsError(errors) =>
-            println("Battle Info empty: " + errors)
+            println("SpyInfo is empty: " + errors)
         }
 
       }
-
 
 
 

@@ -301,7 +301,7 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
         val spellName = friend1HealSpellField.text.trim  // Ensure no trailing space
         val characterName = friend1NameField.text.trim   // Trim to remove any extra whitespace
         if (friend1HealHotkeyCheckbox.selected) {
-          val fullSpellText = s"$spellName on $characterName"
+          val fullSpellText = s"$spellName$characterName"
           SharedSettingsModel.assignKey(selectedKey, fullSpellText)
         } else {
           SharedSettingsModel.unassignKey(selectedKey)
@@ -332,7 +332,7 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
         val spellName = friend2HealSpellField.text.trim  // Ensure no trailing space
         val characterName = friend2NameField.text.trim   // Trim to remove any extra whitespace
         if (friend2HealHotkeyCheckbox.selected) {
-          val fullSpellText = s"$spellName on $characterName"
+          val fullSpellText = s"$spellName$characterName"
           SharedSettingsModel.assignKey(selectedKey, fullSpellText)
         } else {
           SharedSettingsModel.unassignKey(selectedKey)
@@ -363,7 +363,7 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
         val spellName = friend3HealSpellField.text.trim  // Ensure no trailing space
         val characterName = friend3NameField.text.trim   // Trim to remove any extra whitespace
         if (friend3HealHotkeyCheckbox.selected) {
-          val fullSpellText = s"$spellName on $characterName"
+          val fullSpellText = s"$spellName$characterName"
           SharedSettingsModel.assignKey(selectedKey, fullSpellText)
         } else {
           SharedSettingsModel.unassignKey(selectedKey)
