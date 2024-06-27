@@ -45,7 +45,7 @@ object TeamHunt {
                 val blockerPosZ = (blockerInfo \ "PositionZ").as[Int]
                 println(s"Blocker Position: X=$blockerPosX, Y=$blockerPosY")
                 val blockerCharLocation = Vec(blockerPosX, blockerPosY)
-
+                updatedState = updatedState.copy(lastBlockerPos = (blockerPosX, blockerPosY, blockerPosZ))
                 // Check if the blocker is at the same vertical level
                 if (blockerPosZ == presentCharLocationZ) {
                   println("Blocker is reachable")
@@ -121,13 +121,20 @@ object TeamHunt {
                   tileScreenCoordinates match {
                     case Some((tileId, screenX, screenY)) =>
                       printInColor(ANSI_BLUE, s"[WRONG FLOOR] Found valid tile on screen at ($screenX, $screenY), Character location: ($presentCharLocationX, $presentCharLocationY)")
-                      val actionsSeq = Seq(
-                        MouseAction(screenX, screenY, "move"),
-                        MouseAction(screenX, screenY, "pressLeft"),
-                        MouseAction(screenX, screenY, "releaseLeft")
-                      )
-                      actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-                      updatedState = updatedState.copy(slowWalkStatus = 0)
+
+                      // Check if it's the first time or if sufficient time has elapsed since the last action
+                      if (updatedState.chasingBlockerLevelChangeTime == 0 || (updatedState.currentTime - updatedState.chasingBlockerLevelChangeTime > updatedState.longTimeLimit)) {
+                        printInColor(ANSI_BLUE, "[WRONG FLOOR] Chasing blocker.")
+                        val actionsSeq = Seq(
+                          MouseAction(screenX, screenY, "move"),
+                          MouseAction(screenX, screenY, "pressLeft"),
+                          MouseAction(screenX, screenY, "releaseLeft")
+                        )
+                        actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+                        updatedState = updatedState.copy(chasingBlockerLevelChangeTime = updatedState.currentTime)
+                      } else {
+                        printInColor(ANSI_BLUE, "[WRONG FLOOR] Blocker was chased recently.")
+                      }
 
                     case None =>
                       printInColor(ANSI_BLUE, "[WRONG FLOOR] No valid waypoint found within range.")
@@ -135,6 +142,44 @@ object TeamHunt {
                 }
               case None =>
                 println("Blocker not on the screen")
+                val lastBlockerXPos = updatedState.lastBlockerPos._1
+                val lastBlockerYPos = updatedState.lastBlockerPos._2
+                val lastBlockerZPos = updatedState.lastBlockerPos._3
+
+                // Adjusting X coordinate to ensure it's within a max distance of 7
+                val adjustedBlockerXPos = if ((lastBlockerXPos - presentCharLocationX).abs > 7) {
+                  if (lastBlockerXPos > presentCharLocationX) presentCharLocationX + 7 else presentCharLocationX - 7
+                } else lastBlockerXPos
+
+                // Adjusting Y coordinate to ensure it's within a max distance of 6
+                val adjustedBlockerYPos = if ((lastBlockerYPos - presentCharLocationY).abs > 6) {
+                  if (lastBlockerYPos > presentCharLocationY) presentCharLocationY + 6 else presentCharLocationY - 6
+                } else lastBlockerYPos
+
+                println(s"Adjusted Blocker Position to: X = $adjustedBlockerXPos, Y = $adjustedBlockerYPos, Z = $lastBlockerZPos")
+
+                val screenCoordinates = gameToScreenCoordinatesByTileId(adjustedBlockerXPos, lastBlockerYPos, lastBlockerZPos, json)
+                screenCoordinates match {
+                  case Some((screenX, screenY)) =>
+                    printInColor(ANSI_BLUE, s"[LAST SEEN] Found last known tile on screen at tile ${updatedState.lastBlockerPos} ($screenX, $screenY)")
+
+                    // Check if it's the first time or if sufficient time has elapsed since the last action
+                    if (updatedState.chasingBlockerLevelChangeTime == 0 || (updatedState.currentTime - updatedState.chasingBlockerLevelChangeTime > updatedState.longTimeLimit)) {
+                      printInColor(ANSI_BLUE, "[LAST SEEN] Chasing last known position of blocker.")
+                      val actionsSeq = Seq(
+                        MouseAction(screenX, screenY, "move"),
+                        MouseAction(screenX, screenY, "pressLeft"),
+                        MouseAction(screenX, screenY, "releaseLeft")
+                      )
+                      actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+                      updatedState = updatedState.copy(chasingBlockerLevelChangeTime = updatedState.currentTime)
+                    } else {
+                      printInColor(ANSI_BLUE, "[LAST SEEN] Blocker was chased recently.")
+                    }
+                  case None =>
+                    println("No screen coordinates found for the given tile ID.")
+                }
+
             }
 
           case JsError(errors) =>
@@ -261,6 +306,23 @@ object TeamHunt {
       updatedState
     }
   }
+  // Function to convert game coordinates to a single string identifier and find screen coordinates from JSON
+  def gameToScreenCoordinatesByTileId(gameX: Int, gameY: Int, gameZ: Int, json: JsValue): Option[(Int, Int)] = {
+    val tileId = s"${gameX}${gameY}${gameZ}"
 
+    // Extracting the mapPanelLoc part of the JSON
+    val mapPanelLoc = (json \ "screenInfo" \ "mapPanelLoc").as[JsObject]
+
+    // Finding the matching tile by id
+    mapPanelLoc.values.find {
+      case JsObject(obj) if (obj \ "id").asOpt[String].contains(tileId) => true
+      case _ => false
+    }.flatMap { tileJsValue =>
+      for {
+        x <- (tileJsValue \ "x").asOpt[Int]
+        y <- (tileJsValue \ "y").asOpt[Int]
+      } yield (x, y)
+    }
+  }
 
 }

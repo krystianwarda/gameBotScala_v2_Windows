@@ -63,6 +63,7 @@ case class ProcessorState(
                            healingRetryAttempts: Int = 1,
                            currentTime: Long = 0,
                            healingSpellCooldown: Long = 1200,
+                           chasingBlockerLevelChangeTime: Long = 0,
                            shortTimeLimit: Long = 1000,
                            normalTimeLimit: Long = 2000,
                            longTimeLimit: Long = 5000,
