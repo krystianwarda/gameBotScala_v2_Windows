@@ -5,7 +5,7 @@ import play.api.libs.json._
 import userUI.SettingsUtils.UISettings
 import utils.consoleColorPrint.{ANSI_RED, printInColor}
 import processing.CaveBot.{Vec, aStarSearch, adjustGoalWithinBounds, calculateDirection, generateSubwaypoints, printGrid}
-
+import play.api.libs.json._
 import java.lang.System.currentTimeMillis
 import utils.consoleColorPrint._
 
@@ -315,7 +315,7 @@ object TeamHunt {
 
     // Finding the matching tile by id
     mapPanelLoc.values.find {
-      case JsObject(obj) if (obj \ "id").asOpt[String].contains(tileId) => true
+      case JsObject(obj) if obj.apply("id").asOpt[String].contains(tileId) => true
       case _ => false
     }.flatMap { tileJsValue =>
       for {
