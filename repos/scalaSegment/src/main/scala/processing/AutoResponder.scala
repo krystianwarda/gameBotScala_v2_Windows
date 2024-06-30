@@ -23,7 +23,7 @@ object AutoResponder {
         // Correctly access the messages in the focused tab
         val messages = (json \ "textChatInfo" \ "focusedTabInfo").as[JsObject].values.toSeq
         // Extract the ignored creatures list from setting
-        val ignoredCreaturesList: mutable.Buffer[String] = settings.protectionZoneSettings.ignoredCreatures
+        val ignoredCreaturesList: Seq[String] = settings.protectionZoneSettings.ignoredCreatures
 
         val relevantMessages = messages.filter { messageJson =>
           val from = (messageJson \ "from").asOpt[String].getOrElse("")

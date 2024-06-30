@@ -16,7 +16,7 @@ import scala.collection.mutable
 
 class ProtectionZoneBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: ActorRef) {
   var selectedRectangles: Seq[String] = Seq.empty
-  var stringsList: mutable.Buffer[String] = mutable.Buffer.empty[String]
+  var stringsList: Seq[String] = Seq.empty
 
   // Existing checkbox
   val playerOnScreenAlertCheckbox = new CheckBox("Player on the screen alert")
@@ -68,11 +68,10 @@ class ProtectionZoneBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor
   reactions += {
     case SelectionChanged(`comboBox`) =>
       if (inputTextField.text.nonEmpty && !stringsList.contains(inputTextField.text)) {
-        inputTextField.text +=: stringsList // Prepend to list
+        stringsList = inputTextField.text +: stringsList // Prepend to list
         updateComboBox()
         inputTextField.text = "" // Clear input field
       }
-
     case ButtonClicked(`removeButton`) =>
       comboBox.selection.item.foreach { item =>
         stringsList = stringsList.filterNot(_ == item) // Remove selected item
@@ -81,12 +80,12 @@ class ProtectionZoneBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor
   }
 
 
-  def setIgnoredCreatures(creatures: mutable.Buffer[String]): Unit = {
+  def setIgnoredCreatures(creatures: Seq[String]): Unit = {
     stringsList = creatures
     updateComboBox()
   }
 
-  def getIgnoredCreatures: mutable.Buffer[String] = stringsList
+  def getIgnoredCreatures: Seq[String] = stringsList
 
   private def updateComboBox(): Unit = {
     comboBox.peer.setModel(ComboBox.newConstantModel(stringsList))

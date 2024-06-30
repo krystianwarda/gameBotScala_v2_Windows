@@ -12,8 +12,14 @@ import scala.collection.mutable.ListBuffer
 
 class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: ActorRef) {
 
-  val targetMonstersOnBattleCheckbox = new CheckBox("Target monsters on battle list")
-  val lootMonsterCheckbox = new CheckBox("Loot this monster")
+
+  val targetOnBattleLabel = new Label("Target on battle:")
+  val lootMonsterLabel = new Label("Loot monster:")
+  val chaseMonsterLabel = new Label("Chase monster:")
+
+  val targetMonstersOnBattleCheckbox = new CheckBox("Yes")
+  val lootMonsterCheckbox = new CheckBox("Yes")
+  val chaseMonstersCheckbox = new CheckBox("Yes")
 
   val loadButton = new JButton("Load")
   val saveButton = new JButton("Save")
@@ -52,7 +58,10 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
   val creatureDanger = Array(1, 2, 3, 4, 5, 6, 7, 8)
   val creatureDangerDropdown = new JComboBox(creatureDanger.map(_.asInstanceOf[Object]))
 
-
+  val attackWithRuneLabel = new Label("Use rune:")
+  val useRuneCheckbox = new CheckBox("Yes")
+  val runeTypes = Array("HMM.3198", "SD.3155", "EXPLO.3200", "GFB.3191", "LMM.3174", "FB.3189")
+  val runeTypeDropdown = new JComboBox[String](runeTypes) // Simplified initialization with items
 
 
   val autoTargetTab: Component = Component.wrap(new JPanel(new GridBagLayout) {
@@ -95,7 +104,7 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
     c.gridx = 0
     c.gridy += 1
     c.fill = GridBagConstraints.HORIZONTAL
-    c.gridheight = 4
+    c.gridheight = 9
     add(creatureScrollPane, c)
     c.gridheight = 1
 
@@ -133,14 +142,34 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
     add(creatureDangerDropdown, c)
 
 
-
     c.gridwidth = 1
+    c.gridx = 4
     c.gridy += 1
-    c.gridwidth = 4
+    add(targetOnBattleLabel.peer, c)
+    c.gridx += 1
     add(targetMonstersOnBattleCheckbox.peer, c)
+    c.gridx = 4
+
     c.gridy += 1
+    add(lootMonsterLabel.peer, c)
+    c.gridx += 1
     add(lootMonsterCheckbox.peer, c)
 
+    c.gridx = 4
+    c.gridy += 1
+    add(chaseMonsterLabel.peer, c)
+    c.gridx += 1
+    add(chaseMonstersCheckbox.peer, c)
+
+
+    c.gridy += 1
+    c.gridx = 4
+    c.gridwidth = 1
+    add(attackWithRuneLabel.peer, c)
+    c.gridx = 5
+    add(useRuneCheckbox.peer, c)
+    c.gridx = 6
+    add(runeTypeDropdown, c)
 
 
     // Event listeners for the buttons
@@ -150,11 +179,14 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
       val hpRangeFrom = healthRangeFrom.text.trim
       val hpRangeTo = healthRangeTo.text.trim
       val dangerLevel = creatureDangerDropdown.getSelectedItem.toString
-      val targetOnBattle = if(targetMonstersOnBattleCheckbox.selected) "Yes" else "No"
-      val lootMonster = if(lootMonsterCheckbox.selected) "Yes" else "No"
+      val targetOnBattle = if (targetMonstersOnBattleCheckbox.selected) "Yes" else "No"
+      val lootMonster = if (lootMonsterCheckbox.selected) "Yes" else "No"
+      val chaseMonster = if (chaseMonstersCheckbox.selected) "Yes" else "No"
+      val useRune = if (useRuneCheckbox.selected) "Yes" else "No"
+      val runeType = if (useRuneCheckbox.selected) runeTypeDropdown.getSelectedItem.toString else ""
 
       // Concatenate all information into a single string
-      val creatureInfo = s"$creatureName, Count: $count, HP: $hpRangeFrom-$hpRangeTo, Danger: $dangerLevel, Target in Battle: $targetOnBattle, Loot: $lootMonster"
+      val creatureInfo = s"$creatureName, Count: $count, HP: $hpRangeFrom-$hpRangeTo, Danger: $dangerLevel, Target in Battle: $targetOnBattle, Loot: $lootMonster, Chase: $chaseMonster, Use Rune: $useRune, Rune Type: $runeType"
 
       if (creatureName.nonEmpty && !creatureListModel.contains(creatureInfo)) {
         creatureListModel.addElement(creatureInfo)
@@ -166,8 +198,39 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
         creatureDangerDropdown.setSelectedIndex(0) // Reset to default value if needed
         targetMonstersOnBattleCheckbox.selected = false // Reset to default if needed
         lootMonsterCheckbox.selected = false
+        useRuneCheckbox.selected = false // Reset the rune checkbox
+        runeTypeDropdown.setSelectedIndex(0) // Reset the rune dropdown
       }
     })
+
+
+    //    // Event listeners for the buttons
+//    addCreatureButton.peer.addActionListener(_ => {
+//      val creatureName = creatureNameTextField.text.trim
+//      val count = creaturesCountDropdown.getSelectedItem.toString
+//      val hpRangeFrom = healthRangeFrom.text.trim
+//      val hpRangeTo = healthRangeTo.text.trim
+//      val dangerLevel = creatureDangerDropdown.getSelectedItem.toString
+//      val targetOnBattle = if(targetMonstersOnBattleCheckbox.selected) "Yes" else "No"
+//      val lootMonster = if(lootMonsterCheckbox.selected) "Yes" else "No"
+//      val chaseMonster = if(chaseMonstersCheckbox.selected) "Yes" else "No"
+//
+//
+//      // Concatenate all information into a single string
+//      val creatureInfo = s"$creatureName, Count: $count, HP: $hpRangeFrom-$hpRangeTo, Danger: $dangerLevel, Target in Battle: $targetOnBattle, Loot: $lootMonster, Chase: $chaseMonster"
+//
+//      if (creatureName.nonEmpty && !creatureListModel.contains(creatureInfo)) {
+//        creatureListModel.addElement(creatureInfo)
+//        // Resetting the input fields after adding a creature might be a good UX practice
+//        creatureNameTextField.text = ""
+//        healthRangeFrom.text = "0"
+//        healthRangeTo.text = "100"
+//        creaturesCountDropdown.setSelectedIndex(0) // Reset to default value if needed
+//        creatureDangerDropdown.setSelectedIndex(0) // Reset to default value if needed
+//        targetMonstersOnBattleCheckbox.selected = false // Reset to default if needed
+//        lootMonsterCheckbox.selected = false
+//      }
+//    })
 
 
     def updateFieldsWithSelectedCreature(creatureInfo: String): Unit = {

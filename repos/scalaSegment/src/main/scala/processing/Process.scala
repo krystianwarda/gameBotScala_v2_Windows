@@ -4,7 +4,10 @@ import play.api.libs.json.JsObject
 import mouse.{ActionCompleted, ActionTypes, Mouse}
 import mouse.{MouseMoveCommand, MouseMovementSettings}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
+import processing.CaveBot.Vec
 
+import scala.util.Random
+import play.api.libs.json._
 
 object Process {
   // Function to find the screen position of an item in container slots 1-4 with both itemId and itemSubType matching
@@ -126,4 +129,11 @@ object Process {
       case _ => Seq.empty
     }
   }
+
+  // Adjusted function to use the x and y values of Vec as min and max
+  def generateRandomDelay(timeRange: Vec): Long = {
+    val rand = new Random
+    timeRange.x + (rand.nextLong() % (timeRange.y - timeRange.x + 1))
+  }
+
 }

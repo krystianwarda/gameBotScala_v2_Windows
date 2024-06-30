@@ -151,8 +151,8 @@ class SwingApp(playerClassList: List[Player],
   def collectAutoTargetSettings(): AutoTargetSettings = AutoTargetSettings(
     enabled = autoTargetCheckbox.selected,
     creatureList = jListToSeq(autoTargetBot.creatureList),
-    targetMonstersOnBattle = autoTargetBot.targetMonstersOnBattleCheckbox.selected
   )
+
 
 
   def collectAutoResponderSettings(): AutoResponderSettings = AutoResponderSettings(
@@ -203,6 +203,30 @@ class SwingApp(playerClassList: List[Player],
   val saveButton = new Button("Save Settings") {
     reactions += {
       case ButtonClicked(_) =>
+        println("Debug: Save button clicked")
+
+        val settings = collectSettingsFromUI() // This collects current UI values
+        println(s"Debug: Settings collected from UI: $settings")
+
+        val chooser = new FileChooser(new java.io.File("C:\\MyLibraries\\botSettings"))
+        chooser.title = "Save Settings"
+
+        val result = chooser.showSaveDialog(null)
+        println(s"Debug: FileChooser result: $result")
+
+        if (result == FileChooser.Result.Approve) {
+          val selectedFilePath = chooser.selectedFile.getAbsolutePath
+          println(s"Debug: Selected file path: $selectedFilePath")
+
+          saveSettingsToFile(settings, selectedFilePath)
+        }
+    }
+  }
+
+
+/*  val saveButton = new Button("Save Settings") {
+    reactions += {
+      case ButtonClicked(_) =>
         val settings = collectSettingsFromUI() // This collects current UI values
         val chooser = new FileChooser(new java.io.File("C:\\MyLibraries\\botSettings"))
         chooser.title = "Save Settings"
@@ -211,7 +235,7 @@ class SwingApp(playerClassList: List[Player],
           SettingsUtils.saveSettingsToFile(settings, chooser.selectedFile.getAbsolutePath)
         }
     }
-  }
+  }*/
 
   val loadButton = new Button("Load Settings") {
     reactions += {
@@ -253,7 +277,8 @@ class SwingApp(playerClassList: List[Player],
     applyCaveBotSettings(settings.caveBotSettings)
     applyAutoTargetSettings(settings.autoTargetSettings)
     applyAutoLootSettings(settings.autoLootSettings)
-
+    applyTeamHuntSettings(settings.teamHuntSettings)
+    applyHotkeysSettings(settings.hotkeysSettings)
   }
 
   def setDropdownSelection(dropdown: JComboBox[String], value: String): Unit = {
@@ -267,26 +292,24 @@ class SwingApp(playerClassList: List[Player],
     autoHealCheckbox.selected = healingSettings.enabled
 
     // Assuming the list of spellsHeal contains exactly two elements: light and strong heal
-    val lightHeal = healingSettings.spellsHeal.headOption.getOrElse(
+    val spellHeal = healingSettings.spellsHeal.headOption.getOrElse(
       HealingSpellsSettings("", 0, 0, false, "", "", 0, 0, false, "")
     )
-    val strongHeal = healingSettings.spellsHeal.drop(1).headOption.getOrElse(
-      HealingSpellsSettings("", 0, 0, false, "", "", 0, 0, false, "")
-    )
+
 
     // Light spell
-    autoHealBot.lightHealSpellField.text = lightHeal.lightHealSpell
-    autoHealBot.lightHealHealthField.text = lightHeal.lightHealHealth.toString
-    autoHealBot.lightHealManaField.text = lightHeal.lightHealMana.toString
-    autoHealBot.lightHealHotkeyCheckbox.selected = lightHeal.lightHealHotkeyEnabled
-    setDropdownSelection(autoHealBot.lightHealHotkeyDropdown, lightHeal.lightHealHotkey)
+    autoHealBot.lightHealSpellField.text = spellHeal.lightHealSpell
+    autoHealBot.lightHealHealthField.text = spellHeal.lightHealHealth.toString
+    autoHealBot.lightHealManaField.text = spellHeal.lightHealMana.toString
+    autoHealBot.lightHealHotkeyCheckbox.selected = spellHeal.lightHealHotkeyEnabled
+    setDropdownSelection(autoHealBot.lightHealHotkeyDropdown, spellHeal.lightHealHotkey)
 
     // Strong spell
-    autoHealBot.strongHealSpellField.text = strongHeal.strongHealSpell
-    autoHealBot.strongHealHealthField.text = strongHeal.strongHealHealth.toString
-    autoHealBot.strongHealManaField.text = strongHeal.strongHealMana.toString
-    autoHealBot.strongHealHotkeyCheckbox.selected = strongHeal.strongHealHotkeyEnabled
-    setDropdownSelection(autoHealBot.strongHealHotkeyDropdown, strongHeal.strongHealHotkey)
+    autoHealBot.strongHealSpellField.text = spellHeal.strongHealSpell
+    autoHealBot.strongHealHealthField.text = spellHeal.strongHealHealth.toString
+    autoHealBot.strongHealManaField.text = spellHeal.strongHealMana.toString
+    autoHealBot.strongHealHotkeyCheckbox.selected = spellHeal.strongHealHotkeyEnabled
+    setDropdownSelection(autoHealBot.strongHealHotkeyDropdown, spellHeal.strongHealHotkey)
 
     // Other healing settings
     autoHealBot.ihHealHealthField.text = healingSettings.ihHealHealth.toString
@@ -334,11 +357,37 @@ class SwingApp(playerClassList: List[Player],
   }
 
 
+  def applyTeamHuntSettings(teamHuntSettings: TeamHuntSettings): Unit = {
+    teamHuntCheckbox.selected = teamHuntSettings.enabled
+    teamHuntBot.followBlockerCheckbox.selected = teamHuntSettings.followBlocker
+    teamHuntBot.blockerName.text = teamHuntSettings.blockerName
+  }
+
+  def applyHotkeysSettings(hotkeysSettings: HotkeysSettings): Unit = {
+    // Apply the enabled state to the hotkeys checkbox
+    hotkeysCheckbox.selected = hotkeysSettings.enabled
+
+    // Set the text fields for each hotkey based on the settings
+    hotkeysBot.hF1Field.text = hotkeysSettings.hF1Field
+    hotkeysBot.hF2Field.text = hotkeysSettings.hF2Field
+    hotkeysBot.hF3Field.text = hotkeysSettings.hF3Field
+    hotkeysBot.hF4Field.text = hotkeysSettings.hF4Field
+    hotkeysBot.hF5Field.text = hotkeysSettings.hF5Field
+    hotkeysBot.hF6Field.text = hotkeysSettings.hF6Field
+    hotkeysBot.hF7Field.text = hotkeysSettings.hF7Field
+    hotkeysBot.hF8Field.text = hotkeysSettings.hF8Field
+    hotkeysBot.hF9Field.text = hotkeysSettings.hF9Field
+    hotkeysBot.hF10Field.text = hotkeysSettings.hF10Field
+    hotkeysBot.hF11Field.text = hotkeysSettings.hF11Field
+    hotkeysBot.hF12Field.text = hotkeysSettings.hF12Field
+  }
+
+
   def applyAutoTargetSettings(autoTargetSettings: AutoTargetSettings): Unit = {
     autoTargetCheckbox.selected = autoTargetSettings.enabled
     setListModel(autoTargetBot.creatureList, autoTargetSettings.creatureList)
-    autoTargetBot.targetMonstersOnBattleCheckbox.selected = autoTargetSettings.targetMonstersOnBattle
   }
+
 
   def applyAutoLootSettings(autoLootSettings: AutoLootSettings): Unit = {
     autoLootCheckbox.selected = autoLootSettings.enabled
@@ -621,15 +670,6 @@ class SwingApp(playerClassList: List[Player],
     jList.setModel(model)
 //    println(s"Model set with ${model.getSize} grid infos.")
   }
-
-  // Helper function to handle dropdown selection
-//  def setDropdownSelection(dropdown: JComboBox[String], value: String): Unit = {
-//    val keyIndex = autoHealBot.funcButtons.indexOf(value)
-//    if (keyIndex != -1) {
-//      dropdown.setSelectedIndex(keyIndex)
-//    }
-//  }
-
 
 
 }

@@ -21,7 +21,7 @@ object AutoHeal {
     val startTime = System.nanoTime()
 
     if (settings.healingSettings.enabled) {
-      println(s"Status stateHealingWithRune : ${updatedState.stateHealingWithRune}")
+//      println(s"Status stateHealingWithRune : ${updatedState.stateHealingWithRune}")
 //      println(s"Status runeContainer : ${updatedState.uhRuneContainerName}")
 
       if (updatedState.statusOfRuneAutoheal == "open_new_backpack") {
@@ -134,16 +134,16 @@ object AutoHeal {
 //      settings.healingSettings.spellsHeal(1).strongHealHealth > 0 &&
 //      health <= settings.healingSettings.spellsHeal(1).strongHealHealth &&
 //      mana >= settings.healingSettings.spellsHeal(1).strongHealMana) {
-      println(s"settings.healingSettings.spellsHeal.length: ${settings.healingSettings.spellsHeal.length}")
-
-      if (settings.healingSettings.spellsHeal.nonEmpty) {
-        println(s"settings.healingSettings.spellsHeal.head.lightHealSpell: ${settings.healingSettings.spellsHeal.head.lightHealSpell}")
-        println(s"settings.healingSettings.spellsHeal.head.lightHealSpell.length: ${settings.healingSettings.spellsHeal.head.lightHealSpell.length}")
-        println(s"settings.healingSettings.spellsHeal.head.lightHealHealth: ${settings.healingSettings.spellsHeal.head.lightHealHealth}")
-        println(s"settings.healingSettings.spellsHeal.head.lightHealMana: ${settings.healingSettings.spellsHeal.head.lightHealMana}")
-
-
-      }
+//      println(s"settings.healingSettings.spellsHeal.length: ${settings.healingSettings.spellsHeal.length}")
+//
+//      if (settings.healingSettings.spellsHeal.nonEmpty) {
+//        println(s"settings.healingSettings.spellsHeal.head.lightHealSpell: ${settings.healingSettings.spellsHeal.head.lightHealSpell}")
+//        println(s"settings.healingSettings.spellsHeal.head.lightHealSpell.length: ${settings.healingSettings.spellsHeal.head.lightHealSpell.length}")
+//        println(s"settings.healingSettings.spellsHeal.head.lightHealHealth: ${settings.healingSettings.spellsHeal.head.lightHealHealth}")
+//        println(s"settings.healingSettings.spellsHeal.head.lightHealMana: ${settings.healingSettings.spellsHeal.head.lightHealMana}")
+//
+//
+//      }
 
 //      else if (settings.healingSettings.spellsHeal.head.lightHealSpell.length > 1 &&
 //        settings.healingSettings.spellsHeal.head.lightHealHealth > 0 &&
@@ -164,14 +164,14 @@ object AutoHeal {
 //      }
 
 
-      println(s"updatedState.statusOfRuneAutoheal: ${updatedState.statusOfRuneAutoheal} || Should be ready")
-      println(s"updatedState.stateHealingWithRune: ${updatedState.stateHealingWithRune} || Should be free")
+//      println(s"updatedState.statusOfRuneAutoheal: ${updatedState.statusOfRuneAutoheal} || Should be ready")
+//      println(s"updatedState.stateHealingWithRune: ${updatedState.stateHealingWithRune} || Should be free")
       if (((currentState.currentTime - currentState.lastHealingTime) >= updatedState.healingSpellCooldown) && (updatedState.statusOfRuneAutoheal == "ready") && (updatedState.stateHealingWithRune == "free")) {
-        println(s"Inside healing function")
+//        println(s"Inside healing function")
         val health = (json \ "characterInfo" \ "Health").as[Int]
         val mana = (json \ "characterInfo" \ "Mana").as[Int]
-        println(s"health: ${health}")
-        println(s"mana: ${mana}")
+//        println(s"health: ${health}")
+//        println(s"mana: ${mana}")
 
         val friend1HealthPercentage = if (
           settings.healingSettings.friendsHeal.head.friend1HealSpell.length > 1 &&
