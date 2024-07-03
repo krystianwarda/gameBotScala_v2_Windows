@@ -63,18 +63,59 @@ object AutoTarget {
         }
       }
 
-      // After handling monsters, update chase mode if necessary
-      val (newUpdatedState, newActions, newLogs) = updateChaseModeIfNecessary(json, updatedState, actions, logs, settings)
-      updatedState = newUpdatedState // update the state
-      actions = newActions // update actions
-      logs = newLogs // update logs
+      // Check if the attackInfo is empty
+      val attackInfoPart = (json \ "attackInfo").asOpt[JsObject]
+      // Retrieve current chase mode
+      val currentChaseMode = (json \ "characterInfo" \ "ChaseMode").as[Int]
+
+      attackInfoPart match {
+        case _ =>
+//          println("attackInfo is empty; turning off chase mode.")
+          // Add condition to check if current chase mode is not zero
+          if (currentChaseMode == 1) {
+            // Check if the number of retry attempts has been reached or exceeded
+            if (updatedState.chaseSwitchStatus >= updatedState.retryAttemptsMid) {
+              // Reset the mid-loop retry status
+              updatedState = updatedState.copy(chaseSwitchStatus = 0)
+
+              printInColor(ANSI_RED, "[DEBUG] Changing to stand mode due to empty attack info.")
+              val standModeBoxPosition = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "standModeBox").as[JsObject]
+              val standModeBoxX = (standModeBoxPosition \ "x").as[Int]
+              val standModeBoxY = (standModeBoxPosition \ "y").as[Int]
+
+              val actionsSeq = Seq(
+                MouseAction(standModeBoxX, standModeBoxY, "move"),
+                MouseAction(standModeBoxX, standModeBoxY, "pressLeft"),
+                MouseAction(standModeBoxX, standModeBoxY, "releaseLeft")
+              )
+
+//              logs :+= Log("Move mouse to switch off chase mode.")
+              actions :+= FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+
+            } else {
+              // Increase the retry counter and check if it's time to retry the action
+              updatedState = updatedState.copy(chaseSwitchStatus = updatedState.chaseSwitchStatus + 1)
+//              printInColor(ANSI_RED, "[DEBUG] Waiting to retry changing to stand mode. Retry in: " +
+//                (updatedState.retryAttemptsMid - updatedState.chaseSwitchStatus) + " more loops.")
+            }
+          } else {
+//            println("[DEBUG] Chase mode is already off (mode 0), no action taken.")
+          }
+      }
+
+
+      //      // After handling monsters, update chase mode if necessary
+//      val (newUpdatedState, newActions, newLogs) = updateChaseModeIfNecessary(json, updatedState, actions, logs, settings)
+//      updatedState = newUpdatedState // update the state
+//      actions = newActions // update actions
+//      logs = newLogs // update logs
 
       val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
 
-      println(s"CaveBot enabled: ${settings.caveBotSettings.enabled}")
-      println(s"Current Z-level (presentCharLocationZ): $presentCharLocationZ")
-      println(s"CaveBot levels list contains current Z-level: ${updatedState.caveBotLevelsList.contains(presentCharLocationZ)}")
-      println(s"AutoTarget enabled: ${settings.autoTargetSettings.enabled}")
+//      println(s"CaveBot enabled: ${settings.caveBotSettings.enabled}")
+//      println(s"Current Z-level (presentCharLocationZ): $presentCharLocationZ")
+//      println(s"CaveBot levels list contains current Z-level: ${updatedState.caveBotLevelsList.contains(presentCharLocationZ)}")
+//      println(s"AutoTarget enabled: ${settings.autoTargetSettings.enabled}")
 
       if ((settings.caveBotSettings.enabled && updatedState.caveBotLevelsList.contains(presentCharLocationZ)) || (!(settings.caveBotSettings.enabled) && settings.autoTargetSettings.enabled)) {
         println(s"AutoTarget is ON, status ${updatedState.stateHunting}")
@@ -100,10 +141,13 @@ object AutoTarget {
       println(s"AutoTarget is ON, (ELSE) status ${updatedState.stateHunting}")
       // After handling monsters, update chase mode if necessary
 
-      val (newUpdatedState, newActions, newLogs) = updateChaseModeIfNecessary(json, updatedState, actions, logs, settings)
-      updatedState = newUpdatedState // update the state
-      actions = newActions // update actions
-      logs = newLogs // update logs
+//      val (newUpdatedState, newActions, newLogs) = updateChaseModeIfNecessary(json, updatedState, actions, logs, settings)
+//      updatedState = newUpdatedState // update the state
+//      actions = newActions // update actions
+//      logs = newLogs // update logs
+
+
+
 
 
       (json \ "attackInfo" \ "Id").asOpt[Int] match {
@@ -111,6 +155,60 @@ object AutoTarget {
           println(s"Targeting creature id: $attackedCreatureTarget")
           val tempTargetFreezeHealthPoints = (json \ "attackInfo" \ "HealthPercent").as[Int]
 
+
+          // chase target if requested in UI settings
+          val currentChaseMode = (json \ "characterInfo" \ "ChaseMode").as[Int]
+          val attackInfoPart = (json \ "attackInfo")
+          val tempTargetName = (json \ "attackInfo" \ "Name").as[String]
+
+
+
+          // Find the creature in the creature list with the name matching tempTargetName
+          val targetCreatureSettings = settings.autoTargetSettings.creatureList.find(_.contains(tempTargetName))
+          println(targetCreatureSettings)
+
+          // Determine if chasing is enabled for this creature
+          val chaseEnabled = targetCreatureSettings match {
+            case Some(settingsString) =>
+              settingsString.split(",").exists(_.trim.startsWith("Chase: Yes"))
+            case None =>
+              false
+          }
+
+          // Log current chase mode and whether chasing is enabled
+          println(s"currentChaseMode $currentChaseMode")
+          println(s"chaseEnabled $chaseEnabled")
+
+          if (!(currentChaseMode == 1) && chaseEnabled) {
+            println("inside chase change")
+            if (updatedState.chaseSwitchStatus >= updatedState.retryAttempts) {
+
+              updatedState = updatedState.copy(retryAttempts = 0)
+
+              if (currentChaseMode == 0) {
+                printInColor(ANSI_RED, "[DEBUG] Changing the chase mode.")
+                val chaseModeBoxPosition = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "chaseModeBox").as[JsObject]
+                val chaseModeBoxX = (chaseModeBoxPosition \ "x").as[Int]
+                val chaseModeBoxY = (chaseModeBoxPosition \ "y").as[Int]
+
+                val actionsSeq = Seq(
+                  MouseAction(chaseModeBoxX, chaseModeBoxY, "move"),
+                  MouseAction(chaseModeBoxX, chaseModeBoxY, "pressLeft"),
+                  MouseAction(chaseModeBoxX, chaseModeBoxY, "releaseLeft")
+                )
+
+                logs :+= Log("Move mouse to switch to follow chase mode.")
+                actions :+= FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+              }
+            } else {
+              printInColor(ANSI_RED, "[DEBUG] Looping until changing chase mode!")
+              updatedState = updatedState.copy(retryAttempts = updatedState.retryAttempts + 1)
+            }
+          }
+
+
+
+          // change target if stack
           if (updatedState.targetFreezeHealthStatus >= updatedState.retryAttemptsLong && updatedState.targetFreezeHealthPoints == tempTargetFreezeHealthPoints) {
             printInColor(ANSI_BLUE, f"[DEBUG] Changing target due to health freeze")
 
@@ -162,7 +260,7 @@ object AutoTarget {
           updatedState = updatedState.copy(creatureTarget = attackedCreatureTarget)
 
 
-          // Extract the relevant creature settings from the list based on the targetName
+          // Fire runes at target
           val targetSettings = settings.autoTargetSettings.creatureList.find(_.contains(targetName))
           println(targetSettings)
           targetSettings match {
@@ -465,35 +563,6 @@ object AutoTarget {
     var actions = initialActions
     var logs = initialLogs
     var updatedState = initialState
-    val currentChaseMode = (json \ "characterInfo" \ "ChaseMode").as[Int]
-    // do zmiany ze wzgledu na UI target
-//    if (!(currentChaseMode == 1)) {
-//      if (updatedState.chaseSwitchStatus >= updatedState.retryAttempts) {
-//
-//        updatedState = updatedState.copy(chaseSwitchStatus = 0)
-//
-//
-////        & settings.autoTargetSettings.chaseMonsters
-//        if (currentChaseMode == 0 ) {
-//          printInColor(ANSI_RED, "[DEBUG] Changing the chase mode.")
-//          val chaseModeBoxPosition = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "chaseModeBox").as[JsObject]
-//          val chaseModeBoxX = (chaseModeBoxPosition \ "x").as[Int]
-//          val chaseModeBoxY = (chaseModeBoxPosition \ "y").as[Int]
-//
-//          val actionsSeq = Seq(
-//            MouseAction(chaseModeBoxX, chaseModeBoxY, "move"),
-//            MouseAction(chaseModeBoxX, chaseModeBoxY, "pressLeft"),
-//            MouseAction(chaseModeBoxX, chaseModeBoxY, "releaseLeft")
-//          )
-//
-//          logs :+= Log("Move mouse to switch to follow chase mode.")
-//          actions :+= FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-//        }
-//      } else {
-//        printInColor(ANSI_RED, "[DEBUG] Looping until changing chase mode!")
-//        updatedState = updatedState.copy(chaseSwitchStatus = updatedState.chaseSwitchStatus + 1)
-//      }
-//    }
 
     (updatedState, actions, logs)
   }

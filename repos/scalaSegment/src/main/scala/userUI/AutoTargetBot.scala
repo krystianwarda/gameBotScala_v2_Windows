@@ -30,8 +30,7 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
 
   val addCreatureButton = new Button("Add")
   val removeCreatureButton = new Button("Remove")
-  val increasePriorityButton = new Button("Increase Priority")
-  val decreasePriorityButton = new Button("Decrease Priority")
+
   val creatureListModel = new DefaultListModel[String]()
   val creatureList = new JList[String](creatureListModel)
   val creatureScrollPane = new JScrollPane(creatureList)
@@ -92,13 +91,6 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
     add(addCreatureButton.peer, c)
     c.gridx += 1
     add(removeCreatureButton.peer, c)
-
-    c.gridx += 1
-    add(increasePriorityButton.peer, c)
-
-    c.gridx += 1
-    add(decreasePriorityButton.peer, c)
-
 
     c.gridwidth = 4
     c.gridx = 0
@@ -204,35 +196,6 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
     })
 
 
-    //    // Event listeners for the buttons
-//    addCreatureButton.peer.addActionListener(_ => {
-//      val creatureName = creatureNameTextField.text.trim
-//      val count = creaturesCountDropdown.getSelectedItem.toString
-//      val hpRangeFrom = healthRangeFrom.text.trim
-//      val hpRangeTo = healthRangeTo.text.trim
-//      val dangerLevel = creatureDangerDropdown.getSelectedItem.toString
-//      val targetOnBattle = if(targetMonstersOnBattleCheckbox.selected) "Yes" else "No"
-//      val lootMonster = if(lootMonsterCheckbox.selected) "Yes" else "No"
-//      val chaseMonster = if(chaseMonstersCheckbox.selected) "Yes" else "No"
-//
-//
-//      // Concatenate all information into a single string
-//      val creatureInfo = s"$creatureName, Count: $count, HP: $hpRangeFrom-$hpRangeTo, Danger: $dangerLevel, Target in Battle: $targetOnBattle, Loot: $lootMonster, Chase: $chaseMonster"
-//
-//      if (creatureName.nonEmpty && !creatureListModel.contains(creatureInfo)) {
-//        creatureListModel.addElement(creatureInfo)
-//        // Resetting the input fields after adding a creature might be a good UX practice
-//        creatureNameTextField.text = ""
-//        healthRangeFrom.text = "0"
-//        healthRangeTo.text = "100"
-//        creaturesCountDropdown.setSelectedIndex(0) // Reset to default value if needed
-//        creatureDangerDropdown.setSelectedIndex(0) // Reset to default value if needed
-//        targetMonstersOnBattleCheckbox.selected = false // Reset to default if needed
-//        lootMonsterCheckbox.selected = false
-//      }
-//    })
-
-
     def updateFieldsWithSelectedCreature(creatureInfo: String): Unit = {
       // Example parsing logic based on the provided file format
       val parts = creatureInfo.split(", ")
@@ -265,54 +228,28 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
     })
 
 
-
     removeCreatureButton.peer.addActionListener(_ => {
       val selectedIndices = creatureList.getSelectedIndices
       if (selectedIndices.nonEmpty) {
-        selectedIndices.reverse.foreach { index =>
-          creaturePriorityList.remove(index)
-          creatureListModel.remove(index)
+        // We need to reverse the indices to avoid shifting issues when removing items
+        selectedIndices.sorted(Ordering[Int].reverse).foreach { index =>
+          if (index >= 0 && index < creaturePriorityList.size) {
+            creaturePriorityList.remove(index)
+          }
+          if (index >= 0 && index < creatureListModel.getSize) {
+            creatureListModel.remove(index)
+          }
         }
       }
     })
 
-    increasePriorityButton.peer.addActionListener(_ => {
-      val selectedIndex = creatureList.getSelectedIndex
-      if (selectedIndex > 0) {
-        val item = creaturePriorityList.remove(selectedIndex)
-        creaturePriorityList.insert(selectedIndex - 1, item)
-        updateCreatureList()
-        creatureList.setSelectedIndex(selectedIndex - 1)
-      }
-    })
 
-    decreasePriorityButton.peer.addActionListener(_ => {
-      val selectedIndex = creatureList.getSelectedIndex
-      if (selectedIndex < creaturePriorityList.size - 1 && selectedIndex != -1) {
-        val item = creaturePriorityList.remove(selectedIndex)
-        creaturePriorityList.insert(selectedIndex + 1, item)
-        updateCreatureList()
-        creatureList.setSelectedIndex(selectedIndex + 1)
-      }
-    })
   })
 
   // Updates the JList based on the current state of creaturePriorityList
   private def updateCreatureList(): Unit = {
     creatureListModel.removeAllElements()
     creaturePriorityList.foreach(creatureListModel.addElement)
-  }
-
-  // Updates creaturePriorityList and refreshes the UI to reflect the new list
-  def setTargetPriority(creatures: JList[String]): Unit = {
-    creaturePriorityList.clear()
-
-    // Convert JList to Scala Iterable and append all elements
-    for (i <- 0 until creatures.getModel.getSize) {
-      creaturePriorityList += creatures.getModel.getElementAt(i)
-    }
-
-    updateCreatureList()
   }
 
 
@@ -335,11 +272,6 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
   }
 
 
-  def resetAutoTargetsAndName(): Unit = {
-    // Assuming creatureListModel is the model for waypoints; adjust if it's different
-    creatureListModel.clear()
-    autoTargetSettingsName.text = "not saved"
-  }
 
   saveButton.addActionListener(_ => {
     val userAppDataPath = System.getenv("APPDATA")

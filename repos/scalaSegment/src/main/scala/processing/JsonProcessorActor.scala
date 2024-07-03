@@ -118,6 +118,7 @@ case class ProcessorState(
                            lootingStatus: Int = 0,
                            lootingRestryStatus: Int = 0,
                            retryAttempts: Int = 2,
+                           retryAttemptsMid: Int = 6,
                            retryAttemptsLong: Int = 30,
                            targetFreezeStatus: Int = 0,
                            targetFreezeHealthStatus: Int = 0,
