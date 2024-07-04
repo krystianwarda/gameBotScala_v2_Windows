@@ -63,7 +63,7 @@ object AutoTarget {
         }
       }
 
-      // Check if the attackInfo is empty
+/*      // Check if the attackInfo is empty
       val attackInfoPart = (json \ "attackInfo").asOpt[JsObject]
       // Retrieve current chase mode
       val currentChaseMode = (json \ "characterInfo" \ "ChaseMode").as[Int]
@@ -101,7 +101,7 @@ object AutoTarget {
           } else {
 //            println("[DEBUG] Chase mode is already off (mode 0), no action taken.")
           }
-      }
+      }*/
 
 
       //      // After handling monsters, update chase mode if necessary
@@ -133,7 +133,8 @@ object AutoTarget {
               //            println("Skipping actions due to absence of monsters.")
             }
           case JsError(_) =>
-          //          println("battleInfo is null or invalid format. Skipping processing.")
+          //          println("battleInfo is null or invalid
+          //          format. Skipping processing.")
         }
       }
     } else if (settings.autoTargetSettings.enabled && updatedState.stateHunting == "attacking") {
@@ -162,28 +163,42 @@ object AutoTarget {
           val tempTargetName = (json \ "attackInfo" \ "Name").as[String]
 
 
+          // Print out the entire settings list for verification
+          println("Auto Target Settings List:")
+          settings.autoTargetSettings.creatureList.foreach(println)
 
-          // Find the creature in the creature list with the name matching tempTargetName
-          val targetCreatureSettings = settings.autoTargetSettings.creatureList.find(_.contains(tempTargetName))
-          println(targetCreatureSettings)
+          // Attempt to find specific settings for the creature or fallback to 'All'
+          val targetCreatureSettings = settings.autoTargetSettings.creatureList.find(_.toLowerCase.contains(tempTargetName.toLowerCase))
+            .orElse(settings.autoTargetSettings.creatureList.find(_.contains("All")))
+
+          println(s"Settings for target $tempTargetName: $targetCreatureSettings")
 
           // Determine if chasing is enabled for this creature
           val chaseEnabled = targetCreatureSettings match {
             case Some(settingsString) =>
-              settingsString.split(",").exists(_.trim.startsWith("Chase: Yes"))
+              // Split the string by comma and refine checking for the chase status
+              val chaseSetting = settingsString.split(",").map(_.trim).find(_.startsWith("Chase:"))
+              chaseSetting match {
+                case Some(setting) => setting.split(":")(1).trim.equalsIgnoreCase("yes")
+                case None =>
+                  println("Chase setting not found, defaulting to false.")
+                  false
+              }
             case None =>
+              println("No settings found for target, defaulting to settings for 'All'.")
               false
           }
 
           // Log current chase mode and whether chasing is enabled
-          println(s"currentChaseMode $currentChaseMode")
-          println(s"chaseEnabled $chaseEnabled")
+          println(s"currentChaseMode: $currentChaseMode")
+          println(s"chaseEnabled: $chaseEnabled")
+
 
           if (!(currentChaseMode == 1) && chaseEnabled) {
             println("inside chase change")
-            if (updatedState.chaseSwitchStatus >= updatedState.retryAttempts) {
+            if (updatedState.chaseSwitchStatus >= updatedState.retryAttemptsMid) {
 
-              updatedState = updatedState.copy(retryAttempts = 0)
+              updatedState = updatedState.copy(chaseSwitchStatus = 0)
 
               if (currentChaseMode == 0) {
                 printInColor(ANSI_RED, "[DEBUG] Changing the chase mode.")
@@ -202,14 +217,18 @@ object AutoTarget {
               }
             } else {
               printInColor(ANSI_RED, "[DEBUG] Looping until changing chase mode!")
-              updatedState = updatedState.copy(retryAttempts = updatedState.retryAttempts + 1)
+              updatedState = updatedState.copy(chaseSwitchStatus = updatedState.chaseSwitchStatus + 1)
             }
           }
 
 
 
-          // change target if stack
-          if (updatedState.targetFreezeHealthStatus >= updatedState.retryAttemptsLong && updatedState.targetFreezeHealthPoints == tempTargetFreezeHealthPoints) {
+
+
+          if (tempTargetFreezeHealthPoints < updatedState.targetFreezeHealthPoints) {
+            updatedState = updatedState.copy(targetFreezeHealthStatus = 0)
+
+          } else if (updatedState.targetFreezeHealthStatus >= updatedState.retryAttemptsLong && updatedState.targetFreezeHealthPoints == tempTargetFreezeHealthPoints) {
             printInColor(ANSI_BLUE, f"[DEBUG] Changing target due to health freeze")
 
             val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ attackedCreatureTarget.toString).asOpt[JsObject]
@@ -390,7 +409,13 @@ object AutoTarget {
 
           // Use the existing creatureList from settings
           val jsonResult = transformToJSON(settings.autoTargetSettings.creatureList)
-          //          println(Json.prettyPrint(Json.toJson(jsonResult)))
+//          println(Json.prettyPrint(Json.toJson(jsonResult)))
+
+
+          // Checking if 'All' creatures are targeted
+          val targetAllCreatures = jsonResult.exists { json =>
+            (json \ "name").as[String].equalsIgnoreCase("All")
+          }
 
           // Now use Reads from the Creature object
           val creatureDangerMap = jsonResult.map { json =>
@@ -400,12 +425,17 @@ object AutoTarget {
 
           // create a list of monsters to be looted
           if (updatedState.monstersListToLoot.isEmpty) {
-            // Parse JSON to List of Creature objects and filter to get names of creatures with loot
-            val monstersWithLoot = jsonResult.flatMap { json =>
-              Json.parse(json.toString()).validate[Creature] match {
-                case JsSuccess(creature, _) if creature.loot => Some(creature.name)
-                case _ => None
-              }
+            val monstersWithLoot = if (targetAllCreatures) {
+              // Take all monster names if targeting "All" and convert to List
+              monsters.map(_._2).toList
+            } else {
+              // Parse JSON to List of Creature objects and filter to get names of creatures with loot
+              jsonResult.flatMap { json =>
+                Json.parse(json.toString()).validate[Creature] match {
+                  case JsSuccess(creature, _) if creature.loot => Some(creature.name)
+                  case _ => None
+                }
+              }.toList // Ensure the result is a List
             }
             // Assuming updatedState is being updated within a case class or similar context
             updatedState = updatedState.copy(monstersListToLoot = monstersWithLoot)
@@ -413,45 +443,79 @@ object AutoTarget {
 
 
           // Filter and sort based on the danger level, sorting by descending danger
-          var sortedMonsters = monsters
-            .filter { case (_, name) => creatureDangerMap.contains(name) }
-            .sortBy { case (_, name) => -creatureDangerMap(name) } // Descending order of danger
+          var sortedMonsters = if (targetAllCreatures) {
+            monsters // If targeting all, skip the danger level filtering
+          } else {
+            monsters
+              .filter { case (_, name) => creatureDangerMap.contains(name) }
+              .sortBy { case (_, name) => -creatureDangerMap(name) } // Descending order of danger
+          }
 
-          // Filter monsters with ID >= 5
-          sortedMonsters = sortedMonsters.filter { case (id, _) => id >= 5 }
+          // Further filtering based on IDs or other conditions should be adjusted based on whether "All" is targeted
+          sortedMonsters = if (targetAllCreatures) {
+            sortedMonsters.filter { case (id, _) => id >= 5 }
+          } else {
+            sortedMonsters
+              .filter { case (id, _) => id >= 5 }
+              .sortBy { case (id, _) =>
+                val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ id.toString).asOpt[JsObject]
+                battleCreaturePosition.flatMap(pos => (pos \ "PosY").asOpt[Int]).getOrElse(Int.MaxValue)
+              }
+          }
 
-
-          // Sort based on danger and position
-          sortedMonsters = sortedMonsters.sortBy { case (_, name) => -creatureDangerMap(name) }
-
-          // Further filter and sort
-          sortedMonsters = sortedMonsters
-            .filter { case (id, _) => id >= 5 }
-            .sortBy { case (id, _) =>
-              val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ id.toString).asOpt[JsObject]
-              battleCreaturePosition.flatMap(pos => (pos \ "PosY").asOpt[Int]).getOrElse(Int.MaxValue)
-            }
+//          // Filter and sort based on the danger level, sorting by descending danger
+//          var sortedMonsters = monsters
+//            .filter { case (_, name) => creatureDangerMap.contains(name) }
+//            .sortBy { case (_, name) => -creatureDangerMap(name) } // Descending order of danger
+//
+//          // Filter monsters with ID >= 5
+//          sortedMonsters = sortedMonsters.filter { case (id, _) => id >= 5 }
+//
+//
+//          // Sort based on danger and position
+//          sortedMonsters = sortedMonsters.sortBy { case (_, name) => -creatureDangerMap(name) }
+//
+//          // Further filter and sort
+//          sortedMonsters = sortedMonsters
+//            .filter { case (id, _) => id >= 5 }
+//            .sortBy { case (id, _) =>
+//              val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ id.toString).asOpt[JsObject]
+//              battleCreaturePosition.flatMap(pos => (pos \ "PosY").asOpt[Int]).getOrElse(Int.MaxValue)
+//            }
 
           var topFourMonsters = sortedMonsters.take(4)
-            .sortBy { case (_, name) => -creatureDangerMap(name) }
+            .sortBy { case (_, name) => -creatureDangerMap.getOrElse(name, 0) }
 
           printInColor(ANSI_BLUE, f"[DEBUG] Before reshuffling monster list: ${updatedState.targetFreezeHealthStatus} / ${updatedState.retryAttemptsLong}")
 
           if (updatedState.targetFreezeHealthStatus >= updatedState.retryAttemptsLong) {
-            println(s"[DEBUG] Reshuffling monster list: $topFourMonsters")
+            println(s"[DEBUG] Pre Reshuffling monster list: $topFourMonsters")
+
 
             // Remove monster with targetFreezeCreatureId from the list
             val filteredMonsters = topFourMonsters.filter { case (id, _) => id != updatedState.targetFreezeCreatureId }
+            if (filteredMonsters.isEmpty) {
+              println("[DEBUG] No monsters left after removing the target freeze creature.")
+            }
 
-            // Shuffle the filtered list
+            // Shuffle the filtered list and then sort by descending danger
             val shuffledMonsters = scala.util.Random.shuffle(filteredMonsters)
-              .sortBy { case (_, name) => -creatureDangerMap(name) }
+              .sortBy { case (_, name) => -creatureDangerMap.getOrElse(name, 0) } // Safe access with default if key not found
 
-            println(s"[DEBUG] Reshuffling monster list: $shuffledMonsters")
+
+            //            // Remove monster with targetFreezeCreatureId from the list
+//            val filteredMonsters = topFourMonsters.filter { case (id, _) => id != updatedState.targetFreezeCreatureId }
+//
+//
+//            // Shuffle the filtered list
+//            val shuffledMonsters = scala.util.Random.shuffle(filteredMonsters)
+//              .sortBy { case (_, name) => -creatureDangerMap(name) }
+
+            println(s"[DEBUG] After Reshuffling monster list: $shuffledMonsters")
 
             // Update topFourMonsters with the shuffled list
             topFourMonsters = shuffledMonsters
-
+            updatedState = updatedState.copy(targetFreezeHealthStatus = 0)
           }
 
 
