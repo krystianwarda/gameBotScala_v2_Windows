@@ -120,8 +120,13 @@ object SettingsUtils {
   case class TeamHuntSettings(
                                enabled: Boolean = false,
                                followBlocker: Boolean = false,
-                               blockerName: String = ""
+                               blockerName: String = "",
+                               youAreBlocker: Boolean = false,
+                               waitForTeam: Boolean = false,
+                               chaseMonsterAndExetaRes: Boolean = false,
+                               teamMembersList: List[String] = List()
                              )
+
 
 
   case class AutoLootSettings(

@@ -2,10 +2,10 @@ package userUI
 import java.awt.GridBagLayout
 import java.awt.GridBagConstraints
 import processing.{ConnectToServer, InitializeProcessor}
-import main.scala.MainApp.{jsonProcessorActorRef, periodicFunctionActorRef}
+import main.scala.MainApp.{jsonProcessorActorRef, periodicFunctionActorRef, uiAppActorRef}
 import play.api.libs.json.{Format, Json}
 
-import javax.swing.{DefaultListModel, JComboBox, JList}
+import javax.swing.{DefaultComboBoxModel, DefaultListModel, JComboBox, JList}
 //import userUI.SettingsUtils.{HealingSettings, ProtectionZoneSettings, RuneMakingSettings, UISettings, saveSettingsToFile}
 import userUI.SettingsUtils._
 import scala.swing.{Component, Dialog, FileChooser, Insets}
@@ -163,7 +163,15 @@ class SwingApp(playerClassList: List[Player],
     enabled = teamHuntCheckbox.selected,
     followBlocker = teamHuntBot.followBlockerCheckbox.selected,
     blockerName = teamHuntBot.blockerName.text,
+    youAreBlocker = teamHuntBot.youAreBlocker.selected,
+    waitForTeam = teamHuntBot.waitCheckbox.selected,
+    chaseMonsterAndExetaRes = teamHuntBot.chaseMonsterCheckbox.selected,
+    teamMembersList = comboBoxToList(teamHuntBot.teamMembersDropdown.peer)  // Using the new function
   )
+
+
+
+
 
   def collectTrainingSettings(): TrainingSettings = TrainingSettings(
     enabled = trainingCheckbox.selected,
@@ -361,7 +369,13 @@ class SwingApp(playerClassList: List[Player],
     teamHuntCheckbox.selected = teamHuntSettings.enabled
     teamHuntBot.followBlockerCheckbox.selected = teamHuntSettings.followBlocker
     teamHuntBot.blockerName.text = teamHuntSettings.blockerName
+    teamHuntBot.youAreBlocker.selected = teamHuntSettings.youAreBlocker
+    teamHuntBot.waitCheckbox.selected = teamHuntSettings.waitForTeam
+    teamHuntBot.chaseMonsterCheckbox.selected = teamHuntSettings.chaseMonsterAndExetaRes
+    setComboBoxModel(teamHuntBot.teamMembersDropdown.peer, teamHuntSettings.teamMembersList)
   }
+
+
 
   def applyHotkeysSettings(hotkeysSettings: HotkeysSettings): Unit = {
     // Apply the enabled state to the hotkeys checkbox
@@ -449,6 +463,22 @@ class SwingApp(playerClassList: List[Player],
         // Sending the initialization message to JsonProcessorActor
         jsonProcessorActorRef ! InitializeProcessor(currentPlayer, currentSettings)
 
+    }
+  }
+
+  val updateButton = new Button("Update Settings") {
+    reactions += {
+      case ButtonClicked(_) =>
+        val updatedSettings = collectSettingsFromUI()
+        // Send the updated settings to the actors
+        println(s"Sending UpdateSettings to JsonProcessorActor: $updatedSettings")
+        jsonProcessorActorRef ! MainApp.UpdateSettings(updatedSettings)
+        periodicFunctionActorRef ! MainApp.UpdateSettings(updatedSettings)
+        uiAppActorRef ! MainApp.UpdateSettings(updatedSettings)
+        mainActorRef ! MainApp.UpdateSettings(updatedSettings)
+        // Add more actors if necessary
+
+        println("Settings have been updated and sent to the actors.")
     }
   }
 
@@ -550,7 +580,7 @@ class SwingApp(playerClassList: List[Player],
       }
 
       // Adding Buttons in the second column
-      val buttonComponents = Seq(runButton, saveButton, loadButton)
+      val buttonComponents = Seq(runButton, updateButton, saveButton, loadButton)
 
       for ((button, idx) <- buttonComponents.zipWithIndex) {
         c.gridx = 1
@@ -649,14 +679,14 @@ class SwingApp(playerClassList: List[Player],
   val mPotionHealManaMinField = new TextField()
 
 
-  val updateButton = new Button("Update") {
-    reactions += {
-      case ButtonClicked(_) =>
-        println("Update button clicked")
-        saveExample()
-        updateExample()
-    }
-  }
+//  val updateButton = new Button("Update") {
+//    reactions += {
+//      case ButtonClicked(_) =>
+//        println("Update button clicked")
+//        saveExample()
+//        updateExample()
+//    }
+//  }
 
   def setListModelFromGridInfos(jList: JList[GridInfo], seq: Seq[String]): Unit = {
 //    println(s"Setting list model from grid infos: $seq")
@@ -669,6 +699,27 @@ class SwingApp(playerClassList: List[Player],
     }
     jList.setModel(model)
 //    println(s"Model set with ${model.getSize} grid infos.")
+  }
+
+  // Converts JComboBox items to Seq[String]
+  def comboBoxToSeq(comboBox: JComboBox[String]): Seq[String] = {
+    val model = comboBox.getModel
+    val size = model.getSize
+    (0 until size).map(i => model.getElementAt(i))
+  }
+
+  // Converts JComboBox items to List[String]
+  def comboBoxToList(comboBox: JComboBox[String]): List[String] = {
+    val model = comboBox.getModel
+    val size = model.getSize
+    (0 until size).map(i => model.getElementAt(i)).toList  // Directly converting to List
+  }
+
+
+  // Sets model for JComboBox from Seq[String]
+  def setComboBoxModel(comboBox: JComboBox[String], items: Seq[String]): Unit = {
+    val model = new DefaultComboBoxModel[String](items.toArray)
+    comboBox.setModel(model)
   }
 
 

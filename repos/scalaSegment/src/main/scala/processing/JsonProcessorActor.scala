@@ -210,6 +210,9 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     case msg =>
       println(s"JsonProcessorActor received an unhandled message type: $msg")
 
+    case UpdateSettings(newSettings) =>
+      println(s"Received UpdateSettings with: $newSettings")
+      settings = Some(newSettings)
 
   }
 

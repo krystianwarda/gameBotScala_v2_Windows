@@ -9,6 +9,9 @@ import play.api.libs.json._
 import java.lang.System.currentTimeMillis
 import utils.consoleColorPrint._
 
+
+
+
 object TeamHunt {
   def computeTeamHuntActions(json: JsValue, settings: UISettings, currentState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
     printInColor(ANSI_RED, f"[DEBUG] Performing computeTeamHuntActions action")
@@ -29,16 +32,28 @@ object TeamHunt {
       if (settings.teamHuntSettings.followBlocker) {
         val blockerName = settings.teamHuntSettings.blockerName
 
-        // Extracting the "battleInfo" object from the root JSON
+
+
+        // Extracting the "spyLevelInfo" object from the root JSON
         (json \ "spyLevelInfo").validate[JsObject] match {
-          case JsSuccess(battleInfo, _) =>
-            // Iterating over each entry in the "battleInfo" object
-            val maybeBlocker = battleInfo.value.find {
+          case JsSuccess(spyInfo, _) =>
+            // First attempt to find the specified blocker
+            val maybeBlocker = spyInfo.value.find {
               case (_, jsValue) =>
                 (jsValue \ "Name").asOpt[String].contains(blockerName)
             }
 
-            maybeBlocker match {
+            // If the blocker isn't found, select another team member
+            val effectiveBlocker = maybeBlocker.orElse {
+              // Finding another team member who is not the specified blocker
+              spyInfo.value.find {
+                case (_, jsValue) =>
+                  settings.teamHuntSettings.teamMembersList.contains((jsValue \ "Name").as[String]) &&
+                    (jsValue \ "Name").as[String] != blockerName
+              }
+            }
+
+            effectiveBlocker match {
               case Some((_, blockerInfo)) =>
                 val blockerPosX = (blockerInfo \ "PositionX").as[Int]
                 val blockerPosY = (blockerInfo \ "PositionY").as[Int]
@@ -46,9 +61,10 @@ object TeamHunt {
                 println(s"Blocker Position: X=$blockerPosX, Y=$blockerPosY")
                 val blockerCharLocation = Vec(blockerPosX, blockerPosY)
                 updatedState = updatedState.copy(lastBlockerPos = (blockerPosX, blockerPosY, blockerPosZ))
+
                 // Check if the blocker is at the same vertical level
                 if (blockerPosZ == presentCharLocationZ) {
-                  println("Blocker is reachable")
+                  println("Blocker is on the same level")
                   val chebyshevDistance = Math.max(
                     Math.abs(blockerCharLocation.x - presentCharLocation.x),
                     Math.abs(blockerCharLocation.y - presentCharLocation.y)
@@ -89,18 +105,37 @@ object TeamHunt {
                       }
                   }
                 } else {
-                  println("Blocker changed level")
-
-
+                  println(s"Blocker changed level. Last blocker position: ${updatedState.lastBlockerPos}")
                   // Fetch tiles data from JSON
                   val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
 
-                  // Define levelMovementEnablersIdsList
-                  val levelMovementEnablersIdsList: List[Int] = List(
-                    414, 433, 369, 469, 1977, 1947, 1948, 386, 594
-                  )
 
-                  // Corrected collection manipulation
+                  // Declare the level movement enablers lists outside the conditionals
+                  var levelMovementEnablersIdsList: List[Int] = List()
+
+                  if (blockerPosZ < presentCharLocationZ) {
+                    println("Blocker went up")
+                    levelMovementEnablersIdsList = List(
+                      1948, // ladder up
+                      1947, // stairs up
+                      1952, // stone stairs up
+                      386, // rope up
+                      1958 // stairs up
+                    )
+                  } else if (blockerPosZ > presentCharLocationZ) {
+                    println("Blocker went down")
+                    levelMovementEnablersIdsList = List(
+                      414, // ladder down
+                      428, // stairs down
+                      435, // grate down
+                      434, // stairs down
+                      593, // closed shovel hole
+                      594, // opened shovel hole
+                      469 // stone stairs down
+                    )
+                  }
+
+                  // Collect tiles which contain items that are present in the current levelMovementEnablersIdsList
                   val potentialTiles = tiles.collect {
                     case (tileId, tileData) if (tileData \ "items").as[Map[String, JsObject]].values.exists(itemData =>
                       levelMovementEnablersIdsList.contains((itemData \ "id").as[Int])
@@ -114,13 +149,14 @@ object TeamHunt {
                       val x = (screenData \ "x").as[Int]
                       val y = (screenData \ "y").as[Int]
                       printInColor(ANSI_BLUE, s"[WRONG FLOOR] Tile check ID: $tileId ($x, $y)")
-                      (tileId, x, y)
+                      (tileId, x, y) // Note this tuple includes tileId
                     }
                   }.headOption // Get the first available screen coordinate
 
+
                   tileScreenCoordinates match {
                     case Some((tileId, screenX, screenY)) =>
-                      printInColor(ANSI_BLUE, s"[WRONG FLOOR] Found valid tile on screen at ($screenX, $screenY), Character location: ($presentCharLocationX, $presentCharLocationY)")
+                      printInColor(ANSI_BLUE, s"[WRONG FLOOR] Found valid tile ($tileId) on screen at ($screenX, $screenY), Character location: ($presentCharLocationX, $presentCharLocationY)")
 
                       // Check if it's the first time or if sufficient time has elapsed since the last action
                       if (updatedState.chasingBlockerLevelChangeTime == 0 || (updatedState.currentTime - updatedState.chasingBlockerLevelChangeTime > updatedState.longTimeLimit)) {
@@ -145,6 +181,8 @@ object TeamHunt {
                 val lastBlockerXPos = updatedState.lastBlockerPos._1
                 val lastBlockerYPos = updatedState.lastBlockerPos._2
                 val lastBlockerZPos = updatedState.lastBlockerPos._3
+                println(s"Blocker last position: X=$lastBlockerXPos, Y=$lastBlockerYPos, Z=$lastBlockerZPos")
+
 
                 // Adjusting X coordinate to ensure it's within a max distance of 7
                 val adjustedBlockerXPos = if ((lastBlockerXPos - presentCharLocationX).abs > 7) {
@@ -183,11 +221,11 @@ object TeamHunt {
             }
 
           case JsError(errors) =>
-            println("SpyInfo is empty: " + errors)
+            println(s"Error parsing spyLevelInfo: $errors")
         }
 
-      }
 
+      }
 
 
     }

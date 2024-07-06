@@ -90,6 +90,8 @@ object MainApp extends App {
   // Define case classes and objects as before
   val playerClassList: List[Player] = List(new Player("Player1"))
   case class StartActors(settings: UISettings)
+  case class UpdateSettings(settings: UISettings)
+
   case class JsonData(json: JsValue)
   case class BinaryData(data: ByteString)
   lazy val jsonProcessorActorRef: ActorRef = system.actorOf(Props(new JsonProcessorActor(mouseMovementActorRef, actionStateManagerRef, actionKeyboardManagerRef)), "jsonProcessor")
