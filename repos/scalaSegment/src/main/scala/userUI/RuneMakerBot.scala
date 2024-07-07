@@ -11,6 +11,8 @@ class RuneMakerBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Act
 
   val spellComboBox = new ComboBox(List("adori gran flam"))
   val manaTextField = new TextField(10) // Width set to 10
+  val stackConjuredAmmoCheckbox = new CheckBox("Stack conjured ammo")
+  val makeRunesCheckbox = new CheckBox("Make runes checkbox")
 
   val runeMakerTab: Component = Component.wrap(new JPanel(new GridBagLayout) {
     val c = new GridBagConstraints()
@@ -19,15 +21,21 @@ class RuneMakerBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Act
     // Spell Label and ComboBox
     c.gridx = 0
     c.gridy = 0
+
+    add(makeRunesCheckbox.peer, c)
+    c.gridy = 1
     add(new Label("Spell").peer, c)
     c.gridx = 1
     add(spellComboBox.peer, c)
 
     // Mana Label and TextField
     c.gridx = 0
-    c.gridy = 1
+    c.gridy = 2
     add(new Label("Mana").peer, c)
     c.gridx = 1
     add(manaTextField.peer, c)
+    c.gridx = 0
+    c.gridy = 3
+    add(stackConjuredAmmoCheckbox.peer, c)
   })
 }

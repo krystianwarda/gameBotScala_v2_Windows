@@ -7,19 +7,38 @@ import player.Player
 import javax.swing._
 import java.awt._
 import java.awt.event._
+import scala.swing.MenuBar.NoMenuBar.reactions
 import scala.swing._
-import scala.swing.event.ButtonClicked
+
+import scala.swing.event.{ButtonClicked, SelectionChanged}
 
 
 // Ensure RectangleSettings is defined as a case class with parameters
+// RectangleSettings defined as a case class
 case class RectangleSettings(x: Int, y: Int, width: Int, height: Int)
+
+
+
+// Companion object for RectangleSettings
 object RectangleSettings {
-  // Ensure there's an implicit Format instance for RectangleSettings
   implicit val format: Format[RectangleSettings] = Json.format[RectangleSettings]
 }
+
+
 class FishingBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: ActorRef) {
   var selectedRectangles: Seq[String] = Seq.empty // Change to store strings directly
-//var selectedRectangles: Seq[RectangleSettings] = Seq.empty
+  var fishThrowoutRectangles : Seq[String] = Seq.empty
+  var currentMode: String = "Selected"  // Default mode
+
+  // Define the ComboBox within the Scala Swing framework
+  val modeSelector = new ComboBox(Seq("Selected", "Throwout"))
+
+  // Listen to selection changes
+  modeSelector.selection.reactions += {
+    case SelectionChanged(`modeSelector`) =>
+      currentMode = modeSelector.selection.item
+      println(s"Current mode set to: $currentMode")
+  }
 
   private val drawingComponent = new JPanel() {
     setOpaque(false)
@@ -85,7 +104,7 @@ class FishingBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
   overlayFrame.getContentPane.setLayout(new BorderLayout())
   overlayFrame.getContentPane.add(drawingComponent, BorderLayout.CENTER)
 
-  // Method to create grid overlay
+
   private def createGridOverlay(startPoint: Point, endPoint: Point): Unit = {
     val width = Math.abs(startPoint.x - endPoint.x)
     val height = Math.abs(startPoint.y - endPoint.y)
@@ -93,50 +112,40 @@ class FishingBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
     val gridFrame = new JFrame()
     gridFrame.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE)
     gridFrame.setUndecorated(true)
-    gridFrame.setSize(width, height) // Set the size exactly as the marked area
-
-    // Calculate position for gridFrame based on startPoint
+    gridFrame.setSize(width, height)
     val screenSize = Toolkit.getDefaultToolkit.getScreenSize
     val x = Math.min(startPoint.x, screenSize.width - width)
     val y = Math.min(startPoint.y, screenSize.height - height)
     gridFrame.setLocation(x, y)
-
-
-    // Set semi-transparent background color
     val transparentWhite = new Color(255, 255, 255, 128)
     gridFrame.setBackground(transparentWhite)
 
-    // Step 1: Define the panel
     val panel: JPanel = new JPanel(new GridLayout(11, 15))
-    panel.setOpaque(false) // Ensure panel is not opaque to show the frame's background
-
-    // Step 2: Populate the panel with buttons
+    panel.setOpaque(false)
     for (_y <- 0 until 11; _x <- 0 until 15) {
       val rectangle = new Rectangle(_x, _y)
       val button = new JButton(rectangle.toString) {
-        setOpaque(true) // Necessary for color visibility
-        setBackground(new Color(255, 255, 255, 21)) // Initial very transparent white
+        setOpaque(true)
+        setBackground(new Color(255, 255, 255, 21))
         setBorder(BorderFactory.createLineBorder(Color.BLACK))
-        // Use client properties to track selection state
         putClientProperty("selected", false)
-
         addActionListener(_ => {
           val isSelected = Option(getClientProperty("selected")).getOrElse(false).asInstanceOf[Boolean]
           if (!isSelected) {
-            setBackground(new Color(0, 255, 0, 21)) // Semi-transparent green when selected
+            setBackground(new Color(0, 255, 0, 21))
             putClientProperty("selected", true)
           } else {
-            setBackground(new Color(255, 255, 255, 21)) // Back to very transparent white
+            setBackground(new Color(255, 255, 255, 21))
             putClientProperty("selected", false)
           }
         })
       }
-      panel.add(button) // Add button to panel here, after panel has been defined
+      panel.add(button)
     }
 
-
-    // Directly add panel to gridFrame without BorderLayout.SOUTH modification
     gridFrame.getContentPane.add(panel)
+    gridFrame.setVisible(true)
+
 
     // Adjustments for closeButtonFrame to be placed outside the gridFrame
     val closeButtonFrame = new JFrame()
@@ -156,12 +165,25 @@ class FishingBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
         .filter(button => Option(button.getClientProperty("selected")).getOrElse(false).asInstanceOf[Boolean])
         .map(_.getText) // Directly use the button text as the identifier
 
-      // Update the selectedRectangles variable to hold these identifiers
-      this.selectedRectangles = markedRectangleIds
-      // Print selected tiles
-      println("Selected tiles:")
-      markedRectangleIds.foreach(println)
-      // Dispose of the frames after updating
+
+
+      // Update the correct list based on the current mode
+      if (currentMode == "Selected") {
+        selectedRectangles = markedRectangleIds
+        markedRectangleIds.foreach(println)
+        println("Selected tiles in Selected Mode:")
+      } else {
+        fishThrowoutRectangles = markedRectangleIds
+        markedRectangleIds.foreach(println)
+        println("Selected tiles in Throwout Mode:")
+      }
+
+//      // Update the selectedRectangles variable to hold these identifiers
+//      this.selectedRectangles = markedRectangleIds
+//      // Print selected tiles
+//      println("Selected tiles:")
+//      markedRectangleIds.foreach(println)
+//      // Dispose of the frames after updating
       gridFrame.dispose()
       closeButtonFrame.dispose()
     })
@@ -174,6 +196,7 @@ class FishingBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
     gridFrame.setVisible(true)
     gridFrame.requestFocus()
   }
+
 
   // Helper method to collect marked rectangles - unchanged, assuming it's implemented in your original code
   private def collectMarkedRectangles(panel: JPanel): Seq[String] = {
@@ -200,7 +223,12 @@ class FishingBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
     }
   }
 
-  val fishingTab: scala.swing.BoxPanel = new scala.swing.BoxPanel(scala.swing.Orientation.Vertical) {
+  // Integration of ComboBox into your UI layout
+  val fishingTab: BoxPanel = new BoxPanel(Orientation.Vertical) {
+    contents += modeSelector
     contents += showOverlayButton
+    // Other components as needed
   }
+
+
 }

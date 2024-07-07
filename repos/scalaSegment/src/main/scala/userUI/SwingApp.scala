@@ -104,8 +104,10 @@ class SwingApp(playerClassList: List[Player],
 
   def collectRuneMakingSettings(): RuneMakingSettings = RuneMakingSettings(
     enabled = runeMakerCheckbox.selected,
+    makeRunes = runeMakerBot.makeRunesCheckbox.selected,
     selectedSpell = runeMakerBot.spellComboBox.selection.item,
-    requiredMana = parseTextFieldToInt(runeMakerBot.manaTextField.text)
+    requiredMana = parseTextFieldToInt(runeMakerBot.manaTextField.text),
+    stackConjuredAmmo = runeMakerBot.stackConjuredAmmoCheckbox.selected,
   )
 
   def collectHotkeysSettings(): HotkeysSettings = HotkeysSettings(
@@ -134,7 +136,8 @@ class SwingApp(playerClassList: List[Player],
 
   def collectFishingSettings(): FishingSettings = FishingSettings(
     enabled = fishingCheckbox.selected,
-    selectedRectangles = fishingBot.selectedRectangles
+    selectedRectangles = fishingBot.selectedRectangles,
+    fishThrowoutRectangles = fishingBot.fishThrowoutRectangles
   )
 
   def collectCaveBotSettings(): CaveBotSettings = CaveBotSettings(
@@ -285,6 +288,8 @@ class SwingApp(playerClassList: List[Player],
     applyCaveBotSettings(settings.caveBotSettings)
     applyAutoTargetSettings(settings.autoTargetSettings)
     applyAutoLootSettings(settings.autoLootSettings)
+    applyRuneMakingSettings(settings.runeMakingSettings)
+    applyFishingSettings(settings.fishingSettings)
     applyTeamHuntSettings(settings.teamHuntSettings)
     applyHotkeysSettings(settings.hotkeysSettings)
   }
@@ -411,8 +416,23 @@ class SwingApp(playerClassList: List[Player],
 
   def applyRuneMakingSettings(runeMakingSettings: RuneMakingSettings): Unit = {
     runeMakerCheckbox.selected = runeMakingSettings.enabled
+    runeMakerBot.makeRunesCheckbox.selected = runeMakingSettings.makeRunes
+    runeMakerBot.stackConjuredAmmoCheckbox.selected = runeMakingSettings.stackConjuredAmmo
     // Similarly, apply rune making specific settings here
   }
+
+  def applyFishingSettings(fishingSettings: FishingSettings): Unit = {
+    fishingCheckbox.selected = fishingSettings.enabled
+    fishingBot.selectedRectangles = fishingSettings.selectedRectangles
+    fishingBot.fishThrowoutRectangles = fishingSettings.fishThrowoutRectangles
+
+    // Optionally, if there are UI components directly showing these rectangles (like lists or grids),
+    // you would update them here. Example:
+    // setListModel(fishingBot.uiSelectedRectanglesList, fishingSettings.selectedRectangles)
+    // setListModel(fishingBot.uiFishThrowoutRectanglesList, fishingSettings.fishThrowoutRectangles)
+  }
+
+
 
   def applyProtectionZoneSettings(protectionZoneSettings: ProtectionZoneSettings): Unit = {
     protectionZoneCheckbox.selected = protectionZoneSettings.enabled

@@ -4,7 +4,9 @@ import mouse.FakeAction
 import play.api.libs.json.{JsError, JsObject, JsValue}
 import userUI.SettingsUtils.UISettings
 import play.api.libs.json._
+import processing.Process.extractOkButtonPosition
 import utils.consoleColorPrint.{ANSI_GREEN, ANSI_RED, printInColor}
+
 import scala.util.Random
 
 object AutoLoot {
@@ -49,26 +51,7 @@ object AutoLoot {
           } else {
             printInColor(ANSI_RED, f"[DEBUG] Closing object movement window. Not enough time has passed since the last execution: ${updatedState.lastExtraWindowLoot}ms ago.")
           }
-/*          if (updatedState.extraWidowLootStatus == 0) {
-            val actionsSeq = Seq(
-              MouseAction(posX, posY, "move"),
-              MouseAction(posX, posY, "pressLeft"),
-              MouseAction(posX, posY, "releaseLeft")
-            )
-            printInColor(ANSI_RED, "[DEBUG] Closing object movement window.")
-            actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-            // Increment the status to prevent execution in the next loops
-            updatedState = updatedState.copy(extraWidowLootStatus = updatedState.extraWidowLootStatus + 1)
-          } else {
-            // Check if it's time to reset the status for the next possible execution cycle
-            if (updatedState.extraWidowLootStatus >= updatedState.retryAttempts) {
-              updatedState = updatedState.copy(extraWidowLootStatus = 0)
-            } else {
-              printInColor(ANSI_RED, f"[DEBUG] Closing object movement window. Skipping... (Status ${updatedState.extraWidowLootStatus})")
-              // Increment to continue preventing execution until reaching the retry attempts limit
-              updatedState = updatedState.copy(extraWidowLootStatus = updatedState.extraWidowLootStatus + 1)
-            }
-          }*/
+
         case None => // Do nothing
       }
 
@@ -578,21 +561,7 @@ object AutoLoot {
   }
 
 
-  // Function to safely extract posX and posY if the 'Ok' button exists
-  def extractOkButtonPosition(json: JsValue): Option[(Int, Int)] = {
-    (json \ "screenInfo" \ "extraWindowLoc").validate[JsObject] match {
-      case JsSuccess(extraWindowLoc, _) =>
-        (extraWindowLoc \ "Ok").validate[JsObject] match {
-          case JsSuccess(okButton, _) =>
-            for {
-              posX <- (okButton \ "posX").validate[Int].asOpt
-              posY <- (okButton \ "posY").validate[Int].asOpt
-            } yield (posX, posY)
-          case _ => None // No 'Ok' button or invalid format
-        }
-      case _ => None // No 'extraWindowLoc' or it's not an object
-    }
-  }
+
 
 
 }

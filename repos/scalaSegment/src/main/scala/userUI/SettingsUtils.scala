@@ -90,8 +90,10 @@ object SettingsUtils {
 
   case class RuneMakingSettings(
                                  enabled: Boolean = false,
+                                 makeRunes: Boolean = false,
                                  selectedSpell: String = "",
-                                 requiredMana: Int = 0
+                                 requiredMana: Int = 0,
+                                 stackConjuredAmmo: Boolean = false,
                                )
 
   case class AutoResponderSettings(
@@ -108,7 +110,8 @@ object SettingsUtils {
 
   case class FishingSettings(
                               enabled: Boolean = false,
-                              selectedRectangles: Seq[String] = Seq.empty
+                              selectedRectangles: Seq[String] = Seq.empty,
+                              fishThrowoutRectangles: Seq[String] = Seq.empty
                             )
 
   case class CaveBotSettings(

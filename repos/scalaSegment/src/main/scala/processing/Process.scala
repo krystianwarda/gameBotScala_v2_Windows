@@ -136,4 +136,20 @@ object Process {
     timeRange.x + (rand.nextLong() % (timeRange.y - timeRange.x + 1))
   }
 
+  // Function to safely extract posX and posY if the 'Ok' button exists
+  def extractOkButtonPosition(json: JsValue): Option[(Int, Int)] = {
+    (json \ "screenInfo" \ "extraWindowLoc").validate[JsObject] match {
+      case JsSuccess(extraWindowLoc, _) =>
+        (extraWindowLoc \ "Ok").validate[JsObject] match {
+          case JsSuccess(okButton, _) =>
+            for {
+              posX <- (okButton \ "posX").validate[Int].asOpt
+              posY <- (okButton \ "posY").validate[Int].asOpt
+            } yield (posX, posY)
+          case _ => None // No 'Ok' button or invalid format
+        }
+      case _ => None // No 'extraWindowLoc' or it's not an object
+    }
+  }
+
 }
