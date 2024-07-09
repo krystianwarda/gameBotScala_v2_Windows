@@ -110,6 +110,7 @@ case class ProcessorState(
                            gridState: Array[Array[Boolean]] = Array.ofDim[Boolean](10, 10), // Example default value
                            gridBoundsState: (Int, Int, Int, Int) = (0, 0, 0, 0), // Example default value
                            presentCharLocation: Vec = Vec(0, 0),
+                           presentCharZLocation: Int = 0,
                            alreadyLootedIds: List[Int] = List(),
                            retryStatus: Int = 0,
                            slowWalkStatus: Int = 0,
@@ -407,7 +408,7 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     val currentTime = System.currentTimeMillis()
     currentState.settings.flatMap { settings =>
 
-      println("Performing fishing action.")
+//      println("Performing fishing action.")
       val ((actions, logs), updatedState) = computeFishingActions(json, settings, currentState.copy(lastFishingCommandSent = currentTime))
 
       executeActionsAndLogsNew(actions, logs, Some(settings), Some("fishing"))

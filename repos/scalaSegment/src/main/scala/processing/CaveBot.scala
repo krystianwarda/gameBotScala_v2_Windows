@@ -772,37 +772,7 @@ object CaveBot {
   }
 
 
-  def createBooleanGrid(tiles: Map[String, JsObject], min_x: Int, min_y: Int): (Array[Array[Boolean]], (Int, Int)) = {
-    val levelMovementEnablersIdsList: List[Int] = List(414, 433, 369, 469, 1977, 1947, 1948, 386, 594)
 
-    val maxX = tiles.keys.map(key => key.take(5).trim.toInt).max
-    val maxY = tiles.keys.map(key => key.drop(5).take(5).trim.toInt).max
-    val width = maxX - min_x + 1
-    val height = maxY - min_y + 1
-
-    println(s"Creating boolean grid with dimensions: width=$width, height=$height, maxX=$maxX, maxY=$maxY, min_x=$min_x, min_y=$min_y")
-
-    val grid = Array.fill(height, width)(false)
-
-    tiles.foreach { case (key, tileObj) =>
-      val x = key.take(5).trim.toInt - min_x
-      val y = key.drop(5).take(5).trim.toInt - min_y
-      try {
-        val tileItems = (tileObj \ "items").as[JsObject]
-        val hasBlockingItem = tileItems.values.exists(item =>
-          levelMovementEnablersIdsList.contains((item \ "id").as[Int])
-        )
-
-        grid(y)(x) = (tileObj \ "isWalkable").asOpt[Boolean].getOrElse(false) && !hasBlockingItem
-      } catch {
-        case e: ArrayIndexOutOfBoundsException =>
-          println(s"Exception accessing grid position: x=$x, y=$y, width=$width, height=$height")
-          throw e
-      }
-    }
-
-    (grid, (min_x, min_y))
-  }
 
   def createBooleanGridOldButGood(tiles: Map[String, JsObject], min_x: Int, min_y: Int): (Array[Array[Boolean]], (Int, Int)) = {
     val maxX = tiles.keys.map(key => key.take(5).trim.toInt).max
@@ -810,7 +780,7 @@ object CaveBot {
     val width = maxX - min_x + 1
     val height = maxY - min_y + 1
 
-    println(s"Creating boolean grid with dimensions: width=$width, height=$height, maxX=$maxX, maxY=$maxY, min_x=$min_x, min_y=$min_y")
+//    println(s"Creating boolean grid with dimensions: width=$width, height=$height, maxX=$maxX, maxY=$maxY, min_x=$min_x, min_y=$min_y")
 
     val grid = Array.fill(height, width)(false)
 
@@ -894,6 +864,51 @@ object CaveBot {
   }
 
 
+  def createBooleanGrid(tiles: Map[String, JsObject], min_x: Int, min_y: Int): (Array[Array[Boolean]], (Int, Int)) = {
+    val levelMovementEnablersIdsList: List[Int] = List(414, 433, 369, 469, 1977, 1947, 1948, 386, 594)
+
+    val maxX = tiles.keys.map(key => key.take(5).trim.toInt).max
+    val maxY = tiles.keys.map(key => key.drop(5).take(5).trim.toInt).max
+    val width = maxX - min_x + 1
+    val height = maxY - min_y + 1
+
+    println(s"Creating boolean grid with dimensions: width=$width, height=$height, maxX=$maxX, maxY=$maxY, min_x=$min_x, min_y=$min_y")
+
+    val grid = Array.fill(height, width)(false)
+
+    tiles.foreach { case (key, tileObj) =>
+      val x = key.take(5).trim.toInt - min_x
+      val y = key.drop(5).take(5).trim.toInt - min_y
+      try {
+        val tileElevation = (tileObj \ "getElevation").asOpt[Int].getOrElse(0)
+        val tileIsWalkable = (tileObj \ "isWalkable").asOpt[Boolean].getOrElse(false)
+        val tileItems = (tileObj \ "items").as[JsObject]
+        val hasBlockingItem = tileItems.values.exists(item =>
+          levelMovementEnablersIdsList.contains((item \ "id").as[Int])
+        )
+
+        // Consider tile non-walkable if elevation is 2, otherwise use other conditions
+        if (tileElevation >= 2) {
+          grid(y)(x) = false
+        } else {
+          grid(y)(x) = tileIsWalkable && !hasBlockingItem
+        }
+      } catch {
+        case e: ArrayIndexOutOfBoundsException =>
+          println(s"Exception accessing grid position: x=$x, y=$y, width=$width, height=$height")
+          throw e
+      }
+    }
+
+//    println(s"Grid: ${grid.map(_.mkString(" ")).mkString("\n")}")
+    (grid, (min_x, min_y))
+  }
+
+
+  def heuristic(a: Vec, b: Vec): Int = {
+    Math.abs(a.x - b.x) + Math.abs(a.y - b.y)
+  }
+
   def aStarSearch(start: Vec, goal: Vec, grid: Array[Array[Boolean]], min_x: Int, min_y: Int): List[Vec] = {
     println(s"Starting aStarSearch with start=$start, goal=$goal, min_x=$min_x, min_y=$min_y")
 
@@ -925,15 +940,14 @@ object CaveBot {
         return start :: path
       }
 
-      // Add diagonal directions
       val directions = List(Vec(-1, 0), Vec(1, 0), Vec(0, -1), Vec(0, 1), Vec(-1, -1), Vec(1, 1), Vec(-1, 1), Vec(1, -1))
       directions.foreach { direction =>
         val next = current + direction
         if ((next.x - min_x) >= 0 && (next.x - min_x) < grid(0).length && (next.y - min_y) >= 0 && (next.y - min_y) < grid.length && grid(next.y - min_y)(next.x - min_x)) {
-          val newCost = costSoFar(current) + (if (direction.x != 0 && direction.y != 0) 14 else 10)
+          val newCost = costSoFar(current) + (if (direction.x != 0 && direction.y != 0) 21 else 10)
           if (!costSoFar.contains(next) || newCost < costSoFar(next)) {
             costSoFar(next) = newCost
-            val priority = newCost // You can add a heuristic if needed
+            val priority = newCost + heuristic(next, goal)
             frontier.enqueue((priority, next))
             cameFrom(next) = current
           }
@@ -946,8 +960,57 @@ object CaveBot {
   }
 
 
-//  def aStarSearch(start: Vec, goal: Vec, grid: Array[Array[Boolean]], min_x: Int, min_y: Int): List[Vec] = {
-//    println(s"Starting aStarSearch with start=$start, goal=$goal, min_x=$min_x, min_y=$min_y")
+
+  //  def aStarSearch(start: Vec, goal: Vec, grid: Array[Array[Boolean]], min_x: Int, min_y: Int): List[Vec] = {
+  //    println(s"Starting aStarSearch with start=$start, goal=$goal, min_x=$min_x, min_y=$min_y")
+  //
+  //    if ((start.x - min_x) < 0 || (start.y - min_y) < 0 || (start.x - min_x) >= grid(0).length || (start.y - min_y) >= grid.length ||
+  //      (goal.x - min_x) < 0 || (goal.y - min_y) < 0 || (goal.x - min_x) >= grid(0).length || (goal.y - min_y) >= grid.length) {
+  //      println(s"Error: Start or goal position out of grid bounds. Start: (${start.x - min_x}, ${start.y - min_y}), Goal: (${goal.x - min_x}, ${goal.y - min_y})")
+  //      return List()
+  //    }
+  //
+  //    grid(start.y - min_y)(start.x - min_x) = true
+  //    grid(goal.y - min_y)(goal.x - min_x) = true
+  //
+  //    val frontier = mutable.PriorityQueue.empty[(Int, Vec)](Ordering.by(-_._1))
+  //    frontier.enqueue((0, start))
+  //    val cameFrom = mutable.Map[Vec, Vec]()
+  //    val costSoFar = mutable.Map[Vec, Int](start -> 0)
+  //
+  //    while (frontier.nonEmpty) {
+  //      val (_, current) = frontier.dequeue()
+  //
+  //      if (current == goal) {
+  //        var path = List[Vec]()
+  //        var temp = current
+  //        while (temp != start) {
+  //          path = temp :: path
+  //          temp = cameFrom.getOrElse(temp, start)
+  //        }
+  //        println("Path found: " + (start :: path).mkString(" -> "))
+  //        return start :: path
+  //      }
+  //
+  //      // Add diagonal directions
+  //      val directions = List(Vec(-1, 0), Vec(1, 0), Vec(0, -1), Vec(0, 1), Vec(-1, -1), Vec(1, 1), Vec(-1, 1), Vec(1, -1))
+  //      directions.foreach { direction =>
+  //        val next = current + direction
+  //        if ((next.x - min_x) >= 0 && (next.x - min_x) < grid(0).length && (next.y - min_y) >= 0 && (next.y - min_y) < grid.length && grid(next.y - min_y)(next.x - min_x)) {
+  //          val newCost = costSoFar(current) + (if (direction.x != 0 && direction.y != 0) 14 else 10)
+  //          if (!costSoFar.contains(next) || newCost < costSoFar(next)) {
+  //            costSoFar(next) = newCost
+  //            val priority = newCost // You can add a heuristic if needed
+  //            frontier.enqueue((priority, next))
+  //            cameFrom(next) = current
+  //          }
+  //        }
+  //      }
+  //    }
+  //
+  //    println("Path not found")
+  //    List()
+  //  }intln(s"Starting aStarSearch with start=$start, goal=$goal, min_x=$min_x, min_y=$min_y")
 //
 //    // Check if start and goal are within the bounds of the grid
 //    if ((start.x - min_x) < 0 || (start.y - min_y) < 0 || (start.x - min_x) >= grid(0).length || (start.y - min_y) >= grid.length ||
@@ -1020,9 +1083,6 @@ object CaveBot {
 
 
 
-  def heuristic(a: Vec, b: Vec): Int = {
-    Math.abs(a.x - b.x) + Math.abs(a.y - b.y)
-  }
 
 
 //  def heuristic(a: Vec, b: Vec): Int = a.manhattanDistance(b)
