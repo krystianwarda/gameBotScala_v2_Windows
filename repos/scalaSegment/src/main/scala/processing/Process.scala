@@ -1,13 +1,14 @@
 package processing
 
 import play.api.libs.json.JsObject
-import mouse.{ActionCompleted, ActionTypes, Mouse}
-import mouse.{MouseMoveCommand, MouseMovementSettings}
+import mouse.{ActionCompleted, ActionTypes, FakeAction, Mouse, MouseMoveCommand, MouseMovementSettings}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
 import processing.CaveBot.Vec
 
 import scala.util.Random
 import play.api.libs.json._
+
+import java.time.Instant
 
 object Process {
   // Function to find the screen position of an item in container slots 1-4 with both itemId and itemSubType matching
@@ -151,5 +152,32 @@ object Process {
       case _ => None // No 'extraWindowLoc' or it's not an object
     }
   }
+
+  def handleRetryStatus(currentRetryStatus: Int, retryAttemptsMid: Int): Int = {
+    if (currentRetryStatus >= retryAttemptsMid) {
+      println(s"Resetting retry status.")
+      0  // Reset only if the current status reaches or exceeds the maximum allowed attempts
+    } else {
+      currentRetryStatus + 1  // Increment the retry status if it hasn't reached the maximum yet
+    }
+  }
+
+  def timeToRetry(lastAttemptTime: Long, retryMidDelay: Long): Boolean = {
+    val currentTime = System.currentTimeMillis()
+    (currentTime - lastAttemptTime) >= retryMidDelay
+  }
+
+  def updateRetryStatusBasedOnTime(lastAttemptTime: Long, retryMidDelay: Long): Boolean = {
+    val currentTime = Instant.now.toEpochMilli
+    val timeSinceLastAttempt = currentTime - lastAttemptTime
+    timeSinceLastAttempt >= retryMidDelay
+  }
+
+
+  def performActionSequence(actionsSeq: Seq[MouseAction]): Seq[FakeAction] = {
+    Seq(FakeAction("useMouse", None, Some(MouseActions(actionsSeq))))
+  }
+
+
 
 }

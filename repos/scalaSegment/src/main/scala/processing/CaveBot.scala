@@ -391,8 +391,8 @@ object CaveBot {
 
   def isOppositeDirection(currentDirection: String, newDirection: String): Boolean = {
     (currentDirection, newDirection) match {
-      case ("ArrowLeft", "ArrowRight") | ("ArrowRight", "ArrowLeft") |
-           ("ArrowUp", "ArrowDown") | ("ArrowDown", "ArrowUp") => true
+      case ("MoveLeft", "MoveRight") | ("MoveRight", "MoveLeft") |
+           ("MoveUp", "MoveDown") | ("MoveDown", "MoveUp") => true
       case _ => false
     }
   }
@@ -400,10 +400,10 @@ object CaveBot {
   def filterSubwaypointsByDirection(currentLocation: Vec, subwaypoints: List[Vec], lastDirection: Option[String]): List[Vec] = {
     subwaypoints.filter { waypoint =>
       lastDirection match {
-        case Some("ArrowRight") => waypoint.x >= currentLocation.x
-        case Some("ArrowLeft") => waypoint.x <= currentLocation.x
-        case Some("ArrowUp") => waypoint.y <= currentLocation.y
-        case Some("ArrowDown") => waypoint.y >= currentLocation.y
+        case Some("MoveRight") => waypoint.x >= currentLocation.x
+        case Some("MoveLeft") => waypoint.x <= currentLocation.x
+        case Some("MoveUp") => waypoint.y <= currentLocation.y
+        case Some("MoveDown") => waypoint.y >= currentLocation.y
         case _ => true
       }
     }
@@ -422,69 +422,113 @@ object CaveBot {
         println("Debug - Matched case: Character is already at the destination.")
         None
       case (0, -1) =>
-        println("Debug - Matched case: ArrowUp")
-        Some("ArrowUp")
+        println("Debug - Matched case: MoveUp")
+        Some("MoveUp")
       case (0, 1) =>
-        println("Debug - Matched case: ArrowDown")
-        Some("ArrowDown")
+        println("Debug - Matched case: MoveDown")
+        Some("MoveDown")
       case (-1, 0) =>
-        println("Debug - Matched case: ArrowLeft")
-        Some("ArrowLeft")
+        println("Debug - Matched case: MoveLeft")
+        Some("MoveLeft")
       case (1, 0) =>
-        println("Debug - Matched case: ArrowRight")
-        Some("ArrowRight")
+        println("Debug - Matched case: MoveRight")
+        Some("MoveRight")
       case _ =>
         println("Debug - Matched case: Diagonal or multiple options available.")
         // This is a simplified approach to randomly choose between horizontal or vertical movement
         val random = new Random()
         val decision = if (random.nextBoolean()) {
           // Choose based on deltaX if randomly selected boolean is true
-          if (deltaX < 0) "ArrowLeft" else "ArrowRight"
+          if (deltaX < 0) "MoveLeft" else "MoveRight"
         } else {
           // Choose based on deltaY otherwise
-          if (deltaY < 0) "ArrowUp" else "ArrowDown"
+          if (deltaY < 0) "MoveUp" else "MoveDown"
         }
         println(s"Debug - Randomly chosen direction: $decision based on DeltaX: $deltaX, DeltaY: $deltaY")
         Some(decision)
     }
   }
+//
+//  def calculateDirection(currentLocation: Vec, nextLocation: Vec, lastDirection: Option[String]): Option[String] = {
+//    println(s"Debug - Input currentLocation: $currentLocation, nextLocation: $nextLocation")
+//
+//    val deltaX = nextLocation.x - currentLocation.x
+//    val deltaY = nextLocation.y - currentLocation.y
+//    println(s"Debug - Calculated DeltaX: $deltaX, DeltaY: $deltaY based on inputs")
+//
+//    (deltaX.sign, deltaY.sign) match {
+//      case (0, 0) =>
+//        println("Debug - Matched case: Character is already at the destination.")
+//        None
+//      case (0, -1) =>
+//        checkForSingleMove("MoveUp", lastDirection, "MoveDown")
+//      case (0, 1) =>
+//        checkForSingleMove("MoveDown", lastDirection, "MoveUp")
+//      case (-1, 0) =>
+//        checkForSingleMove("MoveLeft", lastDirection, "MoveRight")
+//      case (1, 0) =>
+//        checkForSingleMove("MoveRight", lastDirection, "MoveLeft")
+//      case (-1, -1) =>
+//        Some("MoveUpLeft")
+//      case (-1, 1) =>
+//        Some("MoveDownLeft")
+//      case (1, -1) =>
+//        Some("MoveUpRight")
+//      case (1, 1) =>
+//        Some("MoveDownRight")
+//      case _ =>
+//        println("Debug - Matched case: Unhandled direction, applying random choice.")
+//        randomDirectionChoice(deltaX, deltaY)
+//    }
+//  }
 
   def calculateDirection(currentLocation: Vec, nextLocation: Vec, lastDirection: Option[String]): Option[String] = {
-    // Debugging the inputs directly to ensure they're as expected
     println(s"Debug - Input currentLocation: $currentLocation, nextLocation: $nextLocation")
 
     val deltaX = nextLocation.x - currentLocation.x
     val deltaY = nextLocation.y - currentLocation.y
     println(s"Debug - Calculated DeltaX: $deltaX, DeltaY: $deltaY based on inputs")
 
-    (deltaX.sign, deltaY.sign) match {
-      case (0, 0) =>
-        println("Debug - Matched case: Character is already at the destination.")
+    val chosenDirection = chooseDirection(deltaX, deltaY)
+    chosenDirection match {
+      case Some(direction) if lastDirection.contains(oppositeDirection(direction)) =>
+        println(s"Debug - Avoiding reversal from ${oppositeDirection(direction)} to $direction")
         None
-      case (0, -1) =>
-        checkForSingleMove("ArrowUp", lastDirection, "ArrowDown")
-      case (0, 1) =>
-        checkForSingleMove("ArrowDown", lastDirection, "ArrowUp")
-      case (-1, 0) =>
-        checkForSingleMove("ArrowLeft", lastDirection, "ArrowRight")
-      case (1, 0) =>
-        checkForSingleMove("ArrowRight", lastDirection, "ArrowLeft")
-      case _ =>
-        println("Debug - Matched case: Diagonal or multiple options available.")
-        // Choose direction avoiding reversal of the last direction
-        lastDirection match {
-          case Some("ArrowRight") if deltaX < 0 =>
-            chooseDirectionBasedOnDeltaY(deltaY)
-          case Some("ArrowLeft") if deltaX > 0 =>
-            chooseDirectionBasedOnDeltaY(deltaY)
-          case Some("ArrowDown") if deltaY < 0 =>
-            chooseDirectionBasedOnDeltaX(deltaX)
-          case Some("ArrowUp") if deltaY > 0 =>
-            chooseDirectionBasedOnDeltaX(deltaX)
-          case _ =>
-            // If not reversing, choose randomly between available directions
-            randomDirectionChoice(deltaX, deltaY)
-        }
+      case Some(direction) =>
+        println(s"Debug - Chosen direction: $direction")
+        Some(direction)
+      case None =>
+        println("Debug - No movement needed.")
+        None
+    }
+  }
+
+  def oppositeDirection(direction: String): String = {
+    direction match {
+      case "MoveUp" => "MoveDown"
+      case "MoveDown" => "MoveUp"
+      case "MoveLeft" => "MoveRight"
+      case "MoveRight" => "MoveLeft"
+      case "MoveUpLeft" => "MoveDownRight"
+      case "MoveDownLeft" => "MoveUpRight"
+      case "MoveUpRight" => "MoveDownLeft"
+      case "MoveDownRight" => "MoveUpLeft"
+      case _ => direction
+    }
+  }
+
+  def chooseDirection(deltaX: Int, deltaY: Int): Option[String] = {
+    (deltaX.sign, deltaY.sign) match {
+      case (0, 0) => None
+      case (0, -1) => Some("MoveUp")
+      case (0, 1) => Some("MoveDown")
+      case (-1, 0) => Some("MoveLeft")
+      case (1, 0) => Some("MoveRight")
+      case (-1, -1) => Some("MoveUpLeft")
+      case (-1, 1) => Some("MoveDownLeft")
+      case (1, -1) => Some("MoveUpRight")
+      case (1, 1) => Some("MoveDownRight")
+      case _ => None // Shouldn't be reached
     }
   }
 
@@ -502,24 +546,24 @@ object CaveBot {
 //        println("Debug - Matched case: Character is already at the destination.")
         None
       case (0, -1) =>
-        checkForSingleMove("ArrowUpSingle", lastDirection, "ArrowDownSingle")
+        checkForSingleMove("MoveUpSingle", lastDirection, "MoveDownSingle")
       case (0, 1) =>
-        checkForSingleMove("ArrowDownSingle", lastDirection, "ArrowUpSingle")
+        checkForSingleMove("MoveDownSingle", lastDirection, "MoveUpSingle")
       case (-1, 0) =>
-        checkForSingleMove("ArrowLeftSingle", lastDirection, "ArrowRightSingle")
+        checkForSingleMove("MoveLeftSingle", lastDirection, "MoveRightSingle")
       case (1, 0) =>
-        checkForSingleMove("ArrowRightSingle", lastDirection, "ArrowLeftSingle")
+        checkForSingleMove("MoveRightSingle", lastDirection, "MoveLeftSingle")
       case _ =>
 //        println("Debug - Matched case: Diagonal or multiple options available.")
         // Choose direction avoiding reversal of the last direction
         lastDirection match {
-          case Some("ArrowRightSingle") if deltaX < 0 =>
+          case Some("MoveRightSingle") if deltaX < 0 =>
             chooseDirectionBasedOnDeltaY(deltaY)
-          case Some("ArrowLeftSingle") if deltaX > 0 =>
+          case Some("MoveLeftSingle") if deltaX > 0 =>
             chooseDirectionBasedOnDeltaY(deltaY)
-          case Some("ArrowDownSingle") if deltaY < 0 =>
+          case Some("MoveDownSingle") if deltaY < 0 =>
             chooseDirectionBasedOnDeltaX(deltaX)
-          case Some("ArrowUpSingle") if deltaY > 0 =>
+          case Some("MoveUpSingle") if deltaY > 0 =>
             chooseDirectionBasedOnDeltaX(deltaX)
           case _ =>
             // If not reversing, choose randomly between available directions
@@ -539,19 +583,19 @@ object CaveBot {
   }
 
   def chooseDirectionBasedOnDeltaX(deltaX: Int): Option[String] = {
-    if (deltaX < 0) Some("ArrowLeft") else Some("ArrowRight")
+    if (deltaX < 0) Some("MoveLeft") else Some("MoveRight")
   }
 
   def chooseDirectionBasedOnDeltaY(deltaY: Int): Option[String] = {
-    if (deltaY < 0) Some("ArrowUp") else Some("ArrowDown")
+    if (deltaY < 0) Some("MoveUp") else Some("MoveDown")
   }
 
   def randomDirectionChoice(deltaX: Int, deltaY: Int): Option[String] = {
     val random = new Random()
     val decision = if (random.nextBoolean()) {
-      if (deltaX < 0) "ArrowLeft" else "ArrowRight"
+      if (deltaX < 0) "MoveLeft" else "MoveRight"
     } else {
-      if (deltaY < 0) "ArrowUp" else "ArrowDown"
+      if (deltaY < 0) "MoveUp" else "MoveDown"
     }
     println(s"Debug - Randomly chosen direction: $decision based on DeltaX: $deltaX, DeltaY: $deltaY")
     Some(decision)
@@ -570,28 +614,28 @@ object CaveBot {
         println("Debug - Matched case: Character is already at the destination.")
         None
       case (0, -1) =>
-        println("Debug - Matched case: ArrowUp")
-        Some("ArrowUp")
+        println("Debug - Matched case: MoveUp")
+        Some("MoveUp")
       case (0, 1) =>
-        println("Debug - Matched case: ArrowDown")
-        Some("ArrowDown")
+        println("Debug - Matched case: MoveDown")
+        Some("MoveDown")
       case (-1, 0) =>
-        println("Debug - Matched case: ArrowLeft")
-        Some("ArrowLeft")
+        println("Debug - Matched case: MoveLeft")
+        Some("MoveLeft")
       case (1, 0) =>
-        println("Debug - Matched case: ArrowRight")
-        Some("ArrowRight")
+        println("Debug - Matched case: MoveRight")
+        Some("MoveRight")
       case _ =>
         println("Debug - Matched case: Diagonal or multiple options available.")
         // Choose direction avoiding reversal of the last direction
         lastDirection match {
-          case Some("ArrowRight") if deltaX < 0 => // Avoid going left if last went right
+          case Some("MoveRight") if deltaX < 0 => // Avoid going left if last went right
             chooseDirectionBasedOnDeltaY(deltaY)
-          case Some("ArrowLeft") if deltaX > 0 => // Avoid going right if last went left
+          case Some("MoveLeft") if deltaX > 0 => // Avoid going right if last went left
             chooseDirectionBasedOnDeltaY(deltaY)
-          case Some("ArrowDown") if deltaY < 0 => // Avoid going up if last went down
+          case Some("MoveDown") if deltaY < 0 => // Avoid going up if last went down
             chooseDirectionBasedOnDeltaX(deltaX)
-          case Some("ArrowUp") if deltaY > 0 => // Avoid going down if last went up
+          case Some("MoveUp") if deltaY > 0 => // Avoid going down if last went up
             chooseDirectionBasedOnDeltaX(deltaX)
           case _ =>
             // If not reversing, choose randomly between available directions
@@ -611,23 +655,23 @@ object CaveBot {
       case (0, 0) =>
         //        println("Character is already at the destination.")
         None
-      case (0, -1) => Some("ArrowUp")
-      case (0, 1) => Some("ArrowDown")
-      case (-1, 0) => Some("ArrowLeft")
-      case (1, 0) => Some("ArrowRight")
+      case (0, -1) => Some("MoveUp")
+      case (0, 1) => Some("MoveDown")
+      case (-1, 0) => Some("MoveLeft")
+      case (1, 0) => Some("MoveRight")
       case (signX, signY) =>
         // Random choice logic here might be too simplistic, consider enhancing or removing for more deterministic behavior
-        val decision = if (lastDirection.exists(dir => Seq("ArrowLeft", "ArrowRight").contains(dir)) && signY != 0) {
-          if (signY < 0) "ArrowUp" else "ArrowDown"
-        } else if (lastDirection.exists(dir => Seq("ArrowUp", "ArrowDown").contains(dir)) && signX != 0) {
-          if (signX < 0) "ArrowLeft" else "ArrowRight"
+        val decision = if (lastDirection.exists(dir => Seq("MoveLeft", "MoveRight").contains(dir)) && signY != 0) {
+          if (signY < 0) "MoveUp" else "MoveDown"
+        } else if (lastDirection.exists(dir => Seq("MoveUp", "MoveDown").contains(dir)) && signX != 0) {
+          if (signX < 0) "MoveLeft" else "MoveRight"
         } else {
           // Fallback to random direction if no clear choice
           val random = new Random()
           if (random.nextBoolean()) {
-            if (signX < 0) "ArrowLeft" else "ArrowRight"
+            if (signX < 0) "MoveLeft" else "MoveRight"
           } else {
-            if (signY < 0) "ArrowUp" else "ArrowDown"
+            if (signY < 0) "MoveUp" else "MoveDown"
           }
         }
         //        println(s"Calculated Direction: $decision based on deltaX: $deltaX, deltaY: $deltaY, and lastDirection: $lastDirection")
@@ -849,29 +893,18 @@ object CaveBot {
     }
   }
 
+
   def aStarSearch(start: Vec, goal: Vec, grid: Array[Array[Boolean]], min_x: Int, min_y: Int): List[Vec] = {
     println(s"Starting aStarSearch with start=$start, goal=$goal, min_x=$min_x, min_y=$min_y")
 
-    // Check if start and goal are within the bounds of the grid
     if ((start.x - min_x) < 0 || (start.y - min_y) < 0 || (start.x - min_x) >= grid(0).length || (start.y - min_y) >= grid.length ||
       (goal.x - min_x) < 0 || (goal.y - min_y) < 0 || (goal.x - min_x) >= grid(0).length || (goal.y - min_y) >= grid.length) {
       println(s"Error: Start or goal position out of grid bounds. Start: (${start.x - min_x}, ${start.y - min_y}), Goal: (${goal.x - min_x}, ${goal.y - min_y})")
       return List()
     }
 
-    // For testing: Force the start and goal positions to be walkable
     grid(start.y - min_y)(start.x - min_x) = true
     grid(goal.y - min_y)(goal.x - min_x) = true
-
-    // Check if start or goal positions are blocked
-    if (!grid(start.y - min_y)(start.x - min_x)) {
-      println("Error: Start position is blocked.")
-      return List()
-    }
-    if (!grid(goal.y - min_y)(goal.x - min_x)) {
-      println("Error: Goal position is blocked.")
-      return List()
-    }
 
     val frontier = mutable.PriorityQueue.empty[(Int, Vec)](Ordering.by(-_._1))
     frontier.enqueue((0, start))
@@ -880,39 +913,30 @@ object CaveBot {
 
     while (frontier.nonEmpty) {
       val (_, current) = frontier.dequeue()
-      println(s"Dequeued: $current")
 
       if (current == goal) {
-        println("Goal reached")
         var path = List[Vec]()
         var temp = current
         while (temp != start) {
           path = temp :: path
-          temp = cameFrom.getOrElse(temp, start) // ensure fallback to start to avoid infinite loop
+          temp = cameFrom.getOrElse(temp, start)
         }
         println("Path found: " + (start :: path).mkString(" -> "))
         return start :: path
       }
 
-      List(Vec(-1, 0), Vec(1, 0), Vec(0, -1), Vec(0, 1)).foreach { direction =>
+      // Add diagonal directions
+      val directions = List(Vec(-1, 0), Vec(1, 0), Vec(0, -1), Vec(0, 1), Vec(-1, -1), Vec(1, 1), Vec(-1, 1), Vec(1, -1))
+      directions.foreach { direction =>
         val next = current + direction
-        if ((next.x - min_x) >= 0 && (next.x - min_x) < grid(0).length && (next.y - min_y) >= 0 && (next.y - min_y) < grid.length) {
-          if (grid(next.y - min_y)(next.x - min_x)) {
-            val newCost = costSoFar(current) + 1
-            if (!costSoFar.contains(next) || newCost < costSoFar(next)) {
-              costSoFar(next) = newCost
-              val priority = newCost + heuristic(next, goal)
-              frontier.enqueue((priority, next))
-              cameFrom(next) = current
-              println(s"Enqueued: $next with priority $priority")
-            } else {
-              println(s"Skipped enqueueing $next due to higher cost or already visited")
-            }
-          } else {
-            println(s"Skipped: $next (blocked)")
+        if ((next.x - min_x) >= 0 && (next.x - min_x) < grid(0).length && (next.y - min_y) >= 0 && (next.y - min_y) < grid.length && grid(next.y - min_y)(next.x - min_x)) {
+          val newCost = costSoFar(current) + (if (direction.x != 0 && direction.y != 0) 14 else 10)
+          if (!costSoFar.contains(next) || newCost < costSoFar(next)) {
+            costSoFar(next) = newCost
+            val priority = newCost // You can add a heuristic if needed
+            frontier.enqueue((priority, next))
+            cameFrom(next) = current
           }
-        } else {
-          println(s"Skipped: $next (out of bounds)")
         }
       }
     }
@@ -920,6 +944,81 @@ object CaveBot {
     println("Path not found")
     List()
   }
+
+
+//  def aStarSearch(start: Vec, goal: Vec, grid: Array[Array[Boolean]], min_x: Int, min_y: Int): List[Vec] = {
+//    println(s"Starting aStarSearch with start=$start, goal=$goal, min_x=$min_x, min_y=$min_y")
+//
+//    // Check if start and goal are within the bounds of the grid
+//    if ((start.x - min_x) < 0 || (start.y - min_y) < 0 || (start.x - min_x) >= grid(0).length || (start.y - min_y) >= grid.length ||
+//      (goal.x - min_x) < 0 || (goal.y - min_y) < 0 || (goal.x - min_x) >= grid(0).length || (goal.y - min_y) >= grid.length) {
+//      println(s"Error: Start or goal position out of grid bounds. Start: (${start.x - min_x}, ${start.y - min_y}), Goal: (${goal.x - min_x}, ${goal.y - min_y})")
+//      return List()
+//    }
+//
+//    // For testing: Force the start and goal positions to be walkable
+//    grid(start.y - min_y)(start.x - min_x) = true
+//    grid(goal.y - min_y)(goal.x - min_x) = true
+//
+//    // Check if start or goal positions are blocked
+//    if (!grid(start.y - min_y)(start.x - min_x)) {
+//      println("Error: Start position is blocked.")
+//      return List()
+//    }
+//    if (!grid(goal.y - min_y)(goal.x - min_x)) {
+//      println("Error: Goal position is blocked.")
+//      return List()
+//    }
+//
+//    val frontier = mutable.PriorityQueue.empty[(Int, Vec)](Ordering.by(-_._1))
+//    frontier.enqueue((0, start))
+//    val cameFrom = mutable.Map[Vec, Vec]()
+//    val costSoFar = mutable.Map[Vec, Int](start -> 0)
+//
+//    while (frontier.nonEmpty) {
+//      val (_, current) = frontier.dequeue()
+//      println(s"Dequeued: $current")
+//
+//      if (current == goal) {
+//        println("Goal reached")
+//        var path = List[Vec]()
+//        var temp = current
+//        while (temp != start) {
+//          path = temp :: path
+//          temp = cameFrom.getOrElse(temp, start) // ensure fallback to start to avoid infinite loop
+//        }
+//        println("Path found: " + (start :: path).mkString(" -> "))
+//        return start :: path
+//      }
+//
+//      List(Vec(-1, 0), Vec(1, 0), Vec(0, -1), Vec(0, 1)).foreach { direction =>
+//        val next = current + direction
+//        if ((next.x - min_x) >= 0 && (next.x - min_x) < grid(0).length && (next.y - min_y) >= 0 && (next.y - min_y) < grid.length) {
+//          if (grid(next.y - min_y)(next.x - min_x)) {
+//            val newCost = costSoFar(current) + 1
+//            if (!costSoFar.contains(next) || newCost < costSoFar(next)) {
+//              costSoFar(next) = newCost
+//              val priority = newCost + heuristic(next, goal)
+//              frontier.enqueue((priority, next))
+//              cameFrom(next) = current
+//              println(s"Enqueued: $next with priority $priority")
+//            } else {
+//              println(s"Skipped enqueueing $next due to higher cost or already visited")
+//            }
+//          } else {
+//            println(s"Skipped: $next (blocked)")
+//          }
+//        } else {
+//          println(s"Skipped: $next (out of bounds)")
+//        }
+//      }
+//    }
+//
+//    println("Path not found")
+//    List()
+//  }
+
+
 
   def heuristic(a: Vec, b: Vec): Int = {
     Math.abs(a.x - b.x) + Math.abs(a.y - b.y)

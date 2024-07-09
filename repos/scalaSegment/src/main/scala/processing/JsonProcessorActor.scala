@@ -117,9 +117,16 @@ case class ProcessorState(
                            chaseSwitchStatus: Int = 0,
                            lootingStatus: Int = 0,
                            lootingRestryStatus: Int = 0,
+                           retryFishingStatus: Int = 0,
+                           retryMergeFishStatus: Int = 0,
+                           retryMergeFishDelay: Long = 0,
+                           retryThroughoutFishesStatus: Int = 0,
                            retryAttempts: Int = 2,
-                           retryAttemptsMid: Int = 6,
-                           retryAttemptsLong: Int = 60,
+                           retryAttemptsShort: Int = 6,
+                           retryAttemptsMid: Int = 10,
+                           retryMidDelay: Long = 3000,
+                           retryAttemptsLong: Int = 20,
+                           retryAttemptsVerLong: Int = 60,
                            targetFreezeStatus: Int = 0,
                            targetFreezeHealthStatus: Int = 0,
                            targetFreezeHealthPoints: Int = 0,
@@ -399,13 +406,13 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
   def performFishing(json: JsValue, currentState: ProcessorState): ProcessorState = {
     val currentTime = System.currentTimeMillis()
     currentState.settings.flatMap { settings =>
-      if (settings.fishingSettings.enabled && currentTime - currentState.lastFishingCommandSent >= 2000) {
-        println("Performing fishing action.")
-        val (actions, logs) = computeFishingActions(json, settings)
-//        executeActionsAndLogs(actions, logs, Some(settings))
-        executeActionsAndLogsNew(actions, logs, Some(settings), Some("fishing"))
-        Some(currentState.copy(lastFishingCommandSent = currentTime))
-      } else None
+
+      println("Performing fishing action.")
+      val ((actions, logs), updatedState) = computeFishingActions(json, settings, currentState.copy(lastFishingCommandSent = currentTime))
+
+      executeActionsAndLogsNew(actions, logs, Some(settings), Some("fishing"))
+      Some(updatedState)
+
     }.getOrElse(currentState)
   }
 

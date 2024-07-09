@@ -14,7 +14,9 @@ libraryDependencies ++= Seq(
   "org.scala-lang.modules" %% "scala-swing" % "3.0.0", // GUI applications (optional, based on your needs)
   "com.typesafe.akka" %% "akka-http" % "10.2.10", // For making HTTP requests
   "com.typesafe.akka" %% "akka-stream" % "2.6.14",
-  "org.scalatest" %% "scalatest" % "3.2.9" % Test // For testing
+  "org.scalatest" %% "scalatest" % "3.2.9" % Test, // For testing
+  "net.java.dev.jna" % "jna" % "5.8.0",
+  "net.java.dev.jna" % "jna-platform" % "5.8.0",
 )
 
 

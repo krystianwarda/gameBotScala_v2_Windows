@@ -20,6 +20,7 @@ import java.io.IOException
 import java.nio.charset.StandardCharsets
 import scala.collection.mutable
 
+case class StartSpecificPeriodicFunction(functionName: String)
 
 class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
   import context.dispatcher
@@ -162,7 +163,7 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
 //    }
 //  }
 
-  def sendJson(json: JsValue): Boolean = {
+  def sendJson(functionName: String): Boolean = {
     // This command is manually constructed to match your desired byte format
     val commandString = "__command\r\u0000\u0000\u0000periodicEvent"
     val commandPrefix = Array[Byte](0x89.toByte) // Prefix byte
@@ -428,8 +429,9 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
 
 
   def initiateSendFunction(commandName: String): Unit = {
+    println(s"commandName: $commandName")
     val jsonCommand = Json.obj("__command" -> commandName)
-    if (!sendJson(jsonCommand)) {
+    if (!sendJson(commandName)) {
       println("Failed to send JSON, attempting to reconnect for the next task...")
       reconnectToServer()
     }

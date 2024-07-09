@@ -17,7 +17,7 @@ import utils.StartMouseMovementActor
 import java.awt.Dimension
 import scala.swing.{BoxPanel, Button, CheckBox, ComboBox, Label, MainFrame, Orientation, TabbedPane, TextField}
 import scala.swing.event.{ButtonClicked, SelectionChanged}
-
+import utils.StartSpecificPeriodicFunction
 
 class SwingApp(playerClassList: List[Player],
                uiAppActor: ActorRef,
@@ -462,7 +462,11 @@ class SwingApp(playerClassList: List[Player],
 
 
   val currentPlayer: Player = playerClassList.head
-  val runButton = new Button("RUN") {
+
+
+
+
+    val runButton = new Button("RUN") {
     reactions += {
       case ButtonClicked(_) =>
         val currentSettings = collectSettingsFromUI()
@@ -475,9 +479,6 @@ class SwingApp(playerClassList: List[Player],
           mainActorRef ! StartMouseMovementActor
         }
 
-
-        // Sending the settings to the JsonProcessorActor and PeriodicFunctionActor
-//        jsonProcessorActorRef ! MainApp.StartActors(currentSettings)
         periodicFunctionActorRef ! MainApp.StartActors(currentSettings)
 
         // Sending the initialization message to JsonProcessorActor
