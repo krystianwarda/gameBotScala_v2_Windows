@@ -21,6 +21,8 @@ import keyboard.AutoResponderCommand
 import processing.CaveBot.{Vec, computeCaveBotActions}
 import processing.AutoTarget.computeAutoTargetActions
 import processing.AutoLoot.computeAutoLootActions
+import processing.EmailAlerts.computeEmailAlertsActions
+import processing.GMDetector.computeGMDetectorActions
 import processing.TeamHunt.computeTeamHuntActions
 
 import java.awt.event.{InputEvent, KeyEvent}
@@ -58,6 +60,8 @@ case class WaypointInfo(
                        )
 
 case class ProcessorState(
+                           gmDetected: Boolean = false,
+                           lastEmailAlertTime: Long = 0,
                            stateHealingWithRune: String = "free",
                            healingRestryStatus: Int = 0,
                            healingRetryAttempts: Int = 1,
@@ -242,7 +246,9 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
   private def handleOkStatus(json: JsValue, initialState: ProcessorState): ProcessorState = {
     // Sequentially apply action handlers, each updating the state based on its own logic
     val updatedState = initialState.copy(currentTime = Instant.now().toEpochMilli())
-    val afterFishingState = performFishing(json, updatedState)
+    val afterGMDetectorState = performGMDetector(json, updatedState)
+    val afterEmailAlertsState = performEmailAlerts(json, afterGMDetectorState)
+    val afterFishingState = performFishing(json, afterEmailAlertsState)
     val afterHealingState = performAutoHealing(json, afterFishingState)
     val afterRuneMakingState = performRuneMaking(json, afterHealingState)
     val afterTrainingState = performTraining(json, afterRuneMakingState)
@@ -271,15 +277,42 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
           println("Fake action - use keyboard - type text")
           actionKeyboardManager ! TypeText(actionDetail.text)
 
+
+        case FakeAction("autoResponderFunction", _, Some(ListOfJsons(jsons))) =>
+          autoResponderManagerRef ! AutoResponderCommand(jsons)
+
+
         case FakeAction("useOnYourselfFunction", Some(itemInfo), None) =>
           // Handle function-based actions: sendJson with itemInfo for specific use
           sendJson(Json.obj("__command" -> "useOnYourself", "itemInfo" -> Json.toJson(itemInfo)))
+
+
 
         case FakeAction("useMouse", _, Some(actionDetail: MouseActions)) =>
           println("Fake action - use mouse")
           actionStateManager ! MouseMoveCommand(actionDetail.actions, settings.mouseMovements, source)
       }
     }
+  }
+
+  def performGMDetector(json: JsValue, currentState: ProcessorState): ProcessorState = {
+    currentState.settings.flatMap { settings =>
+
+      val ((actions, logs), updatedState) = computeGMDetectorActions(json, settings, currentState)
+      executeActionsAndLogsNew(actions, logs, Some(settings), Some("GMDetector"))
+      Some(updatedState)
+
+    }.getOrElse(currentState) // If the settings flatMap results in None, return the original currentState
+  }
+
+  def performEmailAlerts(json: JsValue, currentState: ProcessorState): ProcessorState = {
+    currentState.settings.flatMap { settings =>
+
+      val ((actions, logs), updatedState) = computeEmailAlertsActions(json, settings, currentState)
+      executeActionsAndLogsNew(actions, logs, Some(settings), Some("emailAlerts"))
+      Some(updatedState)
+
+    }.getOrElse(currentState) // If the settings flatMap results in None, return the original currentState
   }
 
   def performAutoHealing(json: JsValue, currentState: ProcessorState): ProcessorState = {

@@ -100,6 +100,13 @@ object SettingsUtils {
                                     enabled: Boolean = false
                                   )
 
+  case class EmailAlertsSettings(
+                                    enabled: Boolean = false,
+                                    email: String = "",
+                                    password: String = "",
+                                    recipient: String = "",
+                                  )
+
   case class ProtectionZoneSettings(
                                      enabled: Boolean = false,
                                      playerOnScreenAlert: Boolean = false,
@@ -161,6 +168,7 @@ object SettingsUtils {
   implicit val hotkeysSettingsFormat: Format[HotkeysSettings] = Json.format[HotkeysSettings]
   implicit val protectionZoneSettingsFormat: Format[ProtectionZoneSettings] = Json.format[ProtectionZoneSettings]
   implicit val autoResponderSettingsFormat: Format[AutoResponderSettings] = Json.format[AutoResponderSettings]
+  implicit val emailAlertsSettingsFormat: Format[EmailAlertsSettings] = Json.format[EmailAlertsSettings]
   implicit val fishingSettingsFormat: Format[FishingSettings] = Json.format[FishingSettings]
   implicit val trainingSettingsFormat: Format[TrainingSettings] = Json.format[TrainingSettings]
   implicit val caveBotSettingsFormat: Format[CaveBotSettings] = Json.format[CaveBotSettings]
@@ -183,6 +191,7 @@ object SettingsUtils {
                          autoLootSettings: AutoLootSettings,
                          autoTargetSettings: AutoTargetSettings,
                          teamHuntSettings: TeamHuntSettings,
+                         emailAlertsSettings: EmailAlertsSettings,
 
                          // Add other settings or groups of settings as needed
                        )

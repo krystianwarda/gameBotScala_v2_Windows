@@ -17,6 +17,7 @@ libraryDependencies ++= Seq(
   "org.scalatest" %% "scalatest" % "3.2.9" % Test, // For testing
   "net.java.dev.jna" % "jna" % "5.8.0",
   "net.java.dev.jna" % "jna-platform" % "5.8.0",
+  "com.sun.mail" % "javax.mail" % "1.6.2",
 )
 
 

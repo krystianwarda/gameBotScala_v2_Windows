@@ -1,6 +1,7 @@
 package keyboard
 
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
+import main.scala.MainApp.actionKeyboardManagerRef
 import play.api.libs.json.{JsValue, Json}
 
 import scala.collection.mutable
@@ -36,7 +37,7 @@ object Gpt3ApiClient {
   import ApplicationSetup._ // Import execution context like this
 
   //  import context.dispatcher
-  val apiKey = "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"
+  val apiKey = gptCredentials.apiKey
   val endpoint = "https://api.openai.com/v1/chat/completions"
 
 
@@ -93,70 +94,78 @@ class AutoResponderManager(keyboardActorRef: ActorRef) extends Actor {
   import ApplicationSetup._
   override def preStart(): Unit = {
     // Initialize the scheduler in preStart to ensure it starts with the actor.
-    context.system.scheduler.scheduleWithFixedDelay(0.seconds, 5.seconds, self, CheckPendingResponses)
+    context.system.scheduler.scheduleWithFixedDelay(1.second, 3.seconds, self, CheckPendingResponses)
+
   }
 
+
   val dialogueHistory: mutable.Buffer[JsValue] = mutable.Buffer.empty
-
-  // Holds messages that have already been responded to
   val respondedMessages: mutable.Set[String] = mutable.Set.empty
-  // Queue for messages waiting to be responded to, with timestamp for delay handling
   val pendingResponses: mutable.Queue[(String, Long)] = mutable.Queue.empty
-
 
   override def receive: Receive = {
     case AutoResponderCommand(messages) =>
+      println(s"Received ${messages.size} messages to process in AutoResponder.")
       messages.foreach { messageJson =>
         val text = (messageJson \ "text").as[String]
         val from = (messageJson \ "from").as[String]
         val key = s"$from:$text"
+        println(s"Processing message from $from with text $text. Key: $key")
 
-        // Add player message to dialogue history
-        dialogueHistory += messageJson
-
-        // Check if the message was already responded to
         if (!respondedMessages.contains(key) && !pendingResponses.exists(_._1 == key)) {
-          // Add to pending responses with the current time
           pendingResponses.enqueue((key, System.currentTimeMillis()))
+//          respondedMessages.add(key) // Optionally mark as responded immediately upon queuing, if appropriate
+          println(s"Enqueued message: $key")
+        } else {
+          println(s"Message already processed or in queue: $key")
         }
+
       }
 
+
     case CheckPendingResponses =>
-      while (pendingResponses.nonEmpty && System.currentTimeMillis() - pendingResponses.front._2 >= 5000) {
-        val (key, _) = pendingResponses.dequeue()
-
-        // Ensure a message hasn't been responded to before generating a response
-        if (!respondedMessages.contains(key)) {
-          respondedMessages.add(key) // Mark as responded preemptively to avoid duplication
-
-          // Print the messages going to the HTTP request for debugging
-          println("Sending the following dialogue history to GPT-3 API:")
-          dialogueHistory.foreach(msg => println(msg))
-
-          // Use the full dialogue history when generating a response
-          Gpt3ApiClient.generateResponse(dialogueHistory.toSeq)
-            .map(response => {
-              // Add ChatGPT response to dialogue history before sending to KeyboardActor
-              val responseJson = Json.obj("from" -> "ChatGPT", "text" -> response)
-              dialogueHistory += responseJson
-              TextResponse(key, response)
-            })
-            .recover { case ex => TextResponse(key, s"Error: ${ex.getMessage}") }
-            .pipeTo(self)
+      println(s"Checking pending responses, queue size: ${pendingResponses.size}")
+      val currentTime = System.currentTimeMillis()
+      pendingResponses.dequeueAll { case (key, time) =>
+        if (currentTime - time >= 5000) {
+          println(s"Processing queued message: $key")
+          println(s"respondedMessages: $respondedMessages")
+          if (!respondedMessages.contains(key)) {
+            println(s"Attempting to generate response for $key")
+            Gpt3ApiClient.generateResponse(dialogueHistory.toSeq)
+              .map { response =>
+                val responseJson = Json.obj("from" -> "ChatGPT", "text" -> response)
+                dialogueHistory += responseJson
+                respondedMessages.add(key) // Mark as responded only after successful response generation
+                println(s"Response generated for $key: $response")
+                TextResponse(key, response)
+              }
+              .recover { case ex =>
+                println(s"Failed to generate response for $key: ${ex.getMessage}")
+                TextResponse(key, s"Error: ${ex.getMessage}")
+              }
+              .pipeTo(self)
+          } else {
+            println(s"Skipping processing for already responded message: $key")
+          }
+          true // Confirm removal from the queue
+        } else {
+          false // Keep in the queue if not yet ready
         }
       }
 
     case TextResponse(key, responseText) =>
-      println(s"Responding to: $key with '$responseText'")
-      keyboardActorRef ! TypeText(responseText)
+      println(s"Sending response to keyboard for $key: $responseText")
+      actionKeyboardManagerRef ! TypeText(responseText)  // Assuming actionKeyboardManagerRef is a reference to ActionKeyboardManager
 
 
-        // Simulate responding to the message. Later, integrate with a dynamic response.
-//        println(s"Responding to: $key with 'Yes'")
-//        keyboardActorRef ! TypeText("Yes")
+//    case TextResponse(key, responseText) =>
+//      println(s"Sending response to keyboard for $key: $responseText")
+//      keyboardActorRef ! TypeText(responseText)
 
 
-    case _ => println("Unhandled message in AutoResponderManager")
+
+    case _ => println("Unhandled message type received in AutoResponderManager.")
   }
 }
 

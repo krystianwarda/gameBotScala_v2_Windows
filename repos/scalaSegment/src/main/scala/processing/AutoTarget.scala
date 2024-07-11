@@ -27,19 +27,19 @@ object AutoTarget {
 
 //    printInColor(ANSI_RED, f"[DEBUG] computeAutoTargetActions process started with status:${updatedState.stateHunting}")
 
-    if (settings.autoTargetSettings.enabled && updatedState.stateHunting == "free") {
+    if (settings.autoTargetSettings.enabled && updatedState.stateHunting == "free" && !updatedState.gmDetected) {
 
 
 
       // Assuming the correct structure of the JSON object and that the JSON parsing is appropriate:
       if (updatedState.attackRuneContainerName == "not_set") {
-        logs = logs :+ Log("Checking for attack Rune container...")
+//        logs = logs :+ Log("Checking for attack Rune container...")
 
         // Extract rune IDs from the creature list
         val creatureList = settings.autoTargetSettings.creatureList
-        println(s"Creature List: $creatureList")
+//        println(s"Creature List: $creatureList")
         val runeIds = creatureList.flatMap(extractRuneIdFromSetting).toSet
-        println(s"Extracted Rune IDs: $runeIds")
+//        println(s"Extracted Rune IDs: $runeIds")
 
         // Accessing and checking containersInfo
         (json \ "containersInfo").asOpt[JsObject].foreach { containersInfo =>
@@ -58,7 +58,7 @@ object AutoTarget {
               logs = logs :+ Log(s"Found attack Rune in $containerName.")
               updatedState = updatedState.copy(attackRuneContainerName = containerName)
             case None =>
-              logs = logs :+ Log("Attack Rune not found in any container.")
+//              logs = logs :+ Log("Attack Rune not found in any container.")
           }
         }
       }
@@ -362,7 +362,7 @@ object AutoTarget {
   }
 
   def executeWhenMonstersOnScreen(json: JsValue, settings: UISettings, initialState: ProcessorState, initialActions: Seq[FakeAction], initialLogs: Seq[Log]): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
-    println("Performing executeWhenMonstersOnScreen.")
+//    println("Performing executeWhenMonstersOnScreen.")
     val startTime = System.nanoTime()
     var actions = initialActions
     var logs = initialLogs

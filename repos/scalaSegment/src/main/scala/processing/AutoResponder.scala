@@ -5,48 +5,64 @@ import play.api.libs.json.{JsObject, JsValue, Json}
 import userUI.SettingsUtils
 
 import scala.collection.mutable
+
+
+
 object AutoResponder {
 
   def computeAutoRespondActions(json: JsValue, settings: SettingsUtils.UISettings): (Seq[FakeAction], Seq[Log]) = {
-
     var actions: Seq[FakeAction] = Seq()
     var logs: Seq[Log] = Seq()
 
+    // Debug: Check if the auto responder settings are enabled
+    println(s"AutoResponder Enabled: ${settings.autoResponderSettings.enabled}")
+
     if (settings.autoResponderSettings.enabled) {
+      // Debug: Parsing the focus status
+      val isDefaultChatFocused = (json \ "textTabsInfo" \ "1" \ "isFocused").asOpt[Boolean].getOrElse(false)
+      println(s"Default Chat Focused: $isDefaultChatFocused")
 
+      val localCharName = (json \ "characterInfo" \ "Name").asOpt[String].getOrElse("")
+      println(s"Local Character Name: $localCharName")
 
-      // default chat
-      val isDefaultChatFocused = (json \ "textChatInfo" \ "textTabsInfo" \ "1" \ "isFocused").asOpt[String].getOrElse(0)
-      val localCharName = (json \ "characterInfo" \ "Name").asOpt[String].getOrElse(0)
+      if (isDefaultChatFocused) {
+        // Debug: Fetching messages
+        val messages = (json \ "focusedTabInfo").as[JsObject].values.toSeq.flatMap(_.asOpt[JsObject])
+        println(s"Total Messages Fetched: ${messages.length}")
 
-      if (isDefaultChatFocused == "true") {
-        // Correctly access the messages in the focused tab
-        val messages = (json \ "textChatInfo" \ "focusedTabInfo").as[JsObject].values.toSeq
-        // Extract the ignored creatures list from setting
         val ignoredCreaturesList: Seq[String] = settings.protectionZoneSettings.ignoredCreatures
+        println(s"Ignored Creatures: $ignoredCreaturesList")
 
         val relevantMessages = messages.filter { messageJson =>
           val from = (messageJson \ "from").asOpt[String].getOrElse("")
-          !from.equals("server") && !from.equals(localCharName) && !ignoredCreaturesList.contains(from)
+          println(s"Message From: $from") // Debug: Log each message's sender
+
+          val relevant = !from.equals("server") && !from.equals(localCharName) && !ignoredCreaturesList.contains(from)
+          println(s"Message from $from is relevant: $relevant")
+          relevant
         }
 
-        // Check if there are any relevant messages
+        // Debug: Check if any messages are relevant
+        println(s"Relevant Messages Found: ${relevantMessages.length}")
         if (relevantMessages.nonEmpty) {
           actions = actions :+ FakeAction("autoResponderFunction", None, Some(ListOfJsons(relevantMessages)))
+          println("Action added for relevant messages.")
         } else {
-          //  No message found
+          logs = logs :+ Log("No relevant messages found")
+          println("No relevant messages found.")
         }
-
       } else {
-        // To be coded later - channel switch
+        logs = logs :+ Log("Default chat is not focused")
+        println("Default chat is not focused.")
       }
-
+    } else {
+      logs = logs :+ Log("AutoResponder is disabled")
+      println("AutoResponder is disabled.")
     }
 
     (actions, logs)
   }
 }
-
 
 //  "textChatInfo":{
 //      "focusedTabInfo":{

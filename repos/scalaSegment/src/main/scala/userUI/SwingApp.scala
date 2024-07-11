@@ -43,6 +43,8 @@ class SwingApp(playerClassList: List[Player],
   val trainingBot = new TrainingBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val autoResponderBot = new AutoResponderBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val teamHuntBot = new TeamHuntBot(currentPlayer, uiAppActor, jsonProcessorActor)
+  val emailAlertsBot = new EmailAlertsBot(currentPlayer, uiAppActor, jsonProcessorActor)
+
 
   val exampleNames = playerClassList.map(_.characterName)
   val exampleMap = playerClassList.map(e => e.characterName -> e).toMap
@@ -134,6 +136,11 @@ class SwingApp(playerClassList: List[Player],
     ignoredCreatures = protectionZoneBot.getIgnoredCreatures
   )
 
+  def collectEmailAlertsSettings(): EmailAlertsSettings = EmailAlertsSettings(
+    enabled = emailAlertsCheckbox.selected,
+
+  )
+
   def collectFishingSettings(): FishingSettings = FishingSettings(
     enabled = fishingCheckbox.selected,
     selectedRectangles = fishingBot.selectedRectangles,
@@ -199,6 +206,7 @@ class SwingApp(playerClassList: List[Player],
     trainingSettings = collectTrainingSettings(),
     teamHuntSettings = collectTeamHuntSettings(),
     mouseMovements = mouseMovementsCheckbox.selected,
+    emailAlertsSettings = collectEmailAlertsSettings(),
   )
 
 
@@ -517,6 +525,7 @@ class SwingApp(playerClassList: List[Player],
   val protectionZoneCheckbox = new CheckBox("Protection Zone")
   val autoTargetCheckbox = new CheckBox("Auto Target")
   val autoLootCheckbox = new CheckBox("Auto Loot")
+  val emailAlertsCheckbox = new CheckBox("Email Alerts")
 
   // ...and other fields and buttons as in the second snippet
 
@@ -524,7 +533,7 @@ class SwingApp(playerClassList: List[Player],
   listenTo(autoHealCheckbox, runeMakerCheckbox, trainingCheckbox, caveBotCheckbox,
     autoResponderCheckbox, protectionZoneCheckbox, fishingCheckbox,
     mouseMovementsCheckbox, protectionZoneCheckbox, autoTargetCheckbox,
-    autoLootCheckbox,teamHuntCheckbox,hotkeysCheckbox,
+    autoLootCheckbox,teamHuntCheckbox,hotkeysCheckbox,emailAlertsCheckbox
   )
   //  exampleDropdown.selection
   reactions += {
@@ -568,7 +577,9 @@ class SwingApp(playerClassList: List[Player],
 
     case ButtonClicked(`autoLootCheckbox`) =>
       println("Auto Loot Checkbox clicked")
-    // Add logic for when caveBotCheckbox is clicked
+
+    case ButtonClicked(`emailAlertsCheckbox`) =>
+      println("Email Alerts Checkbox clicked")
 
     case SelectionChanged(`exampleDropdown`) =>
       println("Dropdown selection changed")
@@ -591,7 +602,7 @@ class SwingApp(playerClassList: List[Player],
       // Adding Checkboxes in the first column
       val checkBoxComponents = Seq(autoHealCheckbox, hotkeysCheckbox, runeMakerCheckbox, trainingCheckbox,
         caveBotCheckbox, teamHuntCheckbox, fishingCheckbox, mouseMovementsCheckbox,autoResponderCheckbox,
-        protectionZoneCheckbox, autoTargetCheckbox, autoLootCheckbox)
+        protectionZoneCheckbox, autoTargetCheckbox, autoLootCheckbox, emailAlertsCheckbox)
 
       for ((checkbox, idx) <- checkBoxComponents.zipWithIndex) {
         c.gridx = 0
@@ -634,6 +645,8 @@ class SwingApp(playerClassList: List[Player],
     pages += new TabbedPane.Page("Fishing", fishingBot.fishingTab)
 
     pages += new TabbedPane.Page("Protection Zone", protectionZoneBot.protectionZoneTab)
+
+    pages += new TabbedPane.Page("Email Alerts", emailAlertsBot.emailAlertsTab)
 
   }
 
