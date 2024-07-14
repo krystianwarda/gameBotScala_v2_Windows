@@ -97,7 +97,9 @@ object SettingsUtils {
                                )
 
   case class AutoResponderSettings(
-                                    enabled: Boolean = false
+                                    enabled: Boolean = false,
+                                    selectedStory: String = "",
+                                    additionalStory: String = ""
                                   )
 
   case class EmailAlertsSettings(
@@ -192,6 +194,7 @@ object SettingsUtils {
                          autoTargetSettings: AutoTargetSettings,
                          teamHuntSettings: TeamHuntSettings,
                          emailAlertsSettings: EmailAlertsSettings,
+
 
                          // Add other settings or groups of settings as needed
                        )

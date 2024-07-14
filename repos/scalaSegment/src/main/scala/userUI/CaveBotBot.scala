@@ -107,7 +107,7 @@ class CaveBotBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
   val gridInfoList = new JList[GridInfo](gridInfoListModel)
   gridInfoList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
 
-  val waypointName = new TextField("not save8888899d", 30)
+  val waypointName = new TextField("not saved", 30)
   // Add button to add waypoints
   val addWalkButton = new JButton("Walk")
   val addStairsButton = new JButton("Stairs")

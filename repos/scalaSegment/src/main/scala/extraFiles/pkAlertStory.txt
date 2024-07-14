@@ -1,0 +1,1 @@
+"Very important Alert! You have just been attacked by someone. Say something like 'ok stop, I will log out' or 'please stop' or 'stop, I will log out' or similiar. If someone ask you to pay him or say something like 'weapon', 'armor', 'boots', say 'no'."

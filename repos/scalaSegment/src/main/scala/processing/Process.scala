@@ -1,7 +1,8 @@
 package processing
 
+import keyboard.KeyAction
 import play.api.libs.json.JsObject
-import mouse.{ActionCompleted, ActionTypes, FakeAction, Mouse, MouseMoveCommand, MouseMovementSettings}
+import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, Mouse, MouseMoveCommand, MouseMovementSettings}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
 import processing.CaveBot.Vec
 
@@ -174,7 +175,7 @@ object Process {
   }
 
 
-  def performActionSequence(actionsSeq: Seq[MouseAction]): Seq[FakeAction] = {
+  def performMouseActionSequance(actionsSeq: Seq[MouseAction]): Seq[FakeAction] = {
     Seq(FakeAction("useMouse", None, Some(MouseActions(actionsSeq))))
   }
 

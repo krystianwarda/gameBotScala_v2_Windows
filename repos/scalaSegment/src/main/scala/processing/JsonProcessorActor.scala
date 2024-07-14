@@ -33,6 +33,7 @@ import java.nio.{ByteBuffer, ByteOrder}
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 import javax.swing.JList
+import scala.collection.mutable
 import scala.concurrent.duration.Duration
 import scala.util.Random
 // import userUI.UIAppActor
@@ -61,6 +62,15 @@ case class WaypointInfo(
 
 case class ProcessorState(
                            gmDetected: Boolean = false,
+                           gmDetectedTime: Long = 0,
+                           gmWaitTime: Long = 45000,
+                           messageRespondRequested: Boolean = false,
+                           messageListenerTime: Long = 0,
+                           preparedAnswer: String = "",
+                           dialogueHistory: mutable.Buffer[(JsValue, String)] = mutable.Buffer.empty,
+                           respondedMessages: mutable.Set[String] = mutable.Set.empty,
+                           pendingMessages: mutable.Queue[(JsValue, Long)] = mutable.Queue.empty,
+                           characterLastRotationTime: Long = 0,
                            lastEmailAlertTime: Long = 0,
                            stateHealingWithRune: String = "free",
                            healingRestryStatus: Int = 0,
@@ -145,7 +155,7 @@ case class UpdateSettings(settings: UISettings)
 case class Log(message: String)
 case object HealingComplete
 
-
+case class ResponseGenerated(history: Seq[(JsValue, String)], response: String, pendingMessages: mutable.Queue[(JsValue, Long)])
 case class BackPosition(x: Int, y: Int, z: Int)
 
 object BackPosition {
@@ -215,6 +225,31 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     case ActionCompleted(actionType) =>
       println("Action completed.")
 
+    case ResponseGenerated(history, response, pending) =>
+      // Get the current time to use as the timestamp for the response
+      val currentTime = System.currentTimeMillis()
+      val responseEntry = (Json.obj(
+        "from" -> "me", // System is responding
+        "text" -> response,
+        "time" -> currentTime.toString // Store time as a string
+      ), "response")
+
+      // Map over pending messages to add them to history as "received"
+      val updatedHistory = history ++ pending.map {
+        case (message, timestamp) =>
+          // Here timestamp represents the time message was added to pending
+          (message, "received")
+      }
+
+      // Update state with the new response and the newly formed history
+      state = state.copy(
+        dialogueHistory = state.dialogueHistory ++= updatedHistory :+ responseEntry,
+        preparedAnswer = response
+      )
+
+      // Log the update to verify correct operation
+      println(s"Updated state with new response: $response at $currentTime")
+
     case HealingComplete => // Make sure this matches exactly how the case object is defined
       state = state.copy(stateHealingWithRune = "free")
       println("Healing process completed, ready for new commands.")
@@ -278,8 +313,8 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
           actionKeyboardManager ! TypeText(actionDetail.text)
 
 
-        case FakeAction("autoResponderFunction", _, Some(ListOfJsons(jsons))) =>
-          autoResponderManagerRef ! AutoResponderCommand(jsons)
+//        case FakeAction("autoResponderFunction", _, Some(ListOfJsons(jsons))) =>
+//          autoResponderManagerRef ! AutoResponderCommand(jsons)
 
 
         case FakeAction("useOnYourselfFunction", Some(itemInfo), None) =>
@@ -416,10 +451,10 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     val currentTime = System.currentTimeMillis()
     currentState.settings.flatMap { settings =>
       if (settings.autoResponderSettings.enabled) {
-        val (actions, logs) = computeAutoRespondActions(json, settings)
-//        executeActionsAndLogs(actions, logs, Some(settings))
+        val ((actions, logs), updatedState) = computeAutoRespondActions(json, settings, currentState)
+
         executeActionsAndLogsNew(actions, logs, Some(settings), Some("autoresponder"))
-        Some(currentState.copy(lastAutoResponderCommandSend = currentTime))
+        Some(updatedState)
       } else None
     }.getOrElse(currentState)
   }

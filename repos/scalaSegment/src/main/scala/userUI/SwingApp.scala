@@ -2,7 +2,7 @@ package userUI
 import java.awt.GridBagLayout
 import java.awt.GridBagConstraints
 import processing.{ConnectToServer, InitializeProcessor}
-import main.scala.MainApp.{jsonProcessorActorRef, periodicFunctionActorRef, uiAppActorRef}
+import main.scala.MainApp.{autoResponderManagerRef, jsonProcessorActorRef, periodicFunctionActorRef, uiAppActorRef}
 import play.api.libs.json.{Format, Json}
 
 import javax.swing.{DefaultComboBoxModel, DefaultListModel, JComboBox, JList}
@@ -18,6 +18,10 @@ import java.awt.Dimension
 import scala.swing.{BoxPanel, Button, CheckBox, ComboBox, Label, MainFrame, Orientation, TabbedPane, TextField}
 import scala.swing.event.{ButtonClicked, SelectionChanged}
 import utils.StartSpecificPeriodicFunction
+
+
+case class UpdateSettings(settings: UISettings)
+
 
 class SwingApp(playerClassList: List[Player],
                uiAppActor: ActorRef,
@@ -166,7 +170,9 @@ class SwingApp(playerClassList: List[Player],
 
 
   def collectAutoResponderSettings(): AutoResponderSettings = AutoResponderSettings(
-    enabled = autoResponderCheckbox.selected
+    enabled = autoResponderCheckbox.selected,
+    selectedStory = autoResponderBot.selectedStory,
+    additionalStory = autoResponderBot.additionalStory.text,
   )
 
   def collectTeamHuntSettings(): TeamHuntSettings = TeamHuntSettings(
@@ -296,6 +302,7 @@ class SwingApp(playerClassList: List[Player],
     applyCaveBotSettings(settings.caveBotSettings)
     applyAutoTargetSettings(settings.autoTargetSettings)
     applyAutoLootSettings(settings.autoLootSettings)
+    applyAutoResponderSettings(settings.autoResponderSettings)
     applyRuneMakingSettings(settings.runeMakingSettings)
     applyFishingSettings(settings.fishingSettings)
     applyTeamHuntSettings(settings.teamHuntSettings)
@@ -410,6 +417,12 @@ class SwingApp(playerClassList: List[Player],
   }
 
 
+  def applyAutoResponderSettings(autoResponderSettings: AutoResponderSettings): Unit = {
+    autoResponderCheckbox.selected = autoResponderSettings.enabled
+    autoResponderBot.selectedStory = autoResponderSettings.selectedStory
+    autoResponderBot.additionalStory.text = autoResponderSettings.additionalStory
+  }
+
   def applyAutoTargetSettings(autoTargetSettings: AutoTargetSettings): Unit = {
     autoTargetCheckbox.selected = autoTargetSettings.enabled
     setListModel(autoTargetBot.creatureList, autoTargetSettings.creatureList)
@@ -459,9 +472,6 @@ class SwingApp(playerClassList: List[Player],
     trainingBot.switchWeaponToEnsureDamageCheckbox.selected = trainingSettings.switchWeaponToEnsureDamage
   }
 
-  def applyAutoResponderSettings(autoResponderSettings: AutoResponderSettings): Unit = {
-    autoResponderCheckbox.selected = autoResponderSettings.enabled
-  }
 
   def applyGeneralSettings(settings: UISettings): Unit = {
 //    fishingCheckbox.selected = settings.fishingSettings.enabled
@@ -491,6 +501,7 @@ class SwingApp(playerClassList: List[Player],
 
         // Sending the initialization message to JsonProcessorActor
         jsonProcessorActorRef ! InitializeProcessor(currentPlayer, currentSettings)
+        autoResponderManagerRef ! UpdateSettings(currentSettings)
 
     }
   }

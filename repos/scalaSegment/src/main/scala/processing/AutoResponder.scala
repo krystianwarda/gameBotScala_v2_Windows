@@ -1,90 +1,143 @@
 package processing
 
+import akka.http.scaladsl.Http
+import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpMethods, HttpRequest, StatusCodes, Uri}
+import akka.http.scaladsl.model.headers.{Authorization, GenericHttpCredentials}
+import akka.http.scaladsl.unmarshalling.Unmarshal
+import keyboard.Gpt3ApiClient.{alertStory, apiKey, endpoint, initialStory, storiesMap}
 import mouse.FakeAction
 import play.api.libs.json.{JsObject, JsValue, Json}
 import userUI.SettingsUtils
+import userUI.SettingsUtils.UISettings
+import keyboard.RequestAnswer
+import scala.collection.mutable
+import scala.concurrent.{Await, Future}
+import akka.actor.{Actor, ActorRef, ActorSystem, Props}
+import keyboard.ApplicationSetup.system
+import keyboard.Gpt3ApiClient.{alertStory, storiesMap}
+import keyboard.KeyboardActionTypes.TypeText
+import keyboard.{AutoResponderCommand, gptCredentials}
+import main.scala.MainApp.{actionKeyboardManagerRef, autoResponderManagerRef}
+import play.api.libs.json.{JsValue, Json}
+import userUI.SettingsUtils
+import userUI.SettingsUtils.UISettings
+import userUI.UpdateSettings
 
 import scala.collection.mutable
+import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.duration._
+import scala.io.Source
 
+case class AnalyzeMessage(json: JsValue)
+case object CheckPendingResponses
+case class AutoResponderCommand(messages: Seq[JsValue])
+case class TextResponse(key: String, responseText: String)
+case class UpdateAlertStory(alertType: String)
+case object CancelAlert
 
+// updatedState.dialogueHistory: mutable.Buffer[JsValue] = mutable.Buffer.empty
+// updatedState.respondedMessages: mutable.Set[String] = mutable.Set.empty
+// updatedState.pendingResponses: mutable.Queue[(String, Long)] = mutable.Queue.empty
 
 object AutoResponder {
 
-  def computeAutoRespondActions(json: JsValue, settings: SettingsUtils.UISettings): (Seq[FakeAction], Seq[Log]) = {
+  def computeAutoRespondActions(json: JsValue, settings: SettingsUtils.UISettings, currentState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
     var actions: Seq[FakeAction] = Seq()
     var logs: Seq[Log] = Seq()
+    var updatedState = currentState
+    val currentTime = System.currentTimeMillis()
 
     // Debug: Check if the auto responder settings are enabled
-    println(s"AutoResponder Enabled: ${settings.autoResponderSettings.enabled}")
+//    println(s"AutoResponder Enabled: ${settings.autoResponderSettings.enabled}")
 
     if (settings.autoResponderSettings.enabled) {
       // Debug: Parsing the focus status
       val isDefaultChatFocused = (json \ "textTabsInfo" \ "1" \ "isFocused").asOpt[Boolean].getOrElse(false)
-      println(s"Default Chat Focused: $isDefaultChatFocused")
+//      println(s"Default Chat Focused: $isDefaultChatFocused")
 
       val localCharName = (json \ "characterInfo" \ "Name").asOpt[String].getOrElse("")
-      println(s"Local Character Name: $localCharName")
+//      println(s"Local Character Name: $localCharName")
 
       if (isDefaultChatFocused) {
         // Debug: Fetching messages
         val messages = (json \ "focusedTabInfo").as[JsObject].values.toSeq.flatMap(_.asOpt[JsObject])
-        println(s"Total Messages Fetched: ${messages.length}")
+//        println(s"Total Messages Fetched: ${messages.length}")
 
-        val ignoredCreaturesList: Seq[String] = settings.protectionZoneSettings.ignoredCreatures
-        println(s"Ignored Creatures: $ignoredCreaturesList")
 
+        val historyMessages = updatedState.dialogueHistory.map { case (msgJson, _) =>
+          (msgJson \ "from").as[String] -> (msgJson \ "text").as[String]
+        }.toSet
+
+        val pendingMessagesSet = updatedState.pendingMessages.map(msg => (msg._1 \ "from").as[String] -> (msg._1 \ "text").as[String]).toSet
+        val playerName = (json \ "characterInfo" \ "Name").as[String]
         val relevantMessages = messages.filter { messageJson =>
           val from = (messageJson \ "from").asOpt[String].getOrElse("")
-          println(s"Message From: $from") // Debug: Log each message's sender
+          val text = (messageJson \ "text").asOpt[String].getOrElse("")
+          val messageIdentifier = (from, text)
 
-          val relevant = !from.equals("server") && !from.equals(localCharName) && !ignoredCreaturesList.contains(from)
-          println(s"Message from $from is relevant: $relevant")
-          relevant
+          !from.equals("server") && from != playerName && !from.equals("Local Character Name") && !historyMessages.contains(messageIdentifier) && !pendingMessagesSet.contains(messageIdentifier)
         }
 
-        // Debug: Check if any messages are relevant
-        println(s"Relevant Messages Found: ${relevantMessages.length}")
-        if (relevantMessages.nonEmpty) {
-          actions = actions :+ FakeAction("autoResponderFunction", None, Some(ListOfJsons(relevantMessages)))
-          println("Action added for relevant messages.")
-        } else {
-          logs = logs :+ Log("No relevant messages found")
-          println("No relevant messages found.")
+        // Debugging outputs
+        println(s"historyMessages: $historyMessages")
+        println(s"updatedState.pendingMessages: ${updatedState.pendingMessages}")
+        println(s"messageRespondRequested: ${updatedState.messageRespondRequested}")
+        println(s"relevantMessages.nonEmpty: ${relevantMessages.nonEmpty}")
+
+        if (relevantMessages.nonEmpty && !updatedState.messageRespondRequested) {
+          println(s"Relevant messages detected: ${messages.length}")
+          if (updatedState.messageListenerTime == 0) {
+            println(s"Start listening for messages for 8sec.")
+            updatedState = updatedState.copy(messageListenerTime = currentTime)
+          }
+
+          relevantMessages.foreach { message =>
+            println(s"Added following message to pendingMessages: ${message}")
+            updatedState.pendingMessages.enqueue((message, currentTime))
+          }
+          println(s"All messages in pendingMessages: ${updatedState.pendingMessages}")
         }
+
+        // Block adding new messages after 2 seconds
+        if (currentTime - updatedState.messageListenerTime > 8000 && !updatedState.messageRespondRequested && updatedState.pendingMessages.nonEmpty) {
+          println(s"All messages in pendingMessages: ${updatedState.pendingMessages}")
+          // Directly use dialogueHistory as it already contains messages with metadata
+          val historyWithMeta: Seq[(JsValue, String)] = updatedState.dialogueHistory.toSeq
+          println(s"Requesting answer.")
+          autoResponderManagerRef ! RequestAnswer(historyWithMeta, updatedState.pendingMessages, settings)
+
+          updatedState = updatedState.copy(
+            pendingMessages = mutable.Queue.empty,
+            messageRespondRequested = true
+          )
+
+        }
+
       } else {
-        logs = logs :+ Log("Default chat is not focused")
         println("Default chat is not focused.")
       }
     } else {
-      logs = logs :+ Log("AutoResponder is disabled")
       println("AutoResponder is disabled.")
     }
 
-    (actions, logs)
+    // Response Handling
+    if (updatedState.messageRespondRequested && (System.currentTimeMillis() - updatedState.messageListenerTime > 2000)) {
+      if (updatedState.preparedAnswer.nonEmpty) {
+
+        logs = logs :+ Log(s"sending answer ${updatedState.preparedAnswer}")
+        actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(updatedState.preparedAnswer)))
+
+        updatedState = updatedState.copy(
+          preparedAnswer = "",
+          messageListenerTime = 0,
+          messageRespondRequested = false,
+        )
+
+      }
+    }
+
+    ((actions, logs), updatedState)
   }
+
+
 }
-
-//  "textChatInfo":{
-//      "focusedTabInfo":{
-//      "1":{
-//      "from":"server",
-//      "mode":"Silver",
-//      "text":"Your stream is currently disabled.",
-//      "time":"21:40"
-//      }
-//    },
-//  "textTabsInfo":{
-//    "1":{
-//        "hasUnread":"false",
-//        "isFocused":"true",
-//        "tabName":"Default"
-//        },
-//    "2":{
-//        "hasUnread":"false",
-//        "isFocused":"false",
-//        "tabName":"Server Log"},
-//        "3":{"hasUnread":"false",
-//        "isFocused":"false",
-//        "tabName":"Loot Channel"}}}}
-
-

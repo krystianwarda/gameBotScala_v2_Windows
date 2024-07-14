@@ -1,12 +1,21 @@
 package processing
 
+import main.scala.MainApp.autoResponderManagerRef
 import mouse.FakeAction
 import play.api.libs.json.JsValue
 import userUI.SettingsUtils.UISettings
 import utils.consoleColorPrint.{ANSI_GREEN, ANSI_RED, printInColor}
-import processing.CaveBot.{Vec}
+import processing.CaveBot.Vec
+import keyboard.{CancelAlert, KeyAction, UpdateAlertStory}
+
 import scala.collection.immutable.Seq
 import play.api.libs.json._
+import processing.Process.{handleRetryStatus, performMouseActionSequance}
+import keyboard.CustomKeyAction
+import scala.util.Random
+
+
+
 
 object GMDetector {
   def computeGMDetectorActions(json: JsValue, settings: UISettings, currentState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
@@ -14,6 +23,36 @@ object GMDetector {
     var logs: Seq[Log] = Seq.empty
     var updatedState = currentState // Initialize updatedState
     val startTime = System.nanoTime()
+    val currentTime = System.currentTimeMillis()
+
+    if (updatedState.gmDetected ) {
+
+      if (currentTime - updatedState.characterLastRotationTime < updatedState.gmWaitTime) {
+        // Define the Ctrl press and release actions as individual FakeActions
+        val ctrlPress = FakeAction("pressKey", None, Some(PushTheButton("Ctrl")))
+        val ctrlRelease = FakeAction("releaseKey", None, Some(PushTheButton("Ctrl")))
+
+        // Generate a list of potential directions
+        val directions = Seq("Up", "Down", "Left", "Right")
+
+        // Randomly select 4-5 directions to simulate pressing
+        val numberOfPresses = Random.nextInt(2) + 4 // This will give you either 4 or 5
+        val randomDirections = Random.shuffle(directions).take(numberOfPresses)
+
+        // Create FakeAction for each direction
+        val keyPresses = randomDirections.map(dir => FakeAction("pressKey", None, Some(PushTheButton(dir))))
+
+        // Combine all actions into a single sequence, including pressing and releasing Ctrl
+        actions = actions ++ (ctrlPress +: keyPresses :+ ctrlRelease)
+
+      }
+
+      if (currentTime - updatedState.gmDetectedTime < updatedState.gmWaitTime) {
+//        autoResponderManagerRef ! CancelAlert
+      }
+
+    }
+
 //    println("Start computeGMDetectorActions.")
     // Extracting player's current position
     val presentCharLocationX = (json \ "characterInfo" \ "PositionX").as[Int]
@@ -71,8 +110,12 @@ object GMDetector {
       val distanceX = Math.abs(presentCharLocationX - lastTargetPos._1)
       val distanceY = Math.abs(presentCharLocationY - lastTargetPos._2)
       if (distanceX <= 7 && distanceY <= 6 && presentCharLocationZ == lastTargetPos._3) {
-        println("Monster has disappeared from both battle info and visual range.")
-        updatedState = updatedState.copy(gmDetected = true)
+        println("Monster has disappeared from both battle info and visual range. Sending alert ")
+        autoResponderManagerRef ! UpdateAlertStory("gm alert") // For a game master alert
+//        autoResponderManagerRef ! UpdateAlertStory("pk alert") // For a player-killer alert
+//        autoResponderManagerRef ! CancelAlert  // This will clear the alert and resume normal operations
+
+        updatedState = updatedState.copy(gmDetected = true, gmDetectedTime = currentTime)
       } else {
 //        println("Monster is outside of the defined proximity range.")
       }

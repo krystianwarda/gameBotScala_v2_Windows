@@ -101,7 +101,13 @@ object MainApp extends App {
   lazy val mouseMovementActorRef: ActorRef = system.actorOf(Props(new MouseMovementActor(actionStateManagerRef, jsonProcessorActorRef)), "mouseMovementActor")
 
   val keyboardActorRef: ActorRef = system.actorOf(Props[KeyboardActor], "keyboardActor")
-  val autoResponderManagerRef: ActorRef = system.actorOf(AutoResponderManager.props(keyboardActorRef), "autoResponderManager")
+
+  val autoResponderManagerRef: ActorRef = system.actorOf(AutoResponderManager.props(keyboardActorRef, jsonProcessorActorRef), "autoResponderManager")
+
+
+
+
+
   val actionKeyboardManagerRef: ActorRef = system.actorOf(Props(new ActionKeyboardManager(keyboardActorRef)), "actionKeyboardManager")
 
   val functionExecutorActorRef: ActorRef = system.actorOf(Props[FunctionExecutorActor], "functionExecutorActor")

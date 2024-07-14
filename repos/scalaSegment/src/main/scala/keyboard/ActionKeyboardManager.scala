@@ -1,10 +1,27 @@
 package keyboard
 import akka.actor.{Actor, ActorRef, Props}
-import processing.PushTheButton
+import play.api.libs.json.{Json, Writes}
+import processing.{ActionDetail, PushTheButton}
+
 import scala.collection.mutable
 
 // Assuming TypeText is already correctly defined
 case class TypeText(text: String)
+case class KeyAction(action: String, key: String)
+
+// Definition for a sequence of keyboard actions including a modifier
+sealed trait ActionDetail
+case class CustomKeyAction(detailType: String, details: Map[String, String]) extends ActionDetail
+
+// Other subclasses of ActionDetail...
+
+// New subclass for handling keyboard sequences
+case class KeyboardSequence(modifier: Option[String], keys: Seq[String]) extends ActionDetail
+
+object KeyboardSequence {
+  implicit val writes: Writes[KeyboardSequence] = Json.writes[KeyboardSequence]
+}
+
 
 case class KeyboardActionCompleted(actionType: KeyboardActionTypes.Value)
 
@@ -22,6 +39,15 @@ class ActionKeyboardManager(keyboardActorRef: ActorRef) extends Actor {
     case PushTheButton(key) =>
       // Assuming PushTheButton implies a PressKey action
       processKeyAction(KeyboardActionTypes.PressKey, key)
+
+    case TypeText(text) =>
+      if (keyboardActorRef != null) {
+        println("Processing TypeText command")
+        actionStates(KeyboardActionTypes.TypeText) = ("in progress", System.currentTimeMillis())
+        keyboardActorRef ! TypeText(text)
+      } else {
+        println("[ERROR] Keyboard actor reference is null!")
+      }
 
     case textCommand: TypeText =>
       processTextAction(textCommand)
@@ -63,6 +89,14 @@ class ActionKeyboardManager(keyboardActorRef: ActorRef) extends Actor {
     // Placeholder for actual priority logic; adjust as needed
     true
   }
+
+
+  // Factory method to create a KeyboardSequence-like action
+  def createKeyboardSequence(modifier: Option[String], keys: Seq[String]): CustomKeyAction = {
+    CustomKeyAction("KeyboardSequence", Map("modifier" -> modifier.getOrElse(""), "keys" -> keys.mkString(",")))
+  }
+
+
 }
 
 object ActionKeyboardManager {

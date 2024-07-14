@@ -29,9 +29,6 @@ object ItemInfo {
   implicit val writes: Writes[ItemInfo] = Json.writes[ItemInfo]
 }
 
-// Action class that can include either mouse actions, keyboard text, or other command types
-//case class FakeAction(command: String, itemInfo: Option[ItemInfo], actionDetail: Option[ActionDetail])
-//case class FakeAction(command: String, itemInfo: Option[ItemInfo], actionDetail: Option[JsValue])
 case class FakeAction(command: String, itemInfo: Option[ItemInfo], actionDetail: Option[ActionDetail])
 
 //case class MouseMoveCommand(actions: Seq[MouseAction], mouseMovementsEnabled: Boolean)

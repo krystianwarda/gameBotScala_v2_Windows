@@ -2,7 +2,7 @@ package processing
 
 import mouse.{FakeAction, ItemInfo}
 import play.api.libs.json.{JsDefined, JsNumber, JsObject, JsValue, Json}
-import processing.Process.{extractOkButtonPosition, handleRetryStatus, performActionSequence, timeToRetry, updateRetryStatusBasedOnTime}
+import processing.Process.{extractOkButtonPosition, handleRetryStatus, performMouseActionSequance, timeToRetry, updateRetryStatusBasedOnTime}
 import userUI.SettingsUtils
 import utils.consoleColorPrint.{ANSI_RED, printInColor}
 
@@ -40,7 +40,7 @@ object Fishing {
           )
 
           if (updatedState.retryMergeFishDelay == 0 || timeToRetry(updatedState.retryMergeFishDelay, updatedState.retryMidDelay)) {
-            actions = actions ++ performActionSequence(actionsSeq)
+            actions = actions ++ performMouseActionSequance(actionsSeq)
             logs = logs :+ Log("Merging fishes")
             updatedState = updatedState.copy(retryMergeFishDelay = currentTime) // Set to current time after action
           } else {
@@ -117,7 +117,7 @@ object Fishing {
 
                         // Check and update retry status based on current value and threshold
                         if (updatedState.retryThroughoutFishesStatus == 0) {
-                          actions = actions ++ performActionSequence(actionsSeq) // Use ++ to concatenate sequences
+                          actions = actions ++ performMouseActionSequance(actionsSeq) // Use ++ to concatenate sequences
                           logs = logs :+ Log(s"Moveing fishes out.")
                           updatedState = updatedState.copy(retryThroughoutFishesStatus = updatedState.retryThroughoutFishesStatus + 1)
                         } else {
@@ -207,7 +207,7 @@ object Fishing {
 
 
                 if (updatedState.retryMergeFishStatus == 0) {
-                  actions = actions ++ performActionSequence(actionsSeq) // Use ++ to concatenate sequences
+                  actions = actions ++ performMouseActionSequance(actionsSeq) // Use ++ to concatenate sequences
                   logs = logs :+ Log(s"Merging fishes")
                   updatedState = updatedState.copy(retryMergeFishStatus = updatedState.retryMergeFishStatus + 1)
                 } else {
@@ -258,7 +258,7 @@ object Fishing {
                 // Check and update retry status based on time elapsed
 
                 if (updatedState.retryMergeFishDelay == 0 || timeToRetry(updatedState.retryMergeFishDelay, updatedState.retryMidDelay)) {
-                  actions = actions ++ performActionSequence(actionsSeq)
+                  actions = actions ++ performMouseActionSequance(actionsSeq)
                   logs = logs :+ Log("Merging fishes")
                   updatedState = updatedState.copy(retryMergeFishDelay = currentTime) // Set to current time after action
                 } else {
@@ -301,7 +301,7 @@ object Fishing {
               )
 
               if (updatedState.retryMergeFishStatus == 0) {
-                actions = actions ++ performActionSequence(actionsSeq)
+                actions = actions ++ performMouseActionSequance(actionsSeq)
                 logs = logs :+ Log("Merging fish stacks")
                 updatedState = updatedState.copy(retryMergeFishStatus = updatedState.retryMergeFishStatus + 1)
               } else {
@@ -338,7 +338,7 @@ object Fishing {
 
             // Check and update retry status based on current value and threshold
             if (updatedState.retryFishingStatus == 0) {
-              actions = actions ++ performActionSequence(actionsSeq)  // Use ++ to concatenate sequences
+              actions = actions ++ performMouseActionSequance(actionsSeq)  // Use ++ to concatenate sequences
               logs = logs :+ Log(s"Fishing")
               updatedState = updatedState.copy(retryFishingStatus = updatedState.retryFishingStatus + 1)
             } else {

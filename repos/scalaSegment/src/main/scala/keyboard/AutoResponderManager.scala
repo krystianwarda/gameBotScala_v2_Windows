@@ -1,17 +1,27 @@
 package keyboard
 
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
-import main.scala.MainApp.actionKeyboardManagerRef
+import keyboard.Gpt3ApiClient.{alertStory, storiesMap}
+import main.scala.MainApp.{actionKeyboardManagerRef, jsonProcessorActorRef}
 import play.api.libs.json.{JsValue, Json}
+import userUI.SettingsUtils
+import userUI.SettingsUtils.UISettings
+import userUI.UpdateSettings
+import processing.ResponseGenerated
 
 import scala.collection.mutable
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
+import scala.io.Source
 
 case class AnalyzeMessage(json: JsValue)
 case object CheckPendingResponses
 case class AutoResponderCommand(messages: Seq[JsValue])
 case class TextResponse(key: String, responseText: String)
+case class UpdateAlertStory(alertType: String)
+case object CancelAlert
+case class RequestAnswer(dialogueHistory: Seq[(JsValue, String)], pendingMessages: mutable.Queue[(JsValue, Long)], settings: UISettings)
+
 
 import akka.pattern.pipe
 
@@ -40,13 +50,49 @@ object Gpt3ApiClient {
   val apiKey = gptCredentials.apiKey
   val endpoint = "https://api.openai.com/v1/chat/completions"
 
+  val storiesMap = Map(
+    "training" -> loadStoryFromFile("src/main/scala/extraFiles/trainingStory.txt"),
+    "solo hunt" -> loadStoryFromFile("src/main/scala/extraFiles/soloHuntStory.txt"),
+    "team hunt" -> loadStoryFromFile("src/main/scala/extraFiles/teamHuntStory.txt"),
+    "fishing" -> loadStoryFromFile("src/main/scala/extraFiles/fishingStory.txt"),
+    "rune making" -> loadStoryFromFile("src/main/scala/extraFiles/runeMakingStory.txt"),
+    "gm alert" -> loadStoryFromFile("src/main/scala/extraFiles/gmAlertStory.txt"),
+    "pk alert" -> loadStoryFromFile("src/main/scala/extraFiles/pkAlertStory.txt"),
+  )
+  val initialStory = loadStoryFromFile("src/main/scala/extraFiles/initialStory.txt")
+  var alertStory = ""
+  def loadStoryFromFile(filePath: String): String = {
+    try {
+      Source.fromFile(filePath).getLines.mkString("\n")
+    } catch {
+      case e: Exception =>
+        println(s"Failed to read $filePath: ${e.getMessage}")
+        ""
+    }
+  }
 
-  def generateResponse(messages: Seq[JsValue]): Future[String] = {
+  def generateResponse(messages: Seq[JsValue], settings: UISettings): Future[String] = {
+    // Determine the main story based on settings, if enabled
+    val mainStory = if (settings.autoResponderSettings.enabled) {
+      storiesMap.getOrElse(settings.autoResponderSettings.selectedStory, "")
+    } else {
+      "" // No main story if auto responder is disabled
+    }
+
+    // Additional story from settings
+    val additionalStory = if (settings.autoResponderSettings.enabled) {
+      settings.autoResponderSettings.additionalStory
+    } else {
+      "" // No additional story if auto responder is disabled
+    }
+
+    // Combine the stories
+    val combinedStory = s"$initialStory $mainStory $additionalStory $alertStory"
+
     val systemMessage = Json.obj(
       "role" -> "system",
-      "content" -> "You are a player in a computer game, training your skills by hitting a monk creature on your computer for long hours. You haven't seen and aren't supposed to see anybody. Suddenly, someone is talking to you. Keep your answers very brief, do not make sentences, and do not use capital letters, but try to use up to 3-4 words. Try to answer politely if someone asks you how you are doing. If someone will ask you about your skill say 91/90."
+      "content" -> combinedStory
     )
-
 
     val chatMessages = systemMessage +: messages.map(msg => Json.obj(
       "role" -> "user",
@@ -89,86 +135,27 @@ object Gpt3ApiClient {
 
 
 
-class AutoResponderManager(keyboardActorRef: ActorRef) extends Actor {
+class AutoResponderManager(keyboardActorRef: ActorRef, jsonProcessorActorRef: ActorRef) extends Actor {
 //  import context.dispatcher
   import ApplicationSetup._
-  override def preStart(): Unit = {
-    // Initialize the scheduler in preStart to ensure it starts with the actor.
-    context.system.scheduler.scheduleWithFixedDelay(1.second, 3.seconds, self, CheckPendingResponses)
+  var settings: Option[UISettings] = None  // Start with None and update when settings are received
 
-  }
-
-
-  val dialogueHistory: mutable.Buffer[JsValue] = mutable.Buffer.empty
-  val respondedMessages: mutable.Set[String] = mutable.Set.empty
-  val pendingResponses: mutable.Queue[(String, Long)] = mutable.Queue.empty
 
   override def receive: Receive = {
-    case AutoResponderCommand(messages) =>
-      println(s"Received ${messages.size} messages to process in AutoResponder.")
-      messages.foreach { messageJson =>
-        val text = (messageJson \ "text").as[String]
-        val from = (messageJson \ "from").as[String]
-        val key = s"$from:$text"
-        println(s"Processing message from $from with text $text. Key: $key")
 
-        if (!respondedMessages.contains(key) && !pendingResponses.exists(_._1 == key)) {
-          pendingResponses.enqueue((key, System.currentTimeMillis()))
-//          respondedMessages.add(key) // Optionally mark as responded immediately upon queuing, if appropriate
-          println(s"Enqueued message: $key")
-        } else {
-          println(s"Message already processed or in queue: $key")
-        }
-
+    case RequestAnswer(history, pending, settings) =>
+      val messages = pending.map(_._1).toSeq
+      println("Message requested in AutoResponderManager.")
+      Gpt3ApiClient.generateResponse(messages, settings).map { response =>
+        jsonProcessorActorRef ! ResponseGenerated(history, response, pending)
       }
-
-
-    case CheckPendingResponses =>
-      println(s"Checking pending responses, queue size: ${pendingResponses.size}")
-      val currentTime = System.currentTimeMillis()
-      pendingResponses.dequeueAll { case (key, time) =>
-        if (currentTime - time >= 5000) {
-          println(s"Processing queued message: $key")
-          println(s"respondedMessages: $respondedMessages")
-          if (!respondedMessages.contains(key)) {
-            println(s"Attempting to generate response for $key")
-            Gpt3ApiClient.generateResponse(dialogueHistory.toSeq)
-              .map { response =>
-                val responseJson = Json.obj("from" -> "ChatGPT", "text" -> response)
-                dialogueHistory += responseJson
-                respondedMessages.add(key) // Mark as responded only after successful response generation
-                println(s"Response generated for $key: $response")
-                TextResponse(key, response)
-              }
-              .recover { case ex =>
-                println(s"Failed to generate response for $key: ${ex.getMessage}")
-                TextResponse(key, s"Error: ${ex.getMessage}")
-              }
-              .pipeTo(self)
-          } else {
-            println(s"Skipping processing for already responded message: $key")
-          }
-          true // Confirm removal from the queue
-        } else {
-          false // Keep in the queue if not yet ready
-        }
-      }
-
-    case TextResponse(key, responseText) =>
-      println(s"Sending response to keyboard for $key: $responseText")
-      actionKeyboardManagerRef ! TypeText(responseText)  // Assuming actionKeyboardManagerRef is a reference to ActionKeyboardManager
-
-
-//    case TextResponse(key, responseText) =>
-//      println(s"Sending response to keyboard for $key: $responseText")
-//      keyboardActorRef ! TypeText(responseText)
-
-
 
     case _ => println("Unhandled message type received in AutoResponderManager.")
   }
 }
 
 object AutoResponderManager {
-  def props(keyboardActorRef: ActorRef): Props = Props(new AutoResponderManager(keyboardActorRef))
+  def props(keyboardActorRef: ActorRef, jsonProcessorActorRef: ActorRef): Props =
+    Props(new AutoResponderManager(keyboardActorRef, jsonProcessorActorRef))
 }
+
