@@ -3,6 +3,7 @@ import akka.actor.{Actor, ActorRef, Props}
 import play.api.libs.json.{Json, Writes}
 import processing.{ActionDetail, PushTheButton}
 
+import javax.swing.Action
 import scala.collection.mutable
 
 // Assuming TypeText is already correctly defined
@@ -28,6 +29,9 @@ case class KeyboardActionCompleted(actionType: KeyboardActionTypes.Value)
 // Definition for PressArrowKey (if not already defined)
 case class PressArrowKey(key: String)
 
+case class ComboKeyAction(controlKey: String, arrowKeys: Seq[String])
+
+case class PressControlAndArrows(controlKey: String, arrowKeys: Seq[String])
 object KeyboardActionTypes extends Enumeration {
   val TypeText, PressKey, OtherAction = Value // Added PressKey for clarity
 }
@@ -36,6 +40,11 @@ class ActionKeyboardManager(keyboardActorRef: ActorRef) extends Actor {
   val actionStates: mutable.Map[KeyboardActionTypes.Value, (String, Long)] = mutable.Map().withDefaultValue(("free", 0L))
 
   override def receive: Receive = {
+
+    case PressControlAndArrows(ctrlKey, arrowKeys) =>
+      actionStates(KeyboardActionTypes.PressKey) = ("in progress", System.currentTimeMillis())
+      keyboardActorRef ! PressControlAndArrows(ctrlKey, arrowKeys)
+
     case PushTheButton(key) =>
       // Assuming PushTheButton implies a PressKey action
       processKeyAction(KeyboardActionTypes.PressKey, key)

@@ -12,7 +12,7 @@ case class KeyboardText(text: String) extends ActionDetail
 case class JsonActionDetails(data: JsValue) extends ActionDetail
 case class ListOfJsons(jsons: Seq[JsValue]) extends ActionDetail
 
-
+case class ComboKeyActions(controlKey: String, arrowKeys: Seq[String]) extends ActionDetail
 object ActionDetail {
   // Define Writes for MouseAction here, and make sure it's declared before mouseActionsWrites
   implicit val mouseActionWrites: Writes[MouseAction] = Json.writes[MouseAction]
@@ -29,6 +29,15 @@ object ActionDetail {
     )
   }
 
+  implicit val comboKeyActionsWrites: Writes[ComboKeyActions] = new Writes[ComboKeyActions] {
+    def writes(combo: ComboKeyActions): JsValue = Json.obj(
+      "controlKey" -> combo.controlKey,
+      "arrowKeys" -> Json.toJson(combo.arrowKeys)
+    )
+  }
+
+
+
   implicit val listOfJsonsWrites: Writes[ListOfJsons] = new Writes[ListOfJsons] {
     def writes(list: ListOfJsons): JsValue = Json.toJson(list.jsons)
   }
@@ -38,6 +47,7 @@ object ActionDetail {
     def writes(detail: ActionDetail): JsValue = detail match {
       case m: MouseActions => Json.toJson(m)(mouseActionsWrites)
       case k: KeyboardText => Json.toJson(k)(keyboardTextWrites)
+      case combo: ComboKeyActions => Json.toJson(combo)(comboKeyActionsWrites)
       case j: JsonActionDetails => j.data
       case l: ListOfJsons => Json.toJson(l)(listOfJsonsWrites)
       case push: PushTheButton => Json.toJson(push)(pushButtonWrites)

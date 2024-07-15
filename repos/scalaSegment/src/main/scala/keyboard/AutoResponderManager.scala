@@ -21,7 +21,7 @@ case class TextResponse(key: String, responseText: String)
 case class UpdateAlertStory(alertType: String)
 case object CancelAlert
 case class RequestAnswer(dialogueHistory: Seq[(JsValue, String)], pendingMessages: mutable.Queue[(JsValue, Long)], settings: UISettings)
-
+import processing.Process.loadTextFromFile
 
 import akka.pattern.pipe
 
@@ -51,25 +51,17 @@ object Gpt3ApiClient {
   val endpoint = "https://api.openai.com/v1/chat/completions"
 
   val storiesMap = Map(
-    "training" -> loadStoryFromFile("src/main/scala/extraFiles/trainingStory.txt"),
-    "solo hunt" -> loadStoryFromFile("src/main/scala/extraFiles/soloHuntStory.txt"),
-    "team hunt" -> loadStoryFromFile("src/main/scala/extraFiles/teamHuntStory.txt"),
-    "fishing" -> loadStoryFromFile("src/main/scala/extraFiles/fishingStory.txt"),
-    "rune making" -> loadStoryFromFile("src/main/scala/extraFiles/runeMakingStory.txt"),
-    "gm alert" -> loadStoryFromFile("src/main/scala/extraFiles/gmAlertStory.txt"),
-    "pk alert" -> loadStoryFromFile("src/main/scala/extraFiles/pkAlertStory.txt"),
+    "training" -> loadTextFromFile("src/main/scala/extraFiles/trainingStory.txt"),
+    "solo hunt" -> loadTextFromFile("src/main/scala/extraFiles/soloHuntStory.txt"),
+    "team hunt" -> loadTextFromFile("src/main/scala/extraFiles/teamHuntStory.txt"),
+    "fishing" -> loadTextFromFile("src/main/scala/extraFiles/fishingStory.txt"),
+    "rune making" -> loadTextFromFile("src/main/scala/extraFiles/runeMakingStory.txt"),
+    "gm alert" -> loadTextFromFile("src/main/scala/extraFiles/gmAlertStory.txt"),
+    "pk alert" -> loadTextFromFile("src/main/scala/extraFiles/pkAlertStory.txt"),
   )
-  val initialStory = loadStoryFromFile("src/main/scala/extraFiles/initialStory.txt")
+  val initialStory = loadTextFromFile("src/main/scala/extraFiles/initialStory.txt")
   var alertStory = ""
-  def loadStoryFromFile(filePath: String): String = {
-    try {
-      Source.fromFile(filePath).getLines.mkString("\n")
-    } catch {
-      case e: Exception =>
-        println(s"Failed to read $filePath: ${e.getMessage}")
-        ""
-    }
-  }
+
 
   def generateResponse(messages: Seq[JsValue], settings: UISettings): Future[String] = {
     // Determine the main story based on settings, if enabled
@@ -85,6 +77,15 @@ object Gpt3ApiClient {
     } else {
       "" // No additional story if auto responder is disabled
     }
+
+    // Determine if 'Game master alert' is contained in any of the messages
+    alertStory = messages.exists { message =>
+      (message \ "text").asOpt[String].exists(_.contains("Game master alert."))
+    } match {
+      case true => storiesMap("gm alert")
+      case false => ""
+    }
+    println(s"generateResponse  -> alertStory: $alertStory")
 
     // Combine the stories
     val combinedStory = s"$initialStory $mainStory $additionalStory $alertStory"
@@ -151,7 +152,11 @@ class AutoResponderManager(keyboardActorRef: ActorRef, jsonProcessorActorRef: Ac
       }
 
     case _ => println("Unhandled message type received in AutoResponderManager.")
+
   }
+
+
+
 }
 
 object AutoResponderManager {

@@ -10,6 +10,7 @@ import scala.util.Random
 import play.api.libs.json._
 
 import java.time.Instant
+import scala.io.Source
 
 object Process {
   // Function to find the screen position of an item in container slots 1-4 with both itemId and itemSubType matching
@@ -175,6 +176,20 @@ object Process {
   }
 
 
+  // Function to load spells from a file
+  def loadSpellsFromFile(filePath: String): List[String] = {
+    Source.fromFile(filePath).getLines.toList
+  }
+
+  def loadTextFromFile(filePath: String): String = {
+    try {
+      Source.fromFile(filePath).getLines.mkString("\n")
+    } catch {
+      case e: Exception =>
+        println(s"Failed to read $filePath: ${e.getMessage}")
+        ""
+    }
+  }
   def performMouseActionSequance(actionsSeq: Seq[MouseAction]): Seq[FakeAction] = {
     Seq(FakeAction("useMouse", None, Some(MouseActions(actionsSeq))))
   }

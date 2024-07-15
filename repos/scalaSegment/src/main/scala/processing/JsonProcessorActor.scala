@@ -4,7 +4,7 @@ import akka.actor.{Actor, ActorRef}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json, Writes}
 import player.Player
 import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, Mouse, TextCommand}
-import keyboard.{AutoResponderManager, TypeText}
+import keyboard.{AutoResponderCommand, PressControlAndArrows, AutoResponderManager, ComboKeyAction, TypeText}
 import processing.ActionDetail
 import main.scala.MainApp
 import main.scala.MainApp.{autoResponderManagerRef, mouseMovementActorRef}
@@ -17,7 +17,6 @@ import processing.RuneMaker.computeRuneMakingActions
 import processing.Training.computeTrainingActions
 import userUI.SettingsUtils
 import userUI.SettingsUtils.UISettings
-import keyboard.AutoResponderCommand
 import processing.CaveBot.{Vec, computeCaveBotActions}
 import processing.AutoTarget.computeAutoTargetActions
 import processing.AutoLoot.computeAutoLootActions
@@ -312,15 +311,15 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
           println("Fake action - use keyboard - type text")
           actionKeyboardManager ! TypeText(actionDetail.text)
 
+        case FakeAction("pressMultipleKeys", _, Some(actionDetail: ComboKeyActions)) =>
+          println(s"Executing complex key press action: Control + ${actionDetail.arrowKeys.mkString(", ")}")
+          actionKeyboardManager ! PressControlAndArrows(actionDetail.controlKey, actionDetail.arrowKeys)
 
-//        case FakeAction("autoResponderFunction", _, Some(ListOfJsons(jsons))) =>
-//          autoResponderManagerRef ! AutoResponderCommand(jsons)
 
 
         case FakeAction("useOnYourselfFunction", Some(itemInfo), None) =>
           // Handle function-based actions: sendJson with itemInfo for specific use
           sendJson(Json.obj("__command" -> "useOnYourself", "itemInfo" -> Json.toJson(itemInfo)))
-
 
 
         case FakeAction("useMouse", _, Some(actionDetail: MouseActions)) =>

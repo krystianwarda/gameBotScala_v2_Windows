@@ -10,6 +10,7 @@ import play.api.libs.json.{JsObject, JsValue, Json}
 import userUI.SettingsUtils
 import userUI.SettingsUtils.UISettings
 import keyboard.RequestAnswer
+
 import scala.collection.mutable
 import scala.concurrent.{Await, Future}
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
@@ -19,6 +20,7 @@ import keyboard.KeyboardActionTypes.TypeText
 import keyboard.{AutoResponderCommand, gptCredentials}
 import main.scala.MainApp.{actionKeyboardManagerRef, autoResponderManagerRef}
 import play.api.libs.json.{JsValue, Json}
+import processing.Process.loadSpellsFromFile
 import userUI.SettingsUtils
 import userUI.SettingsUtils.UISettings
 import userUI.UpdateSettings
@@ -35,11 +37,14 @@ case class TextResponse(key: String, responseText: String)
 case class UpdateAlertStory(alertType: String)
 case object CancelAlert
 
+
 // updatedState.dialogueHistory: mutable.Buffer[JsValue] = mutable.Buffer.empty
 // updatedState.respondedMessages: mutable.Set[String] = mutable.Set.empty
 // updatedState.pendingResponses: mutable.Queue[(String, Long)] = mutable.Queue.empty
 
 object AutoResponder {
+  // Load substrings from external files
+  val spellList = loadSpellsFromFile("src/main/scala/extraFiles/spellsList.txt")
 
   def computeAutoRespondActions(json: JsValue, settings: SettingsUtils.UISettings, currentState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
     var actions: Seq[FakeAction] = Seq()
@@ -75,7 +80,7 @@ object AutoResponder {
           val text = (messageJson \ "text").asOpt[String].getOrElse("")
           val messageIdentifier = (from, text)
 
-          !from.equals("server") && from != playerName && !from.equals("Local Character Name") && !historyMessages.contains(messageIdentifier) && !pendingMessagesSet.contains(messageIdentifier)
+          !from.equals("server") && from != playerName && !from.equals("Local Character Name") && !historyMessages.contains(messageIdentifier) && !pendingMessagesSet.contains(messageIdentifier) && !containsAnySpell(text, spellList)
         }
 
         // Debugging outputs
@@ -125,18 +130,40 @@ object AutoResponder {
       if (updatedState.preparedAnswer.nonEmpty) {
 
         logs = logs :+ Log(s"sending answer ${updatedState.preparedAnswer}")
-        actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(updatedState.preparedAnswer)))
 
-        updatedState = updatedState.copy(
-          preparedAnswer = "",
-          messageListenerTime = 0,
-          messageRespondRequested = false,
-        )
+        // Check if the preparedAnswer contains the symbol "|"
+        val parts = updatedState.preparedAnswer.split("\\|")
+        if (parts.length > 1) {
+          // Send the first part now
+          val currentPart = parts.head.trim
+          actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(currentPart)))
 
+          // Prepare the remaining parts to be sent in the next iteration
+          val remainingParts = parts.tail.mkString("|").trim
+          updatedState = updatedState.copy(
+            preparedAnswer = remainingParts, // Store remaining parts for the next cycle
+            messageListenerTime = System.currentTimeMillis(), // Update time to reset delay calculation
+            messageRespondRequested = true // Ensure that response is still requested
+          )
+        } else {
+          // Send the entire message if there is no "|"
+          actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(updatedState.preparedAnswer)))
+          // Clear the state after sending
+          updatedState = updatedState.copy(
+            preparedAnswer = "",
+            messageListenerTime = 0,
+            messageRespondRequested = false,
+          )
+        }
       }
     }
 
+
     ((actions, logs), updatedState)
+  }
+
+  def containsAnySpell(text: String, spells: List[String]): Boolean = {
+    spells.exists(spell => text.contains(spell))
   }
 
 

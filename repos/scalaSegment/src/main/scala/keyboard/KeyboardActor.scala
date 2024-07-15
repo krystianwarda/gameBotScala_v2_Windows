@@ -19,6 +19,92 @@ class KeyboardActor extends Actor {
   val user32 = User32.INSTANCE
   var keyReleaseTasks: Map[Int, Cancellable] = Map()
 
+
+  // Simulate typing a string and press Enter after typing
+
+  override def receive: Receive = {
+
+    case PressControlAndArrows(ctrlKey, arrowKeys) =>
+      println("[DEBUG] Pressing CTRL and multiple arrow keys.")
+      try {
+        robot.keyPress(KeyEvent.VK_CONTROL) // Press the CTRL key
+        arrowKeys.foreach { key =>
+          val keyCode = keyCodeFromDirection(key) // Map direction to key code
+          robot.keyPress(keyCode) // Press each arrow key
+          robot.delay(100) // Delay for 100 milliseconds between key presses
+          robot.keyRelease(keyCode) // Release each arrow key
+        }
+      } finally {
+        robot.keyRelease(KeyEvent.VK_CONTROL) // Ensure CTRL key is released regardless of any errors
+        println("[DEBUG] CTRL and arrow keys sequence completed.")
+      }
+      sender() ! KeyboardActionCompleted(KeyboardActionTypes.PressKey) // Notify completion
+
+
+    case TypeText(text) =>
+      typeText(text)
+
+
+    case PressArrowKey(direction) =>
+      val numLockOn = Toolkit.getDefaultToolkit.getLockingKeyState(KeyEvent.VK_NUM_LOCK)
+      val (keyCode, immediateRelease) = direction match {
+        // Use JNA for diagonal movements when NumLock is off
+        case "MoveUpLeft" => if (!numLockOn) (0x24, false) else (KeyEvent.VK_HOME, false) // VK_HOME
+        case "MoveUpRight" => if (!numLockOn) (0x21, false) else (KeyEvent.VK_PAGE_UP, false) // VK_PAGE_UP
+        case "MoveDownLeft" => if (!numLockOn) (0x23, false) else (KeyEvent.VK_END, false) // VK_END
+        case "MoveDownRight" => if (!numLockOn) (0x22, false) else (KeyEvent.VK_PAGE_DOWN, false) // VK_PAGE_DOWN
+
+        // Use Robot for all other keys
+        case _ => (keyCodeFromDirection(direction), immediateReleaseFromDirection(direction))
+      }
+
+      println(s"Attempting to press key: $keyCode for direction: $direction with immediate release: $immediateRelease")
+      if (keyCode != -1) {
+        if (direction.startsWith("Move") && !numLockOn) {
+          pressKeyUsingJNA(keyCode)
+        } else {
+          pressKeyUsingRobot(keyCode, immediateRelease)
+        }
+        if (!immediateRelease) {
+          scheduleKeyRelease(keyCode)
+        }
+        println(s"Key pressed and processed for $direction")
+      } else {
+        println(s"Failed to find key mapping for $direction")
+      }
+      sender() ! KeyboardActionCompleted(KeyboardActionTypes.PressKey)
+  }
+
+
+  private def typeText(text: String): Unit = {
+    println(s"KeyboardActor: Typing text: $text") // Debug print
+    text.foreach { char =>
+      char match {
+        case '?' => // Special handling for question mark
+          robot.keyPress(KeyEvent.VK_SHIFT)
+          pressKey(KeyEvent.VK_SLASH)
+          robot.keyRelease(KeyEvent.VK_SHIFT)
+        case _ =>
+          val keyCode = KeyEvent.getExtendedKeyCodeForChar(char)
+          //          println(s"KeyboardActor: Typing char: $char with keyCode: $keyCode") // Debug print for each character
+          if (keyCode == KeyEvent.VK_UNDEFINED) {
+            println(s"KeyboardActor: Cannot type character: $char")
+          } else {
+            if (Character.isUpperCase(char) || char.isDigit || "`~!@#$%^&*()_+{}|:\"<>?".indexOf(char) > -1) {
+              robot.keyPress(KeyEvent.VK_SHIFT)
+            }
+            pressKey(keyCode)
+            if (Character.isUpperCase(char) || char.isDigit || "`~!@#$%^&*()_+{}|:\"<>?".indexOf(char) > -1) {
+              robot.keyRelease(KeyEvent.VK_SHIFT)
+            }
+          }
+      }
+    }
+    // Press Enter after typing the text
+    pressKey(KeyEvent.VK_ENTER)
+    println("KeyboardActor: Pressed Enter after typing") // Debug print
+  }
+
   private def scheduleKeyRelease(keyCode: Int, delay: FiniteDuration = 400.milliseconds): Unit = {
     keyReleaseTasks.get(keyCode).foreach(_.cancel())
     val task = context.system.scheduler.scheduleOnce(delay) {
@@ -75,73 +161,6 @@ class KeyboardActor extends Actor {
     robot.keyRelease(keyCode)
     //    println(s"KeyboardActor: Released key with keyCode: $keyCode") // Debug print
   }
-
-  // Simulate typing a string and press Enter after typing
-  private def typeText(text: String): Unit = {
-    println(s"KeyboardActor: Typing text: $text") // Debug print
-    text.foreach { char =>
-      char match {
-        case '?' => // Special handling for question mark
-          robot.keyPress(KeyEvent.VK_SHIFT)
-          pressKey(KeyEvent.VK_SLASH)
-          robot.keyRelease(KeyEvent.VK_SHIFT)
-        case _ =>
-          val keyCode = KeyEvent.getExtendedKeyCodeForChar(char)
-          //          println(s"KeyboardActor: Typing char: $char with keyCode: $keyCode") // Debug print for each character
-          if (keyCode == KeyEvent.VK_UNDEFINED) {
-            println(s"KeyboardActor: Cannot type character: $char")
-          } else {
-            if (Character.isUpperCase(char) || char.isDigit || "`~!@#$%^&*()_+{}|:\"<>?".indexOf(char) > -1) {
-              robot.keyPress(KeyEvent.VK_SHIFT)
-            }
-            pressKey(keyCode)
-            if (Character.isUpperCase(char) || char.isDigit || "`~!@#$%^&*()_+{}|:\"<>?".indexOf(char) > -1) {
-              robot.keyRelease(KeyEvent.VK_SHIFT)
-            }
-          }
-      }
-    }
-    // Press Enter after typing the text
-    pressKey(KeyEvent.VK_ENTER)
-    println("KeyboardActor: Pressed Enter after typing") // Debug print
-  }
-
-  override def receive: Receive = {
-
-    case TypeText(text) =>
-      typeText(text)
-
-    case PressArrowKey(direction) =>
-      val numLockOn = Toolkit.getDefaultToolkit.getLockingKeyState(KeyEvent.VK_NUM_LOCK)
-      val (keyCode, immediateRelease) = direction match {
-        // Use JNA for diagonal movements when NumLock is off
-        case "MoveUpLeft" => if (!numLockOn) (0x24, false) else (KeyEvent.VK_HOME, false) // VK_HOME
-        case "MoveUpRight" => if (!numLockOn) (0x21, false) else (KeyEvent.VK_PAGE_UP, false) // VK_PAGE_UP
-        case "MoveDownLeft" => if (!numLockOn) (0x23, false) else (KeyEvent.VK_END, false) // VK_END
-        case "MoveDownRight" => if (!numLockOn) (0x22, false) else (KeyEvent.VK_PAGE_DOWN, false) // VK_PAGE_DOWN
-
-        // Use Robot for all other keys
-        case _ => (keyCodeFromDirection(direction), immediateReleaseFromDirection(direction))
-      }
-
-      println(s"Attempting to press key: $keyCode for direction: $direction with immediate release: $immediateRelease")
-      if (keyCode != -1) {
-        if (direction.startsWith("Move") && !numLockOn) {
-          pressKeyUsingJNA(keyCode)
-        } else {
-          pressKeyUsingRobot(keyCode, immediateRelease)
-        }
-        if (!immediateRelease) {
-          scheduleKeyRelease(keyCode)
-        }
-        println(s"Key pressed and processed for $direction")
-      } else {
-        println(s"Failed to find key mapping for $direction")
-      }
-      sender() ! KeyboardActionCompleted(KeyboardActionTypes.PressKey)
-  }
-
-
 
   def keyCodeFromDirection(direction: String): Int = {
     // Example: translate direction to keyCode
