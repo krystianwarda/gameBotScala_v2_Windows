@@ -62,6 +62,7 @@ case class WaypointInfo(
 case class ProcessorState(
                            gmDetected: Boolean = false,
                            gmDetectedTime: Long = 0,
+                           GMlastDialogueTime: Long = 0,
                            gmWaitTime: Long = 45000,
                            messageRespondRequested: Boolean = false,
                            messageListenerTime: Long = 0,

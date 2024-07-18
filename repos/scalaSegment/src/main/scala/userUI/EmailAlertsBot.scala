@@ -12,6 +12,11 @@ import javax.swing._
 
 class EmailAlertsBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: ActorRef) {
 
+  val emailAlert = new TextField(20)
+  val passwordAlert = new TextField(20)
+  val recipientAlert = new TextField(20)
+
+
   val emailAlertsTab: Component = Component.wrap(new JPanel(new GridBagLayout) {
     val c = new GridBagConstraints()
     c.insets = new Insets(5, 5, 5, 5)
@@ -21,9 +26,8 @@ class EmailAlertsBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: A
 
     // Email field
     add(new JLabel("Email address:"), c)
-    val emailField = new TextField(20)
     c.gridx += 1
-    add(emailField.peer, c)
+    add(emailAlert.peer, c)
 
     // Reset grid for the next row
     c.gridx = 0
@@ -31,9 +35,8 @@ class EmailAlertsBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: A
 
     // Password field
     add(new JLabel("Password:"), c)
-    val passwordField = new JPasswordField(20)
     c.gridx += 1
-    add(passwordField, c)
+    add(passwordAlert.peer, c)
 
     // Reset grid for the next row
     c.gridx = 0
@@ -41,23 +44,13 @@ class EmailAlertsBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: A
 
     // Recipient email field
     add(new JLabel("Recipient Email:"), c)
-    val recipientField = new TextField(20)
+
     c.gridx += 1
-    add(recipientField.peer, c)
+    add(recipientAlert.peer, c)
 
     // Reset grid for the next row
     c.gridx = 0
     c.gridy += 1
 
-    // Save button
-    val saveButton = new JButton("Save Settings")
-    c.gridwidth = 2
-    add(saveButton, c)
-
-    saveButton.addActionListener(_ => {
-      // Here, implement the action to save these settings, possibly sending them to a settings manager or actor
-      // Example:
-      // uiAppActor ! UpdateEmailSettings(emailField.text, new String(passwordField.password), recipientField.text)
-    })
   })
 }

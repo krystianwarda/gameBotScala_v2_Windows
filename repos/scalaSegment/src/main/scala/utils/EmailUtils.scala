@@ -1,41 +1,66 @@
-package utils
-
-
-import javax.mail._
-import javax.mail.internet._
-import java.util.Properties
-
-object EmailUtils {
-  def sendEmail(from: String, password: String, to: String, subject: String, body: String): Boolean = {
-    try {
-      val props = new Properties()
-      props.put("mail.smtp.host", "smtp.gmail.com") // for Gmail, use smtp.gmail.com
-      props.put("mail.smtp.port", "587")
-      props.put("mail.smtp.auth", "true")
-      props.put("mail.smtp.starttls.enable", "true") // enable STARTTLS
-
-      // Authenticator to log in to your email account
-      val session = Session.getInstance(props, new Authenticator {
-        override protected def getPasswordAuthentication: PasswordAuthentication = {
-          new PasswordAuthentication(from, password)
-        }
-      })
-
-      // Create a new email message
-      val message = new MimeMessage(session)
-      message.setFrom(new InternetAddress(from))
-      message.addRecipient(Message.RecipientType.TO, new InternetAddress(to))
-      message.setSubject(subject)
-      message.setText(body)
-
-      // Send the email
-      Transport.send(message)
-      true // Email was sent successfully
-    } catch {
-      case e: MessagingException =>
-        e.printStackTrace()
-        false // Email failed to send
-    }
-  }
-}
-
+//package utils
+//
+//import sttp.client._
+//import play.api.libs.json._
+//import javax.mail.internet._
+//import scala.util.{Try, Success, Failure}
+//
+//object EmailUtils {
+//  // Configuration details for OAuth
+//  private val clientId = "your-client-id"
+//  private val clientSecret = "your-client-secret"
+//  private val tokenUrl = "https://api.login.yahoo.com/oauth2/get_token"
+//  private val redirectUri = "http://localhost"
+//
+//  // Function to obtain an access token
+//  private def obtainAccessToken(): String = {
+//    val requestBody = Map(
+//      "grant_type" -> "client_credentials",
+//      "client_id" -> clientId,
+//      "client_secret" -> clientSecret,
+//      "redirect_uri" -> redirectUri
+//    )
+//
+//    implicit val backend = HttpURLConnectionBackend()
+//    val request = basicRequest
+//      .body(requestBody)
+//      .post(uri"$tokenUrl")
+//      .contentType("application/x-www-form-urlencoded")
+//      .auth.basic(clientId, clientSecret)
+//
+//    val response = request.send()
+//    response.body match {
+//      case Right(body) => Json.parse(body) \ "access_token" as[String]
+//      case Left(error) => throw new RuntimeException(s"Failed to obtain access token: $error")
+//    }
+//  }
+//
+//  // Generalized function to send an email
+//  def sendEmail(from: String, to: String, subject: String, body: String): Boolean = {
+//    val accessToken = obtainAccessToken()  // Handle token internally
+//    val mailJson = Json.obj(
+//      "from" -> from,
+//      "to" -> List(to),
+//      "subject" -> subject,
+//      "textPart" -> body
+//    )
+//
+//    val uri = uri"https://api.mail.yahoo.com/some/email/send/endpoint" // Actual Mail API endpoint
+//    implicit val backend = HttpURLConnectionBackend()
+//    val request = basicRequest
+//      .body(mailJson.toString())
+//      .post(uri)
+//      .contentType("application/json")
+//      .header("Authorization", s"Bearer $accessToken")
+//
+//    val response = request.send()
+//    response.body match {
+//      case Right(_) =>
+//        println("Email sent successfully")
+//        true
+//      case Left(error) =>
+//        println(s"Failed to send email: $error")
+//        false
+//    }
+//  }
+//}

@@ -142,7 +142,9 @@ class SwingApp(playerClassList: List[Player],
 
   def collectEmailAlertsSettings(): EmailAlertsSettings = EmailAlertsSettings(
     enabled = emailAlertsCheckbox.selected,
-
+    emailAlert = emailAlertsBot.emailAlert.text,
+    passwordAlert = emailAlertsBot.passwordAlert.text,
+    recipientAlert = emailAlertsBot.recipientAlert.text,
   )
 
   def collectFishingSettings(): FishingSettings = FishingSettings(
@@ -382,6 +384,13 @@ class SwingApp(playerClassList: List[Player],
     caveBotCheckbox.selected = caveBotSettings.enabled
     setListModel(caveBotBot.waypointsList, caveBotSettings.waypointsList)
     setListModelFromGridInfos(caveBotBot.gridInfoList, caveBotSettings.gridInfoList)
+  }
+
+  def applyEmailAlertsSettings(emailAlertsSettings: EmailAlertsSettings): Unit = {
+    emailAlertsCheckbox.selected = emailAlertsSettings.enabled
+    emailAlertsBot.emailAlert.text = emailAlertsSettings.emailAlert
+    emailAlertsBot.passwordAlert.text = emailAlertsSettings.passwordAlert
+    emailAlertsBot.recipientAlert.text = emailAlertsSettings.recipientAlert
   }
 
 

@@ -18,6 +18,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import keyboard.ComboKeyAction
 
+import scala.collection.mutable
+
 
 
 object GMDetector {
@@ -28,11 +30,45 @@ object GMDetector {
     val startTime = System.nanoTime()
     val currentTime = System.currentTimeMillis()
     println(s"GM detected: ${updatedState.gmDetected}")
+
+
+
     if (updatedState.gmDetected ) {
+
+      if (updatedState.preparedAnswer.contains("bye")) {
+        println(s"Conversation has ended.")
+        updatedState = updatedState.copy(
+          gmDetected = false,
+          lastTargetPos = (0, 0, 0),
+          creatureTarget = 0
+        )
+      }
+
+      if (updatedState.pendingMessages.nonEmpty) {
+        updatedState = updatedState.copy(GMlastDialogueTime = currentTime)
+      } else if (currentTime - updatedState.GMlastDialogueTime >= 25000 && updatedState.GMlastDialogueTime != 0 ){
+        println(s"Saying bye bye to GM")
+        // Format the current time for the message
+        val dateFormatter = new SimpleDateFormat("HH:mm")
+        val formattedTime = dateFormatter.format(new Date(currentTime))
+
+        // Construct a JSON message for the game master alert
+        val messageString = s"""{"mode":"command", "from": "me", "text": "Write farewell word and add smiley face divided with '|'. ", "time": "$formattedTime"}"""
+        val messageValue: JsValue = Json.parse(messageString)
+
+        updatedState = updatedState.copy(
+          pendingMessages = updatedState.pendingMessages :+ (messageValue, currentTime),
+          gmDetected = false,
+          lastTargetPos = (0, 0, 0),
+          creatureTarget = 0,
+          dialogueHistory = mutable.Buffer.empty,
+        )
+
+      }
+
 
       // This condition checks if it's the right time to react or if it's the initial state (characterLastRotationTime == 0)
       if (updatedState.characterLastRotationTime == 0 || (currentTime - updatedState.characterLastRotationTime >= updatedState.gmWaitTime)) {
-
 
         val directions = Seq("MoveUp", "MoveDown", "MoveLeft", "MoveRight")
         val randomDirections = Random.shuffle(directions).take(Random.nextInt(2) + 4)
@@ -46,10 +82,6 @@ object GMDetector {
         println(s"currentTime: $currentTime")
         println(s"updatedState.characterLastRotationTime: ${updatedState.characterLastRotationTime}")
         println(s"updatedState.gmWaitTime: ${updatedState.gmWaitTime}")
-      }
-
-      if (currentTime - updatedState.gmDetectedTime < updatedState.gmWaitTime) {
-//        autoResponderManagerRef ! CancelAlert
       }
 
     } else {
@@ -91,21 +123,26 @@ object GMDetector {
       }.getOrElse(0L)
 
       val battleInfoResult = (json \ "battleInfo").validate[Map[String, JsValue]]
-
+      print(s"battleInfo : ${battleInfoResult}")
+      // Further error handling for battleInfo
       // Further error handling for battleInfo
       val creatureInBattle = battleInfoResult.fold(
         _ => {
           println("Failed to parse battleInfo, invalid JSON structure.")
           false
         },
-        battleInfo => battleInfo.get("creatures").exists(_.as[Seq[Long]].contains(lastAttackedId))
+        battleInfo => battleInfo.values.exists { jsValue =>
+          (jsValue \ "Id").asOpt[Long].contains(lastAttackedId)
+        }
       )
 
-      //    println(s"Checking conditions for lastTargetId: $lastTargetId vs lastAttackedId: $lastAttackedId")
-      //    println(s"Attack info exists: $attackInfoExists, Creature is dead: $isDead, Creature in battle: $creatureInBattle")
-
       // Main logic
-      if (lastTargetId == lastAttackedId && !attackInfoExists && !isDead && !creatureInBattle) {
+      println(s"lastTargetId: ${lastTargetId}")
+      println(s"lastTargetId: ${lastAttackedId}")
+      println(s"attackInfoExists: ${attackInfoExists}")
+      println(s"creatureInBattle: ${creatureInBattle}")
+      println(s"isDead: ${isDead}")
+      if (lastTargetId == lastAttackedId && !attackInfoExists && isDead == false && !creatureInBattle && lastTargetId != 0) {
         val distanceX = Math.abs(presentCharLocationX - lastTargetPos._1)
         val distanceY = Math.abs(presentCharLocationY - lastTargetPos._2)
         if (distanceX <= 7 && distanceY <= 6 && presentCharLocationZ == lastTargetPos._3) {
@@ -117,10 +154,8 @@ object GMDetector {
           val formattedTime = dateFormatter.format(new Date(currentTime))
 
           // Construct a JSON message for the game master alert
-          val messageString = s"""{"mode":"white", "from": "Game master", "text": "Game master alert.", "time": "$formattedTime"}"""
+          val messageString = s"""{"mode":"command", "from": "me", "text": "Game master alert apeared!", "time": "$formattedTime"}"""
           val messageValue: JsValue = Json.parse(messageString)
-
-          updatedState = updatedState.copy()
 
           updatedState = updatedState.copy(
             gmDetected = true,

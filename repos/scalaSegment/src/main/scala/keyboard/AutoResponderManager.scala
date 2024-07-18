@@ -63,7 +63,7 @@ object Gpt3ApiClient {
   var alertStory = ""
 
 
-  def generateResponse(messages: Seq[JsValue], settings: UISettings): Future[String] = {
+  def generateResponse(dialogueHistory: Seq[(JsValue, String)], messages: Seq[JsValue], settings: UISettings): Future[String] = {
     // Determine the main story based on settings, if enabled
     val mainStory = if (settings.autoResponderSettings.enabled) {
       storiesMap.getOrElse(settings.autoResponderSettings.selectedStory, "")
@@ -88,7 +88,7 @@ object Gpt3ApiClient {
     println(s"generateResponse  -> alertStory: $alertStory")
 
     // Combine the stories
-    val combinedStory = s"$initialStory $mainStory $additionalStory $alertStory"
+    val combinedStory = s"$initialStory $mainStory $additionalStory $alertStory (Dialogue history: $dialogueHistory)"
 
     val systemMessage = Json.obj(
       "role" -> "system",
@@ -147,14 +147,13 @@ class AutoResponderManager(keyboardActorRef: ActorRef, jsonProcessorActorRef: Ac
     case RequestAnswer(history, pending, settings) =>
       val messages = pending.map(_._1).toSeq
       println("Message requested in AutoResponderManager.")
-      Gpt3ApiClient.generateResponse(messages, settings).map { response =>
+      Gpt3ApiClient.generateResponse(history, messages, settings).map { response =>
         jsonProcessorActorRef ! ResponseGenerated(history, response, pending)
       }
 
     case _ => println("Unhandled message type received in AutoResponderManager.")
 
   }
-
 
 
 }

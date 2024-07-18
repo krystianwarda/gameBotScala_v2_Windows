@@ -104,9 +104,9 @@ object SettingsUtils {
 
   case class EmailAlertsSettings(
                                     enabled: Boolean = false,
-                                    email: String = "",
-                                    password: String = "",
-                                    recipient: String = "",
+                                    emailAlert: String = "",
+                                    passwordAlert: String = "",
+                                    recipientAlert: String = "",
                                   )
 
   case class ProtectionZoneSettings(

@@ -68,7 +68,6 @@ object AutoResponder {
         val messages = (json \ "focusedTabInfo").as[JsObject].values.toSeq.flatMap(_.asOpt[JsObject])
 //        println(s"Total Messages Fetched: ${messages.length}")
 
-
         val historyMessages = updatedState.dialogueHistory.map { case (msgJson, _) =>
           (msgJson \ "from").as[String] -> (msgJson \ "text").as[String]
         }.toSet
@@ -92,7 +91,7 @@ object AutoResponder {
         if (relevantMessages.nonEmpty && !updatedState.messageRespondRequested) {
           println(s"Relevant messages detected: ${messages.length}")
           if (updatedState.messageListenerTime == 0) {
-            println(s"Start listening for messages for 8sec.")
+            println(s"Start listening for messages for 2sec.")
             updatedState = updatedState.copy(messageListenerTime = currentTime)
           }
 
@@ -104,7 +103,7 @@ object AutoResponder {
         }
 
         // Block adding new messages after 2 seconds
-        if (currentTime - updatedState.messageListenerTime > 8000 && !updatedState.messageRespondRequested && updatedState.pendingMessages.nonEmpty) {
+        if (currentTime - updatedState.messageListenerTime > 2000 && !updatedState.messageRespondRequested && updatedState.pendingMessages.nonEmpty) {
           println(s"All messages in pendingMessages: ${updatedState.pendingMessages}")
           // Directly use dialogueHistory as it already contains messages with metadata
           val historyWithMeta: Seq[(JsValue, String)] = updatedState.dialogueHistory.toSeq

@@ -25,7 +25,7 @@ class KeyboardActor extends Actor {
   override def receive: Receive = {
 
     case PressControlAndArrows(ctrlKey, arrowKeys) =>
-      println("[DEBUG] Pressing CTRL and multiple arrow keys.")
+      println("[DEBUG] Initiating CTRL and arrow keys press.")
       try {
         robot.keyPress(KeyEvent.VK_CONTROL) // Press the CTRL key
         arrowKeys.foreach { key =>
@@ -34,12 +34,15 @@ class KeyboardActor extends Actor {
           robot.delay(100) // Delay for 100 milliseconds between key presses
           robot.keyRelease(keyCode) // Release each arrow key
         }
+      } catch {
+        case e: Exception =>
+          println(s"[ERROR] Exception occurred while pressing keys: ${e.getMessage}")
+          throw e
       } finally {
-        robot.keyRelease(KeyEvent.VK_CONTROL) // Ensure CTRL key is released regardless of any errors
-        println("[DEBUG] CTRL and arrow keys sequence completed.")
+        robot.keyRelease(KeyEvent.VK_CONTROL) // Ensure CTRL key is released
+        println("[DEBUG] CTRL and arrow keys sequence completed. Keys released.")
+//        sender() ! KeyboardActionCompleted(KeyboardActionTypes.PressKey) // Notify completion
       }
-      sender() ! KeyboardActionCompleted(KeyboardActionTypes.PressKey) // Notify completion
-
 
     case TypeText(text) =>
       typeText(text)
