@@ -57,11 +57,13 @@ class KeyboardActor extends Actor {
         case "MoveDownLeft" => if (!numLockOn) (0x23, false) else (KeyEvent.VK_END, false) // VK_END
         case "MoveDownRight" => if (!numLockOn) (0x22, false) else (KeyEvent.VK_PAGE_DOWN, false) // VK_PAGE_DOWN
 
+
+
         // Use Robot for all other keys
         case _ => (keyCodeFromDirection(direction), immediateReleaseFromDirection(direction))
       }
+      println(s"[DEBUG] Preparing to press key: $keyCode for direction: $direction with immediate release: $immediateRelease")
 
-      println(s"Attempting to press key: $keyCode for direction: $direction with immediate release: $immediateRelease")
       if (keyCode != -1) {
         if (direction.startsWith("Move") && !numLockOn) {
           pressKeyUsingJNA(keyCode)
@@ -108,16 +110,32 @@ class KeyboardActor extends Actor {
     println("KeyboardActor: Pressed Enter after typing") // Debug print
   }
 
+
   private def scheduleKeyRelease(keyCode: Int, delay: FiniteDuration = 400.milliseconds): Unit = {
-    keyReleaseTasks.get(keyCode).foreach(_.cancel())
+    keyReleaseTasks.get(keyCode).foreach(task => {
+      task.cancel()
+      println(s"[DEBUG] Previously scheduled key release for $keyCode cancelled.")
+    })
     val task = context.system.scheduler.scheduleOnce(delay) {
+      println(s"[DEBUG] Executing scheduled key release for $keyCode.")
       robot.keyRelease(keyCode)
-      keyReleaseTasks -= keyCode
-      println(s"KeyboardActor: Key $keyCode released after delay.")
+      println(s"[DEBUG] Key $keyCode released after delay.")
     }
     keyReleaseTasks += (keyCode -> task)
-    println(s"KeyboardActor: Release for key $keyCode scheduled.")
+    println(s"[DEBUG] Key release for $keyCode scheduled with a delay of $delay.")
   }
+
+
+  //  private def scheduleKeyRelease(keyCode: Int, delay: FiniteDuration = 400.milliseconds): Unit = {
+//    keyReleaseTasks.get(keyCode).foreach(_.cancel())
+//    val task = context.system.scheduler.scheduleOnce(delay) {
+//      robot.keyRelease(keyCode)
+//      keyReleaseTasks -= keyCode
+//      println(s"KeyboardActor: Key $keyCode released after delay.")
+//    }
+//    keyReleaseTasks += (keyCode -> task)
+//    println(s"KeyboardActor: Release for key $keyCode scheduled.")
+//  }
 
   private def pressKeyUsingRobot(keyCode: Int, immediateRelease: Boolean): Unit = {
     robot.keyPress(keyCode)

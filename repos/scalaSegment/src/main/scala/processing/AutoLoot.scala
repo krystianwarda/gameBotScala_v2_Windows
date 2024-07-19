@@ -254,10 +254,20 @@ object AutoLoot {
                         case None =>
                           printInColor(ANSI_RED, f"[DEBUG] No item has been found, looking for container inside container")
                           // Iterate over items in the last container to find any that are marked as a container
+                          println(s"itemsInContainer : $itemsInContainer")
                           itemsInContainer.fields.collectFirst {
                             case (slot, itemInfo) if (itemInfo \ "isContainer").asOpt[Boolean].getOrElse(false) =>
                               val itemSlot = slot.replace("slot", "item")
-                              val itemScreenInfo = (screenInfo \ "inventoryPanelLoc" \ lastContainerIndex \ "contentsPanel" \ itemSlot).as[JsObject]
+                              println(s"lastContainerIndex : $lastContainerIndex")
+//                              val itemScreenInfo = (screenInfo \ "inventoryPanelLoc" \ lastContainerIndex \ "contentsPanel" \ itemSlot).as[JsObject]
+
+                              // Find the key in 'inventoryPanelLoc' that contains the 'lastContainerIndex'
+                              val inventoryPanelLoc = (screenInfo \ "inventoryPanelLoc").as[JsObject]
+                              val matchedKey = inventoryPanelLoc.keys.find(_.contains(lastContainerIndex)).getOrElse(throw new NoSuchElementException("Key containing the substring not found"))
+                              val itemScreenInfo = (inventoryPanelLoc \ matchedKey \ "contentsPanel" \ itemSlot).as[JsObject]
+
+                              println(s"Item Screen Info for $itemSlot: $itemScreenInfo")
+
                               val (x, y) = ((itemScreenInfo \ "x").as[Int], (itemScreenInfo \ "y").as[Int])
                               (x, y)
                           } match {
@@ -270,6 +280,8 @@ object AutoLoot {
                                 MouseAction(x, y, "releaseRight") // Changed to releaseRight for right-click
                               )
                               actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+
+
                             case None =>
                               printInColor(ANSI_RED, f"[DEBUG] No container ( and no items to loot) detected within the items, setting the state to free")
                               if (updatedState.lootingStatus >= updatedState.retryAttempts) {
@@ -279,8 +291,8 @@ object AutoLoot {
                                 printInColor(ANSI_RED, f"[DEBUG] Retrying - No container nor items to loot. (Attempt ${updatedState.lootingStatus + 1})")
                                 updatedState = updatedState.copy(lootingStatus = updatedState.lootingStatus + 1)
                               }
-
                           }
+
                       }
                     } else {
                       printInColor(ANSI_RED, f"[DEBUG] Backpack ($lastContainerIndex) is from static opened backpacks: ${updatedState.staticContainersList}")

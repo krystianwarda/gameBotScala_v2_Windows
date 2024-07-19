@@ -136,11 +136,11 @@ case class ProcessorState(
                            retryMergeFishStatus: Int = 0,
                            retryMergeFishDelay: Long = 0,
                            retryThroughoutFishesStatus: Int = 0,
-                           retryAttempts: Int = 2,
-                           retryAttemptsShort: Int = 6,
-                           retryAttemptsMid: Int = 10,
+                           retryAttempts: Int = 6,
+                           retryAttemptsShort: Int = 15,
+                           retryAttemptsMid: Int = 23,
                            retryMidDelay: Long = 3000,
-                           retryAttemptsLong: Int = 20,
+                           retryAttemptsLong: Int = 30,
                            retryAttemptsVerLong: Int = 60,
                            targetFreezeStatus: Int = 0,
                            targetFreezeHealthStatus: Int = 0,
@@ -282,8 +282,8 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     // Sequentially apply action handlers, each updating the state based on its own logic
     val updatedState = initialState.copy(currentTime = Instant.now().toEpochMilli())
     val afterGMDetectorState = performGMDetector(json, updatedState)
-    val afterEmailAlertsState = performEmailAlerts(json, afterGMDetectorState)
-    val afterFishingState = performFishing(json, afterEmailAlertsState)
+//    val afterEmailAlertsState = performEmailAlerts(json, afterGMDetectorState)
+    val afterFishingState = performFishing(json, afterGMDetectorState)
     val afterHealingState = performAutoHealing(json, afterFishingState)
     val afterRuneMakingState = performRuneMaking(json, afterHealingState)
     val afterTrainingState = performTraining(json, afterRuneMakingState)
