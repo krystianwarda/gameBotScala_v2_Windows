@@ -235,6 +235,7 @@ object CaveBot {
 
     // Check if the character's location is the same as the last update
 //    if (updatedState.presentCharLocation == presentCharLocation) {
+    
 //      if (updatedState.antiCaveBotStuckStatus >= updatedState.retryAttemptsVerLong) {
 //        // Reset if the counter is 20 or more
 //        printInColor(ANSI_BLUE, "[ANTI CAVEBOT STUCK] Character has been in one place for too long. Finding new waypoint")
