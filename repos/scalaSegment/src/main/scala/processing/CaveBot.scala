@@ -235,7 +235,7 @@ object CaveBot {
 
     // Check if the character's location is the same as the last update
 //    if (updatedState.presentCharLocation == presentCharLocation) {
-    
+
 //      if (updatedState.antiCaveBotStuckStatus >= updatedState.retryAttemptsVerLong) {
 //        // Reset if the counter is 20 or more
 //        printInColor(ANSI_BLUE, "[ANTI CAVEBOT STUCK] Character has been in one place for too long. Finding new waypoint")
@@ -320,8 +320,8 @@ object CaveBot {
     if (updatedState.subWaypoints.nonEmpty) {
       // Define a condition to filter out subway points that are too close or exactly at the current location
       val tooCloseOrCurrentSubwaypoints = updatedState.subWaypoints.filter(subwaypoint =>
-        Math.abs(subwaypoint.x - updatedState.presentCharLocation.x) <= 1 &&
-          Math.abs(subwaypoint.y - updatedState.presentCharLocation.y) <= 1
+        Math.abs(subwaypoint.x - updatedState.presentCharLocation.x) <= 2 &&
+          Math.abs(subwaypoint.y - updatedState.presentCharLocation.y) <= 2
       )
 
       // Explicitly check if the current position is in the subwaypoints and remove it
