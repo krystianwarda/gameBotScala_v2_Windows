@@ -175,7 +175,7 @@ object CaveBot {
               val presentCharLocationX = (json \ "characterInfo" \ "PositionX").as[Int]
               val presentCharLocationY = (json \ "characterInfo" \ "PositionY").as[Int]
               val presentCharLocation = Vec(presentCharLocationX, presentCharLocationY)
-              updatedState = updatedState.copy(presentCharLocation = presentCharLocation)
+              updatedState = updatedState.copy(presentCharLocation = presentCharLocation, antiCaveBotStuckStatus = 0)
 
               // track if character crossed a subwaypoint
               if (updatedState.subWaypoints.nonEmpty) {
@@ -199,7 +199,7 @@ object CaveBot {
                 if (Math.abs(currentWaypoint.waypointX - presentCharLocationX) <= 2 && Math.abs(currentWaypoint.waypointY - presentCharLocationY) <= 2) {
                   // Move to the next waypoint, clear sub-waypoints, and force path recalculation
                   val nextWaypointIndex = (currentWaypointIndex + 1) % updatedState.fixedWaypoints.size
-                  updatedState = updatedState.copy(currentWaypointIndex = nextWaypointIndex, subWaypoints = List.empty)
+                  updatedState = updatedState.copy(currentWaypointIndex = nextWaypointIndex, subWaypoints = List.empty, antiCaveBotStuckStatus = 0)
                   printInColor(ANSI_BLUE, f"[WAYPOINT PROGRESS] Character advanced to next Waypoint. Advancing to next Waypoint Index: $nextWaypointIndex")
                 }
               }
@@ -233,33 +233,33 @@ object CaveBot {
     val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
     val presentCharLocation = Vec(presentCharLocationX, presentCharLocationY)
 
-    // Check if the character's location is the same as the last update
-//    if (updatedState.presentCharLocation == presentCharLocation) {
+//     Check if the character's location is the same as the last update
+    if (updatedState.presentCharLocation == presentCharLocation) {
 
-//      if (updatedState.antiCaveBotStuckStatus >= updatedState.retryAttemptsVerLong) {
-//        // Reset if the counter is 20 or more
-//        printInColor(ANSI_BLUE, "[ANTI CAVEBOT STUCK] Character has been in one place for too long. Finding new waypoint")
-//
-//        // Find the closest waypoint
-//        val (closestWaypointIndex, _) = updatedState.fixedWaypoints
-//          .zipWithIndex
-//          .map { case (waypoint, index) =>
-//            (index, presentCharLocation.manhattanDistance(Vec(waypoint.waypointX, waypoint.waypointY)))
-//          }
-//          .minBy(_._2) // Find the minimum by distance
-//
-//        // Reset the state
-//        updatedState = updatedState.copy(currentWaypointIndex = closestWaypointIndex, subWaypoints = List.empty, antiCaveBotStuckStatus = 0, presentCharLocation = presentCharLocation)
-//      } else {
-//        // Increment the counter if not yet reached 20
-//        if (updatedState.antiCaveBotStuckStatus >= 5) {
-//          printInColor(ANSI_BLUE, s"[ANTI CAVEBOT STUCK] COUNT STUCK ${updatedState.antiCaveBotStuckStatus}")
-//        }
-//        updatedState = updatedState.copy(antiCaveBotStuckStatus = updatedState.antiCaveBotStuckStatus + 1, presentCharLocation = presentCharLocation)
-//      }
-//    } else {
-//      updatedState = updatedState.copy(antiCaveBotStuckStatus = 0, presentCharLocation = presentCharLocation)
-//    }
+      if (updatedState.antiCaveBotStuckStatus >= updatedState.retryAttemptsVerLong) {
+        // Reset if the counter is 20 or more
+        printInColor(ANSI_BLUE, "[ANTI CAVEBOT STUCK] Character has been in one place for too long. Finding new waypoint")
+
+        // Find the closest waypoint
+        val (closestWaypointIndex, _) = updatedState.fixedWaypoints
+          .zipWithIndex
+          .map { case (waypoint, index) =>
+            (index, presentCharLocation.manhattanDistance(Vec(waypoint.waypointX, waypoint.waypointY)))
+          }
+          .minBy(_._2) // Find the minimum by distance
+
+        // Reset the state
+        updatedState = updatedState.copy(currentWaypointIndex = closestWaypointIndex, subWaypoints = List.empty, antiCaveBotStuckStatus = 0, presentCharLocation = presentCharLocation)
+      } else {
+        // Increment the counter if not yet reached 20
+        if (updatedState.antiCaveBotStuckStatus >= 5) {
+          printInColor(ANSI_BLUE, s"[ANTI CAVEBOT STUCK] COUNT STUCK ${updatedState.antiCaveBotStuckStatus}")
+        }
+        updatedState = updatedState.copy(antiCaveBotStuckStatus = updatedState.antiCaveBotStuckStatus + 1, presentCharLocation = presentCharLocation)
+      }
+    } else {
+      updatedState = updatedState.copy(antiCaveBotStuckStatus = 0, presentCharLocation = presentCharLocation)
+    }
 
     printInColor(ANSI_RED, f"[DEBUG] Character PositionX: $presentCharLocationX, PositionY: $presentCharLocationY, PositionZ: $presentCharLocationZ")
 
@@ -267,7 +267,7 @@ object CaveBot {
 
     ////////// START //////////
     // Define thresholdDistance with the specified value
-    val thresholdDistance = 25
+    val thresholdDistance = 20
 
     // Calculate the distance from the current character position to the current waypoint
 
