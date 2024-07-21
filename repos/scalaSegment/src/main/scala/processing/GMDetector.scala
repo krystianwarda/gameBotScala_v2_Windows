@@ -35,6 +35,15 @@ object GMDetector {
 
     if (updatedState.gmDetected ) {
 
+      if (currentTime - updatedState.gmDetectedTime >= 45000 ) {
+        updatedState = updatedState.copy(
+          gmDetected = false,
+          lastTargetPos = (0, 0, 0),
+          creatureTarget = 0,
+          gmDetectedTime = 0
+        )
+      }
+
       if (updatedState.preparedAnswer.contains("bye")) {
         println(s"Conversation has ended.")
         updatedState = updatedState.copy(
