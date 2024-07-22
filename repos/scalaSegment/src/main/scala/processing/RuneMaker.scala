@@ -12,7 +12,7 @@ object RuneMaker {
     var actions: Seq[FakeAction] = Seq()
     var logs: Seq[Log] = Seq()
     var onGround = true
-    val arrowId = 5690
+    val arrowId = 3446
 
     if (settings.runeMakingSettings.enabled) {
 

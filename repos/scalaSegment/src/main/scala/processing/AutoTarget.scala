@@ -5,12 +5,12 @@ import play.api.libs.json.JsValue
 import play.api.libs.json.OFormat.oFormatFromReadsAndOWrites
 import play.api.libs.json._
 import processing.CaveBot.executeWhenNoMonstersOnScreen
-import processing.Process.generateRandomDelay
+import processing.Process.{generateRandomDelay, performMouseActionSequance, timeToRetry}
 import userUI.SettingsUtils.UISettings
 import utils.consoleColorPrint.{ANSI_GREEN, ANSI_RED, printInColor}
 import utils.consoleColorPrint._
 
-import scala.util.Try
+import scala.util.{Random, Try}
 import scala.util.matching.Regex
 
 
@@ -24,11 +24,105 @@ object AutoTarget {
     var logs: Seq[Log] = Seq.empty
     var updatedState = currentState // Initialize updatedState
     val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
+    val currentTime = System.currentTimeMillis()
 
 //    printInColor(ANSI_RED, f"[DEBUG] computeAutoTargetActions process started with status:${updatedState.stateHunting}")
 
     if (settings.autoTargetSettings.enabled && updatedState.stateHunting == "free" && !updatedState.gmDetected) {
 
+      updatedState.isUsingAmmo match {
+        case "not_set" =>
+          val ammoIdsList = List(3446, 3447)
+          val slot10Info = (json \ "EqInfo" \ "10").as[JsObject]
+          val ammoId = (slot10Info \ "itemId").as[Int]
+
+          if (ammoIdsList.contains(ammoId)) {
+            val randomCountResuply = Random.nextInt(41) + 40 // Random number between 40 and 80
+            updatedState = updatedState.copy(
+              isUsingAmmo = "true",
+              ammoId = ammoId,
+              ammoCountForNextResupply = randomCountResuply
+            )
+          } else {
+            updatedState = updatedState.copy(isUsingAmmo = "false")
+          }
+
+        case "false" =>
+        // Do nothing and execute further code
+
+        case "true" =>
+          val slot10Info = (json \ "EqInfo" \ "10").as[JsObject]
+          val ammoCount = (slot10Info \ "itemCount").as[Int]
+          println(s"ammoCountForNextResupply: ${updatedState.ammoCountForNextResupply}")
+          if (ammoCount < updatedState.ammoCountForNextResupply) {
+            // Finding ammoId in bps slots
+            val containerInfo = (json \ "containersInfo").as[JsObject]
+
+            val foundSlot = containerInfo.fields.view.flatMap {
+              case (containerName, containerData) =>
+                val items = (containerData \ "items").as[JsObject]
+                // Sorting keys to ensure we start checking from slot1 onwards
+                val sortedSlots = items.fields.sortBy(_._1.stripPrefix("slot").toInt)
+                sortedSlots.collectFirst {
+                  case (slotId, slotData) if (slotData \ "itemId").as[Int] == updatedState.ammoId =>
+                    // Mapping slotId to match itemN format in screenInfo
+                    val screenSlotId = "item" + slotId.drop(4) // Assuming slotId format is "slotN"
+                    (containerName, screenSlotId)
+                }
+            }.headOption
+
+            foundSlot match {
+              case Some((containerName, screenSlotId)) =>
+                println(s"Found ammoId in $containerName at $screenSlotId")
+                // Extracting screen x and y position based on container name and slot id from inventoryPanelLoc
+                val screenInfo = (json \ "screenInfo" \ "inventoryPanelLoc").as[JsObject]
+                screenInfo.fields.collectFirst {
+                  case (key, value) if key.contains(containerName) =>
+                    val (ammoX, ammoY) = ((value \ "contentsPanel" \ screenSlotId \ "x").as[Int], (value \ "contentsPanel" \ screenSlotId \ "y").as[Int])
+                    println(s"Screen position of $screenSlotId in $key: x = $ammoX, y = $ammoY")
+
+
+                    // Retrieve position of slot10 from a different location in screenInfo
+                    val slot10ScreenInfo = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "slot10").as[JsObject]
+                    val (slot10X, slot10Y) = ((slot10ScreenInfo \ "x").as[Int], (slot10ScreenInfo \ "y").as[Int])
+                    println(s"Screen position of slot 10: x = $slot10X, y = $slot10Y")
+
+                    val actionsSeq = Seq(
+                      MouseAction(ammoX, ammoY, "move"),
+                      MouseAction(ammoX, ammoY, "pressCtrl"),
+                      MouseAction(ammoX, ammoY, "pressLeft"),
+                      MouseAction(slot10X, slot10Y, "move"),
+                      MouseAction(slot10X, slot10Y, "releaseLeft"),
+                      MouseAction(slot10X, slot10Y, "releaseCtrl")
+                    )
+
+                    // Check and update retry status based on time elapsed
+                    if (updatedState.ammoResuplyDelay == 0 || timeToRetry(updatedState.ammoResuplyDelay, updatedState.retryMidDelay)) {
+                      actions = actions ++ performMouseActionSequance(actionsSeq)
+                      logs = logs :+ Log("Resuppling ammo")
+                      updatedState = updatedState.copy(ammoResuplyDelay = currentTime) // Set to current time after action
+                    } else {
+                      println(s"Waiting to retry resupling ammo. Time left: ${(updatedState.retryMidDelay - (currentTime - updatedState.ammoResuplyDelay)) / 1000} seconds")
+                    }
+
+
+                    // Updating state with new ammo count
+                    updatedState = updatedState.copy(
+                      ammoCountForNextResupply = scala.util.Random.nextInt(41) + 40 // Recalculate after ammoCount falls below randomCountResupply
+                    )
+                }
+
+
+              case None =>
+                println("No slot with specified ammoId found.")
+            }
+
+
+          }
+
+
+        case _ => // handle unexpected cases or errors
+      }
 
 
       // Assuming the correct structure of the JSON object and that the JSON parsing is appropriate:

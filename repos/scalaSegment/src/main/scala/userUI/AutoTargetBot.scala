@@ -63,6 +63,8 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
   val runeTypeDropdown = new JComboBox[String](runeTypes) // Simplified initialization with items
 
 
+
+
   val autoTargetTab: Component = Component.wrap(new JPanel(new GridBagLayout) {
     val c = new GridBagConstraints()
     c.insets = new Insets(5, 5, 5, 5)
@@ -70,6 +72,7 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
     c.gridx = 0
     c.gridy = 0
     c.fill = GridBagConstraints.HORIZONTAL
+//    c.weightx = 1.0 // Give horizontal components some weight to expand horizontally
 
     // Waypoint Label and List
     add(new JLabel("Save&Loading"), c)
@@ -95,10 +98,23 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
     c.gridwidth = 4
     c.gridx = 0
     c.gridy += 1
-    c.fill = GridBagConstraints.HORIZONTAL
-    c.gridheight = 9
+
+    c.gridheight = 5 // Spanning multiple rows
+    c.fill = GridBagConstraints.BOTH // Fill both horizontally and vertically
+    c.weightx = 1.0
+    c.weighty = 1.0 // Important for vertical expansion
+
+    creatureScrollPane.setPreferredSize(new Dimension(200, 300)) // Optional: Set a preferred size
     add(creatureScrollPane, c)
+
+    // Reset constraints if other components follow
     c.gridheight = 1
+    c.weighty = 0
+
+//    c.fill = GridBagConstraints.HORIZONTAL
+//    c.gridheight = 5
+//    add(creatureScrollPane, c)
+//    c.gridheight = 1
 
 
     // Settings
@@ -199,24 +215,30 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
     def updateFieldsWithSelectedCreature(creatureInfo: String): Unit = {
       // Example parsing logic based on the provided file format
       val parts = creatureInfo.split(", ")
-      if (parts.length >= 4) { // Quick validation
+      if (parts.length >= 8) { // Ensure you have all needed parts
         val name = parts(0)
         val count = parts(1).substring("Count: ".length).toInt
         val hpParts = parts(2).substring("HP: ".length).split("-")
         val danger = parts(3).substring("Danger: ".length).toInt
         val targetInBattle = parts(4).substring("Target in Battle: ".length).equalsIgnoreCase("Yes")
         val lootMonster = parts(5).substring("Loot: ".length).equalsIgnoreCase("Yes")
-
+        val chaseMonster = parts(6).substring("Chase: ".length).equalsIgnoreCase("Yes")
+        val useRune = parts(7).substring("Use Rune: ".length).equalsIgnoreCase("Yes")
+        val runeType = if (useRune) parts(8).substring("Rune Type: ".length) else ""
 
         creatureNameTextField.text = name
-        creaturesCountDropdown.setSelectedItem(count.asInstanceOf[Object]) // Ensure this matches the type in the dropdown
+        creaturesCountDropdown.setSelectedItem(count.asInstanceOf[Object])
         healthRangeFrom.text = hpParts(0)
         healthRangeTo.text = hpParts(1)
-        creatureDangerDropdown.setSelectedItem(danger.asInstanceOf[Object]) // Ensure this matches the type in the dropdown
+        creatureDangerDropdown.setSelectedItem(danger.asInstanceOf[Object])
         targetMonstersOnBattleCheckbox.selected = targetInBattle
         lootMonsterCheckbox.selected = lootMonster
+        chaseMonstersCheckbox.selected = chaseMonster
+        useRuneCheckbox.selected = useRune
+        if (useRune) runeTypeDropdown.setSelectedItem(runeType)
       }
     }
+
 
     creatureList.addListSelectionListener(new ListSelectionListener() {
       override def valueChanged(e: ListSelectionEvent): Unit = {

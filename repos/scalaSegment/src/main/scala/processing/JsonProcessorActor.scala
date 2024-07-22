@@ -125,6 +125,13 @@ case class ProcessorState(
                            gridBoundsState: (Int, Int, Int, Int) = (0, 0, 0, 0), // Example default value
                            presentCharLocation: Vec = Vec(0, 0),
                            presentCharZLocation: Int = 0,
+
+                           // ammo resuply
+                           isUsingAmmo: String = "not_set",
+                           ammoId: Int = 0,
+                           ammoCountForNextResupply: Int = 0,
+                           ammoResuplyDelay: Long = 0,
+
                            alreadyLootedIds: List[Int] = List(),
                            retryStatus: Int = 0,
                            slowWalkStatus: Int = 0,

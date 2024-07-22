@@ -342,7 +342,7 @@ object Fishing {
               logs = logs :+ Log(s"Fishing")
               updatedState = updatedState.copy(retryFishingStatus = updatedState.retryFishingStatus + 1)
             } else {
-              val newRetryStatus = handleRetryStatus(updatedState.retryFishingStatus, updatedState.retryAttemptsShort)
+              val newRetryStatus = handleRetryStatus(updatedState.retryFishingStatus, updatedState.retryAttempts)
               if (newRetryStatus == 0) {
                 println(s"Resetting retryFishingStatus.")
               }
