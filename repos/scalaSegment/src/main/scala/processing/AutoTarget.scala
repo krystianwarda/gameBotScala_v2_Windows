@@ -17,7 +17,8 @@ import scala.util.matching.Regex
 
 object AutoTarget {
   def computeAutoTargetActions(json: JsValue, settings: UISettings, currentState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
-//    println("Performing computeCaveBotActions action.")
+//    println("Performing computeAutoTargetActions action.")
+
     val startTime = System.nanoTime()
 
     var actions: Seq[FakeAction] = Seq.empty
@@ -25,27 +26,36 @@ object AutoTarget {
     var updatedState = currentState // Initialize updatedState
     val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
     val currentTime = System.currentTimeMillis()
+    printInColor(ANSI_RED, f"[DEBUG] computeAutoTargetActions process started with status:${updatedState.stateHunting}")
 
-//    printInColor(ANSI_RED, f"[DEBUG] computeAutoTargetActions process started with status:${updatedState.stateHunting}")
 
     if (settings.autoTargetSettings.enabled && updatedState.stateHunting == "free" && !updatedState.gmDetected) {
 
+      // resuply ammo
       updatedState.isUsingAmmo match {
         case "not_set" =>
           val ammoIdsList = List(3446, 3447)
           val slot10Info = (json \ "EqInfo" \ "10").as[JsObject]
-          val ammoId = (slot10Info \ "itemId").as[Int]
+          val ammoIdOpt = (slot10Info \ "itemId").asOpt[Int]
 
-          if (ammoIdsList.contains(ammoId)) {
-            val randomCountResuply = Random.nextInt(41) + 40 // Random number between 40 and 80
-            updatedState = updatedState.copy(
-              isUsingAmmo = "true",
-              ammoId = ammoId,
-              ammoCountForNextResupply = randomCountResuply
-            )
-          } else {
-            updatedState = updatedState.copy(isUsingAmmo = "false")
+          ammoIdOpt match {
+            case Some(ammoId) if ammoIdsList.contains(ammoId) =>
+              if (ammoIdsList.contains(ammoId)) {
+                val randomCountResuply = Random.nextInt(41) + 40 // Random number between 40 and 80
+                updatedState = updatedState.copy(
+                  isUsingAmmo = "true",
+                  ammoId = ammoId,
+                  ammoCountForNextResupply = randomCountResuply
+                )
+              } else {
+                updatedState = updatedState.copy(isUsingAmmo = "false")
+              }
+            case _ =>
+              println("Nothing in arrow slot...")
+              updatedState = updatedState.copy(isUsingAmmo = "false")
           }
+
+
 
         case "false" =>
         // Do nothing and execute further code
@@ -123,6 +133,8 @@ object AutoTarget {
 
         case _ => // handle unexpected cases or errors
       }
+      // resuply ammo end
+
 
 
       // Assuming the correct structure of the JSON object and that the JSON parsing is appropriate:
@@ -156,60 +168,14 @@ object AutoTarget {
           }
         }
       }
+      // setting attackRuneContainerEnd
 
-/*      // Check if the attackInfo is empty
-      val attackInfoPart = (json \ "attackInfo").asOpt[JsObject]
-      // Retrieve current chase mode
-      val currentChaseMode = (json \ "characterInfo" \ "ChaseMode").as[Int]
-
-      attackInfoPart match {
-        case _ =>
-//          println("attackInfo is empty; turning off chase mode.")
-          // Add condition to check if current chase mode is not zero
-          if (currentChaseMode == 1) {
-            // Check if the number of retry attempts has been reached or exceeded
-            if (updatedState.chaseSwitchStatus >= updatedState.retryAttemptsMid) {
-              // Reset the mid-loop retry status
-              updatedState = updatedState.copy(chaseSwitchStatus = 0)
-
-              printInColor(ANSI_RED, "[DEBUG] Changing to stand mode due to empty attack info.")
-              val standModeBoxPosition = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "standModeBox").as[JsObject]
-              val standModeBoxX = (standModeBoxPosition \ "x").as[Int]
-              val standModeBoxY = (standModeBoxPosition \ "y").as[Int]
-
-              val actionsSeq = Seq(
-                MouseAction(standModeBoxX, standModeBoxY, "move"),
-                MouseAction(standModeBoxX, standModeBoxY, "pressLeft"),
-                MouseAction(standModeBoxX, standModeBoxY, "releaseLeft")
-              )
-
-//              logs :+= Log("Move mouse to switch off chase mode.")
-              actions :+= FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-
-            } else {
-              // Increase the retry counter and check if it's time to retry the action
-              updatedState = updatedState.copy(chaseSwitchStatus = updatedState.chaseSwitchStatus + 1)
-//              printInColor(ANSI_RED, "[DEBUG] Waiting to retry changing to stand mode. Retry in: " +
-//                (updatedState.retryAttemptsMid - updatedState.chaseSwitchStatus) + " more loops.")
-            }
-          } else {
-//            println("[DEBUG] Chase mode is already off (mode 0), no action taken.")
-          }
-      }*/
-
-
-      //      // After handling monsters, update chase mode if necessary
-//      val (newUpdatedState, newActions, newLogs) = updateChaseModeIfNecessary(json, updatedState, actions, logs, settings)
-//      updatedState = newUpdatedState // update the state
-//      actions = newActions // update actions
-//      logs = newLogs // update logs
 
       val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
 
-//      println(s"CaveBot enabled: ${settings.caveBotSettings.enabled}")
-//      println(s"Current Z-level (presentCharLocationZ): $presentCharLocationZ")
-//      println(s"CaveBot levels list contains current Z-level: ${updatedState.caveBotLevelsList.contains(presentCharLocationZ)}")
-//      println(s"AutoTarget enabled: ${settings.autoTargetSettings.enabled}")
+
+
+
 
       if ((settings.caveBotSettings.enabled && updatedState.caveBotLevelsList.contains(presentCharLocationZ)) || (!(settings.caveBotSettings.enabled) && settings.autoTargetSettings.enabled)) {
         println(s"AutoTarget is ON, status ${updatedState.stateHunting}")
@@ -228,21 +194,12 @@ object AutoTarget {
             }
           case JsError(_) =>
           //          println("battleInfo is null or invalid
-          //          format. Skipping processing.")
+
         }
       }
     } else if (settings.autoTargetSettings.enabled && updatedState.stateHunting == "attacking") {
       // Safely attempt to extract the attacked creature's target ID
       println(s"AutoTarget is ON, (ELSE) status ${updatedState.stateHunting}")
-      // After handling monsters, update chase mode if necessary
-
-//      val (newUpdatedState, newActions, newLogs) = updateChaseModeIfNecessary(json, updatedState, actions, logs, settings)
-//      updatedState = newUpdatedState // update the state
-//      actions = newActions // update actions
-//      logs = newLogs // update logs
-
-
-
 
 
       (json \ "attackInfo" \ "Id").asOpt[Int] match {
@@ -288,6 +245,7 @@ object AutoTarget {
           println(s"chaseEnabled: $chaseEnabled")
 
 
+          // change chase if necessary
           if (!(currentChaseMode == 1) && chaseEnabled) {
             println("inside chase change")
             if (updatedState.chaseSwitchStatus >= updatedState.retryAttemptsMid) {
@@ -314,11 +272,12 @@ object AutoTarget {
               updatedState = updatedState.copy(chaseSwitchStatus = updatedState.chaseSwitchStatus + 1)
             }
           }
+          //end chaange chase
 
 
 
 
-
+          // start anti-freeze
           if (tempTargetFreezeHealthPoints < updatedState.targetFreezeHealthPoints) {
             updatedState = updatedState.copy(targetFreezeHealthStatus = 0)
 
@@ -358,6 +317,8 @@ object AutoTarget {
             printInColor(ANSI_BLUE, f"[DEBUG] Target is freezed. (Attempt ${updatedState.targetFreezeHealthStatus + 1})")
             updatedState = updatedState.copy(targetFreezeHealthStatus = updatedState.targetFreezeHealthStatus + 1)
           }
+          // end anti-freeze
+
 
           val targetName = (json \ "attackInfo" \ "Name").asOpt[String].getOrElse("Unknown")
           printInColor(ANSI_RED, f"[DEBUG] computeAutoTargetActions process started. Status:${updatedState.stateHunting}, attacking: $targetName")
@@ -365,18 +326,25 @@ object AutoTarget {
           val yPos = (json \ "attackInfo" \ "Position" \ "y").asOpt[Int].getOrElse(0)
           val zPos = (json \ "attackInfo" \ "Position" \ "z").asOpt[Int].getOrElse(0)
 
-//          printInColor(ANSI_RED, f"[DEBUG] Updating position of attacked creature $targetName in game position $xPos, $yPos, $zPos")
-
           updatedState = updatedState.copy(lastTargetName = targetName)
           updatedState = updatedState.copy(targetFreezeHealthPoints = tempTargetFreezeHealthPoints)
           updatedState = updatedState.copy(lastTargetPos = (xPos, yPos, zPos))
           updatedState = updatedState.copy(creatureTarget = attackedCreatureTarget)
 
 
+          println(settings.autoTargetSettings.creatureList)
           // Fire runes at target
           val targetSettings = settings.autoTargetSettings.creatureList.find(_.contains(targetName))
-          println(targetSettings)
-          targetSettings match {
+
+          // Check if specific settings for the target exist, otherwise use "All" settings if available
+          val effectiveSettings = targetSettings.orElse {
+            val allSettings = settings.autoTargetSettings.creatureList.find(_.contains("All"))
+            if (allSettings.isEmpty) println(s"No specific or 'All' settings found for $targetName.")
+            allSettings
+          }
+
+          println(effectiveSettings)
+          effectiveSettings match {
             case Some(creatureSettings) =>
               val useRune = creatureSettings.contains("Use Rune: Yes")
               extractRuneID(creatureSettings) match {
@@ -404,7 +372,6 @@ object AutoTarget {
                         println(s"Rune position on screen: X=${runeScreenPos._1}, Y=${runeScreenPos._2}")
                         println(s"Monster position on battle screen: X=${monsterPos._1}, Y=${monsterPos._2}")
 
-
                         // Check if the monster's position is valid (not -1 or less than 2)
                         if (monsterPos._1 >= 2 && monsterPos._2 >= 2) {
                           // Define actions sequence here and ensure they are triggered correctly
@@ -426,9 +393,6 @@ object AutoTarget {
                         } else {
                           println("No actions executed: Monster position indicates it is no longer on the screen or too close to the edge.")
                         }
-
-
-
                       case None =>
                         println("Rune is not available in the first four slots of the specified backpack.")
                     }
@@ -441,6 +405,9 @@ object AutoTarget {
             case None =>
               println(s"No settings found for $targetName.")
           }
+
+
+
 
 
         case None =>
@@ -482,8 +449,6 @@ object AutoTarget {
           lastTargetPos = (xPos, yPos, zPos),
           creatureTarget = attackedCreatureTarget
         )
-
-
 
 
       case None =>
@@ -557,25 +522,6 @@ object AutoTarget {
               }
           }
 
-//          // Filter and sort based on the danger level, sorting by descending danger
-//          var sortedMonsters = monsters
-//            .filter { case (_, name) => creatureDangerMap.contains(name) }
-//            .sortBy { case (_, name) => -creatureDangerMap(name) } // Descending order of danger
-//
-//          // Filter monsters with ID >= 5
-//          sortedMonsters = sortedMonsters.filter { case (id, _) => id >= 5 }
-//
-//
-//          // Sort based on danger and position
-//          sortedMonsters = sortedMonsters.sortBy { case (_, name) => -creatureDangerMap(name) }
-//
-//          // Further filter and sort
-//          sortedMonsters = sortedMonsters
-//            .filter { case (id, _) => id >= 5 }
-//            .sortBy { case (id, _) =>
-//              val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ id.toString).asOpt[JsObject]
-//              battleCreaturePosition.flatMap(pos => (pos \ "PosY").asOpt[Int]).getOrElse(Int.MaxValue)
-//            }
 
           var topFourMonsters = sortedMonsters.take(4)
             .sortBy { case (_, name) => -creatureDangerMap.getOrElse(name, 0) }
@@ -655,107 +601,12 @@ object AutoTarget {
     }
 
 
-
-//        // Filter and sort based on the danger level, sorting by descending danger
-//        var sortedMonsters = monsters
-//          .filter { case (_, name) => creatureDangerMap.contains(name) }
-//          .sortBy { case (_, name) => -creatureDangerMap(name) } // Note the negative sign for descending order
-//
-//        // Filter monsters with ID >= 5
-//        sortedMonsters = sortedMonsters.filter { case (id, _) => id >= 5 }
-//
-//        // Sort the filtered list based on Y-coordinate in ascending order
-//        sortedMonsters = sortedMonsters.sortBy { case (id, _) =>
-//          val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ id.toString).asOpt[JsObject]
-//          battleCreaturePosition match {
-//            case Some(pos) => (pos \ "PosY").as[Int]
-//            case None => Int.MaxValue // If position information is not available, put it at the end
-//          }
-//        }
-//
-//        // Take top 4 elements
-//        val topFourMonsters = sortedMonsters.take(4)
-//
-//        // Re-sort the top 4 monsters based on danger level, again in descending order
-//        val sortedTopFourMonsters = topFourMonsters.sortBy { case (_, name) => -creatureDangerMap(name) }
-//
-//        // Process the highest priority target
-//        sortedTopFourMonsters.headOption match {
-//          case Some((id, name)) =>
-//            println(s"Attack creature name: $name, and id: $id")
-//            val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ id.toString).asOpt[JsObject]
-//
-//            battleCreaturePosition match {
-//              case Some(pos) =>
-//                val battleCreaturePositionX = (pos \ "PosX").as[Int]
-//                val battleCreaturePositionY = (pos \ "PosY").as[Int]
-//                println(s"Attack creature on battle positionX: $battleCreaturePositionX, and positionY: $battleCreaturePositionY")
-//                val actionsSeq = Seq(
-//                  MouseAction(battleCreaturePositionX, battleCreaturePositionY, "move"),
-//                  MouseAction(battleCreaturePositionX, battleCreaturePositionY, "pressLeft"),
-//                  MouseAction(battleCreaturePositionX, battleCreaturePositionY, "releaseLeft")
-//                )
-//                actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-//              case None =>
-//                println(s"No position information available for monster ID $id")
-//            }
-//          case None =>
-//            println("No monsters found to attack.")
-//        }
-//    }
-
     val endTime = System.nanoTime()
     val duration = (endTime - startTime) / 1e9d
 //    println(f"[INFO] Processing executeWhenNoMonstersOnScreen took $duration%.6f seconds")
     ((actions, logs), updatedState)
   }
 
-
-  def updateChaseModeIfNecessary(
-                                  json: JsValue,
-                                  initialState: ProcessorState,
-                                  initialActions: Seq[FakeAction],
-                                  initialLogs: Seq[Log],
-                                  settings: UISettings,
-                                ): (ProcessorState, Seq[FakeAction], Seq[Log]) = {
-    var actions = initialActions
-    var logs = initialLogs
-    var updatedState = initialState
-
-    (updatedState, actions, logs)
-  }
-
-
-  def updateChaseModeIfNecessaryOld(json: JsValue, initialState: ProcessorState, initialActions: Seq[FakeAction], initialLogs: Seq[Log]): (Seq[FakeAction], Seq[Log]) = {
-    var actions = initialActions
-    var logs = initialLogs
-    var updatedState = initialState
-
-    if (updatedState.chaseSwitchStatus >= updatedState.retryAttempts) {
-      printInColor(ANSI_BLUE, f"[WRONG FLOOR] Making a slow move.")
-//      updatedState = updatedState.copy(chaseSwitchStatus = 0)
-      val currentChaseMode = (json \ "characterInfo" \ "ChaseMode").as[Int]
-      if (currentChaseMode == 0) {
-        val chaseModeBoxPosition = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "chaseModeBox").as[JsObject]
-        val chaseModeBoxX = (chaseModeBoxPosition \ "x").as[Int]
-        val chaseModeBoxY = (chaseModeBoxPosition \ "y").as[Int]
-
-        val actionsSeq = Seq(
-          MouseAction(chaseModeBoxX, chaseModeBoxY, "move"),
-          MouseAction(chaseModeBoxX, chaseModeBoxY, "pressLeft"),
-          MouseAction(chaseModeBoxX, chaseModeBoxY, "releaseLeft"),
-        )
-
-        logs :+= Log("Move mouse to switch to follow chase mode.")
-        actions :+= FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-      }
-    } else {
-      printInColor(ANSI_BLUE, f"[WRONG FLOOR] Move hold - force slow walk")
-      updatedState = updatedState.copy(chaseSwitchStatus = updatedState.chaseSwitchStatus + 1)
-    }
-
-    (actions, logs)
-  }
 
 
   // Define the Creature case class along with its companion object

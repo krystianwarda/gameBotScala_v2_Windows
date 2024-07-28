@@ -14,11 +14,11 @@ import scala.collection.immutable.Seq
 object AutoHeal {
 
   def computeHealingActions(json: JsValue, settings: SettingsUtils.UISettings, currentState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
+    val startTime = System.nanoTime()
     var actions: Seq[FakeAction] = Seq()
     var logs: Seq[Log] = Seq()
     var updatedState = currentState
     val currentTime = System.currentTimeMillis()
-    val startTime = System.nanoTime()
 
     if (settings.healingSettings.enabled) {
 //      println(s"Status stateHealingWithRune : ${updatedState.stateHealingWithRune}")

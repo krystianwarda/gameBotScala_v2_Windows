@@ -83,8 +83,6 @@ object CaveBot {
             386,
             594,
           )
-          //593, shovel closed
-//          printInColor(ANSI_BLUE, f"[WRONG FLOOR] Level movement enablers: $levelMovementEnablersIdsList")
 
           val presentCharLocationX = (json \ "characterInfo" \ "PositionX").as[Int]
           val presentCharLocationY = (json \ "characterInfo" \ "PositionY").as[Int]
@@ -196,7 +194,7 @@ object CaveBot {
               val currentWaypointIndex = updatedState.currentWaypointIndex
               if (updatedState.fixedWaypoints.isDefinedAt(currentWaypointIndex)) {
                 val currentWaypoint = updatedState.fixedWaypoints(currentWaypointIndex)
-                if (Math.abs(currentWaypoint.waypointX - presentCharLocationX) <= 2 && Math.abs(currentWaypoint.waypointY - presentCharLocationY) <= 2) {
+                if (Math.abs(currentWaypoint.waypointX - presentCharLocationX) <= 4 && Math.abs(currentWaypoint.waypointY - presentCharLocationY) <= 4) {
                   // Move to the next waypoint, clear sub-waypoints, and force path recalculation
                   val nextWaypointIndex = (currentWaypointIndex + 1) % updatedState.fixedWaypoints.size
                   updatedState = updatedState.copy(currentWaypointIndex = nextWaypointIndex, subWaypoints = List.empty, antiCaveBotStuckStatus = 0)
@@ -308,53 +306,18 @@ object CaveBot {
       printInColor(ANSI_RED, f"[ABOVE THRESHOLD] Waypoint idx: $currentWaypointIndex, PositionX: ${currentWaypoint.waypointX}, PositionY: ${currentWaypoint.waypointY}")
     }
 
-    // checking waypoints
-    if (Math.abs(currentWaypoint.waypointX - presentCharLocationX) <= 2 && Math.abs(currentWaypoint.waypointY - presentCharLocationY) <= 2) {
+
+
+    // simplified
+    if (updatedState.subWaypoints.length < 3) {
       printInColor(ANSI_RED, f"[DEBUG] Move to the next waypoint, clear sub-waypoints, and force path recalculation")
       val nextWaypointIndex = (currentWaypointIndex + 1) % updatedState.fixedWaypoints.size
       updatedState = updatedState.copy(currentWaypointIndex = nextWaypointIndex, subWaypoints = List.empty)
       var currentWaypoint = updatedState.fixedWaypoints(updatedState.currentWaypointIndex)
     }
 
-    // Checking subwaypoints
-    if (updatedState.subWaypoints.nonEmpty) {
-      // Define a condition to filter out subway points that are too close or exactly at the current location
-      val tooCloseOrCurrentSubwaypoints = updatedState.subWaypoints.filter(subwaypoint =>
-        Math.abs(subwaypoint.x - updatedState.presentCharLocation.x) <= 2 &&
-          Math.abs(subwaypoint.y - updatedState.presentCharLocation.y) <= 2
-      )
+    updatedState = generateSubwaypoints(currentWaypoint, updatedState, json)
 
-      // Explicitly check if the current position is in the subwaypoints and remove it
-      val isCurrentLocationInSubwaypoints = updatedState.subWaypoints.exists(subwaypoint =>
-        subwaypoint.x == updatedState.presentCharLocation.x && subwaypoint.y == updatedState.presentCharLocation.y
-      )
-
-      if (tooCloseOrCurrentSubwaypoints.nonEmpty || isCurrentLocationInSubwaypoints) {
-        printInColor(ANSI_RED, "[DEBUG] Close or current location subwaypoints detected, they will be cleared to avoid redundancy.")
-        // Filter out subway points that are either too close or exactly at the current location
-        val remainingSubwaypoints = updatedState.subWaypoints.filterNot(subwaypoint =>
-          Math.abs(subwaypoint.x - updatedState.presentCharLocation.x) < 1 &&
-            Math.abs(subwaypoint.y - updatedState.presentCharLocation.y) < 1
-        )
-        updatedState = updatedState.copy(subWaypoints = remainingSubwaypoints)
-      }
-    }
-
-
-    if (updatedState.subWaypoints.length < 2) {
-      printInColor(ANSI_RED, f"[DEBUG] Subwaypoints are empty or few. Generating the path")
-      currentWaypoint = updatedState.fixedWaypoints(updatedState.currentWaypointIndex)
-
-      updatedState = generateSubwaypoints(currentWaypoint, updatedState, json)
-
-    } else {
-      printInColor(ANSI_RED, f"[DEBUG] Proceeding the path")
-
-      printInColor(ANSI_BLUE, f"[DEBUG] PATH BEFORE: ${updatedState.subWaypoints}")
-      updatedState = updatedState.copy(subWaypoints = pruneWaypoints(updatedState.subWaypoints))
-      printInColor(ANSI_BLUE, f"[DEBUG] PATH AFTER: ${updatedState.subWaypoints}")
-      controlPath(currentWaypoint, updatedState, json)
-    }
 
     if (updatedState.subWaypoints.nonEmpty) {
       val nextWaypoint = updatedState.subWaypoints.head
@@ -367,7 +330,6 @@ object CaveBot {
         logs :+= Log(s"Moving closer to the subWaypoint in direction: $dir")
       }
     }
-
 
     val endTime = System.nanoTime()
     val duration = (endTime - startTime) / 1e9d

@@ -4,7 +4,7 @@ import mouse.{FakeAction, ItemInfo}
 import play.api.libs.json.{JsDefined, JsNumber, JsObject, JsValue, Json}
 import processing.Process.{extractOkButtonPosition, handleRetryStatus, performMouseActionSequance, timeToRetry, updateRetryStatusBasedOnTime}
 import userUI.SettingsUtils
-import utils.consoleColorPrint.{ANSI_RED, printInColor}
+import utils.consoleColorPrint.{ANSI_GREEN, ANSI_RED, printInColor}
 
 import java.time.Instant
 import scala.collection.immutable.Seq
@@ -14,6 +14,7 @@ object Fishing {
 
 
   def computeFishingActions(json: JsValue, settings: SettingsUtils.UISettings, currentState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
+    val startTime = System.nanoTime()
     var actions: Seq[FakeAction] = Seq()
     var logs: Seq[Log] = Seq()
     val fishId = 3578
@@ -355,6 +356,10 @@ object Fishing {
         }
       }
     }
+    val endTime = System.nanoTime()
+    val duration = (endTime - startTime) / 1e9d
+    printInColor(ANSI_GREEN, f"[INFO] Processing computeAutoLootActions took $duration%.6f seconds")
+
     ((actions, logs),updatedState)
   }
 

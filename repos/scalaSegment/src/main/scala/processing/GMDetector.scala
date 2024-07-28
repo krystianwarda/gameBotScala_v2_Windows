@@ -29,7 +29,7 @@ object GMDetector {
     var updatedState = currentState // Initialize updatedState
     val startTime = System.nanoTime()
     val currentTime = System.currentTimeMillis()
-    println(s"GM detected: ${updatedState.gmDetected}")
+//    println(s"GM detected: ${updatedState.gmDetected}")
 
 
 
@@ -132,7 +132,7 @@ object GMDetector {
       }.getOrElse(0L)
 
       val battleInfoResult = (json \ "battleInfo").validate[Map[String, JsValue]]
-      print(s"battleInfo : ${battleInfoResult}")
+//      print(s"battleInfo : ${battleInfoResult}")
       // Further error handling for battleInfo
       // Further error handling for battleInfo
       val creatureInBattle = battleInfoResult.fold(
@@ -146,11 +146,11 @@ object GMDetector {
       )
 
       // Main logic
-      println(s"lastTargetId: ${lastTargetId}")
-      println(s"lastTargetId: ${lastAttackedId}")
-      println(s"attackInfoExists: ${attackInfoExists}")
-      println(s"creatureInBattle: ${creatureInBattle}")
-      println(s"isDead: ${isDead}")
+//      println(s"lastTargetId: ${lastTargetId}")
+//      println(s"lastTargetId: ${lastAttackedId}")
+//      println(s"attackInfoExists: ${attackInfoExists}")
+//      println(s"creatureInBattle: ${creatureInBattle}")
+//      println(s"isDead: ${isDead}")
       if (lastTargetId == lastAttackedId && !attackInfoExists && isDead == false && !creatureInBattle && lastTargetId != 0) {
         val distanceX = Math.abs(presentCharLocationX - lastTargetPos._1)
         val distanceY = Math.abs(presentCharLocationY - lastTargetPos._2)
