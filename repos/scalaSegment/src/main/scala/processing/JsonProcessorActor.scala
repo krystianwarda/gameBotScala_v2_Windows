@@ -71,6 +71,10 @@ case class ProcessorState(
                            respondedMessages: mutable.Set[String] = mutable.Set.empty,
                            pendingMessages: mutable.Queue[(JsValue, Long)] = mutable.Queue.empty,
                            characterLastRotationTime: Long = 0,
+
+                           //alerts
+                           playerDetectedAlertTime: Long = 0,
+
                            lastEmailAlertTime: Long = 0,
                            stateHealingWithRune: String = "free",
                            healingRestryStatus: Int = 0,
@@ -396,10 +400,11 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     val currentTime = System.currentTimeMillis()
     currentState.settings.flatMap { settings =>
       if (settings.protectionZoneSettings.enabled) {
-        val (actions, logs) = computeProtectionZoneActions(json, settings)
-//        executeActionsAndLogs(actions, logs, Some(settings))
+        val ((actions, logs), updatedState) = computeProtectionZoneActions(json, settings, currentState)
+
+        //        executeActionsAndLogs(actions, logs, Some(settings))
         executeActionsAndLogsNew(actions, logs, Some(settings), Some("protectionZone"))
-        Some(currentState.copy(lastProtectionZoneCommandSend = currentTime))
+        Some(updatedState)
       } else None
     }.getOrElse(currentState)
   }

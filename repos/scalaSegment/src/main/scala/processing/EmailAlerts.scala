@@ -4,8 +4,10 @@ import keyboard.ApplicationSetup.system.startTime
 import mouse.FakeAction
 import play.api.libs.json.{JsObject, JsValue}
 import userUI.SettingsUtils.UISettings
-//import utils.EmailUtils
 import utils.consoleColorPrint.{ANSI_GREEN, printInColor}
+
+
+
 
 object EmailAlerts {
   def computeEmailAlertsActions(json: JsValue, settings: UISettings, currentState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
@@ -47,3 +49,5 @@ object EmailAlerts {
     ((actions, logs), updatedState)
   }
 }
+
+

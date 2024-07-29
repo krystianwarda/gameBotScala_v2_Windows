@@ -18,7 +18,11 @@ libraryDependencies ++= Seq(
   "net.java.dev.jna" % "jna" % "5.8.0",
   "net.java.dev.jna" % "jna-platform" % "5.8.0",
   "com.sun.mail" % "javax.mail" % "1.6.2",
+  "com.softwaremill.sttp.client3" %% "circe" % "3.9.7",
+  "com.softwaremill.sttp.client3" %% "core" % "3.9.7",
+  "com.softwaremill.sttp.client3" %% "async-http-client-backend-future" % "3.9.7",
   "org.asynchttpclient" % "async-http-client" % "2.12.3",
+  "net.sf.sociaal" % "freetts" % "1.2.2",
 )
 
 

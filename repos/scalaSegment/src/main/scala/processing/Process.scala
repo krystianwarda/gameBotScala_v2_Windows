@@ -11,6 +11,15 @@ import play.api.libs.json._
 
 import java.time.Instant
 import scala.io.Source
+import java.awt.Toolkit
+import com.sun.speech.freetts.Voice
+import com.sun.speech.freetts.VoiceManager
+import java.awt.Robot
+import java.awt.Rectangle
+import java.awt.Toolkit
+import java.io.File
+import javax.imageio.ImageIO
+
 
 object Process {
   // Function to find the screen position of an item in container slots 1-4 with both itemId and itemSubType matching
@@ -20,10 +29,40 @@ object Process {
     case _ => false
   }
 
+
+  def captureScreen(): File = {
+    val screenSize = Toolkit.getDefaultToolkit.getScreenSize
+    val captureRect = new Rectangle(screenSize)
+    val screenFullImage = new Robot().createScreenCapture(captureRect)
+    val tempFile = File.createTempFile("screenshot_", ".png")
+    ImageIO.write(screenFullImage, "png", tempFile)
+    tempFile
+  }
+
   // Function to check if JSON is not empty
   def isJsonNotEmpty(json: JsValue): Boolean = !isJsonEmpty(json)
 
+  import com.sun.speech.freetts.VoiceManager
 
+  def generateNoise(message: String): Unit = {
+    println("generateNoise activated.")
+    System.setProperty("freetts.voices", "com.sun.speech.freetts.en.us.cmu_us_kal.KevinVoiceDirectory")
+    val voiceName = "kevin" // Adjust this name based on the output of listAvailableVoices
+
+    val voiceManager = VoiceManager.getInstance()
+    val voice = voiceManager.getVoice(voiceName)
+
+    if (voice != null) {
+      voice.allocate()
+      try {
+        voice.speak(message)
+      } finally {
+        voice.deallocate()
+      }
+    } else {
+      println("Voice not found.")
+    }
+  }
 
   def findItemInContainerSlot14(json: JsValue, updatedState: ProcessorState, itemId: Int, itemSubType: Int): Option[JsObject] = {
     // Access the specific container information using updatedState
