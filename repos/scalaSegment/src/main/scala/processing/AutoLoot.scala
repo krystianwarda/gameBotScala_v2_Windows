@@ -15,6 +15,8 @@ object AutoLoot {
     var actions: Seq[FakeAction] = Seq.empty
     var logs: Seq[Log] = Seq.empty
     var updatedState = currentState // Initialize updatedState
+    val currentTime = System.currentTimeMillis()
+
 //    printInColor(ANSI_RED, f"[DEBUG] autoLoot: ${settings.autoTargetSettings.enabled}, autoLoot: ${settings.autoLootSettings.enabled}")
     if (settings.autoTargetSettings.enabled && settings.autoLootSettings.enabled) {
 
@@ -120,7 +122,7 @@ object AutoLoot {
 
 
 
-                    printInColor(ANSI_RED, f"[DEBUG] Considering looting from from $lastContainerIndex (statics: ${updatedState.staticContainersList})")
+                    printInColor(ANSI_RED, f"[DEBUG] Considering looting from$lastContainerIndex (statics: ${updatedState.staticContainersList})")
 
                     // Check if the last container is not already in the updatedState.staticContainersList
                     if (!updatedState.staticContainersList.contains(lastContainerIndex)) {
@@ -128,29 +130,65 @@ object AutoLoot {
                       val itemsInContainerInitial = (lastContainer \ "items").as[JsObject]
                       //                    printInColor(ANSI_RED, f"[DEBUG] Items in container detected: $itemsInContainerInitial")
 
-                      val itemsInContainer = JsObject(itemsInContainerInitial.fields.filterNot { case (_, itemInfo) =>
+                      // Assuming itemsInContainerInitial is immutable and fetched as a JsObject
+                      var itemsInContainer = JsObject(itemsInContainerInitial.fields.filterNot { case (_, itemInfo) =>
                         val itemId = (itemInfo \ "itemId").as[Int]
                         updatedState.alreadyLootedIds.contains(itemId)
                       })
-                      //                    printInColor(ANSI_RED, f"[DEBUG] Items already looted: ${updatedState.alreadyLootedIds}")
-                      //                    printInColor(ANSI_RED, f"[DEBUG] Filtered items excluding already looted: $itemsInContainer")
 
+                      if ((currentTime - updatedState.lastEatFoodTime) < 5000) {
+                        // Filter out item 3577 if the last meal was less than 5 seconds ago
+                        itemsInContainer = JsObject(itemsInContainer.fields.filterNot {
+                          case (_, itemInfo) => (itemInfo \ "itemId").as[Int] == 3577
+                        })
+                      }
 
                       // Prepare a set of item IDs from lootList
                       val lootItems = settings.autoLootSettings.lootList.map(_.trim.split(",\\s*")(0).toInt).toSet
                       printInColor(ANSI_RED, f"[DEBUG] Available Loot Items: ${lootItems.mkString(", ")}")
 
 
-                      //                    // Assuming `json` is your JSON object parsed into a JsValue
-                      //                    val container = (json \ "containersInfo" \ lastContainerIndex \ "items").as[JsObject]
 
                       // Extract all items from the last container and find first matching loot item
                       val foundItemOpt = itemsInContainer.fields.reverse.collectFirst {
+                        case (slot, itemInfo) if (itemInfo \ "itemId").as[Int] == 3577 =>
+                          (slot, itemInfo.as[JsObject])
+
                         case (slot, itemInfo) if lootItems((itemInfo \ "itemId").as[Int]) =>
                           (slot, itemInfo.as[JsObject])
                       }
 
                       foundItemOpt match {
+
+                        case Some((slot, item)) if (item \ "itemId").as[Int] == 3577 =>
+                          println("FOUND FOOD")
+                          println(slot)
+                          println(item)
+                          val itemSlot = slot.replace("slot", "item") // Convert "slot2" to "item2"
+
+                          // Find the key in 'inventoryPanelLoc' that contains the 'lastContainerIndex'
+                          val inventoryPanelLoc = (screenInfo \ "inventoryPanelLoc").as[JsObject]
+                          val matchedKey = inventoryPanelLoc.keys.find(_.contains(lastContainerIndex))
+                            .getOrElse(throw new NoSuchElementException("Key containing the substring not found"))
+
+                          val itemScreenInfo = (inventoryPanelLoc \ matchedKey \ "contentsPanel" \ itemSlot).as[JsObject]
+
+                          val x = (itemScreenInfo \ "x").as[Int]
+                          val y = (itemScreenInfo \ "y").as[Int]
+                          println(s"Item Screen Info for $itemSlot: x=$x, y=$y")
+
+                          // Perform right click actions
+                          val actionsSeq = Seq(
+                            MouseAction(x, y, "move"),
+                            MouseAction(x, y, "pressRight"), // Changed to pressRight for right-click
+                            MouseAction(x, y, "releaseRight") // Changed to releaseRight for right-click
+                          )
+
+                          updatedState = updatedState.copy(lastEatFoodTime = currentTime)
+                          actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+                          println("[DEBUG] Right-click executed at coordinates for specified item")
+
+
                         case Some((slot, item)) =>
 
                           val itemId = (item \ "itemId").as[Int]

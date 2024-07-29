@@ -129,6 +129,7 @@ case class ProcessorState(
                            gridBoundsState: (Int, Int, Int, Int) = (0, 0, 0, 0), // Example default value
                            presentCharLocation: Vec = Vec(0, 0),
                            presentCharZLocation: Int = 0,
+                           lastEatFoodTime: Long = 0,
 
                            // ammo resuply
                            isUsingAmmo: String = "not_set",

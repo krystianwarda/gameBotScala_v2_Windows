@@ -20,6 +20,14 @@ class ProtectionZoneBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor
 
   // Existing checkbox
   val playerOnScreenAlertCheckbox = new CheckBox("Player on the screen alert")
+
+  val playerDetectedCheckbox = new CheckBox("Player detection alert")
+  val monsterDetectedAlertCheckbox = new CheckBox("Monster on the screen alert")
+  val logoutWhenPlayerDetecterdCheckbox = new CheckBox("Logout when player detected")
+  val sendDiscordAlertCheckbox = new CheckBox("Logout when player detected")
+
+
+
   val escapeToProtectionZoneCheckbox = new CheckBox("Escape to protection zone")
   val inputFieldLabel = new Label("Add creature to ignore:")
   val inputTextField = new TextField(20)
