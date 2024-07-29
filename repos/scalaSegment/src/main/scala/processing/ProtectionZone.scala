@@ -39,8 +39,7 @@ object ProtectionZone {
               println(s"player on the screen: $currentName")
               if (currentTime - updatedState.playerDetectedAlertTime > 10000) { // More than 5000 milliseconds
                 generateNoise("Player on the screen.")
-                val screenshot = captureScreen()
-
+//                val screenshot = captureScreen()
 //                println(s"Sending message to AlertActor")
 //                alertSenderActorRef ! SendDiscordAlert("Player on the screen.", Some(screenshot), Some(json))
                 updatedState = updatedState.copy(playerDetectedAlertTime = currentTime)
