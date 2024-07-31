@@ -174,10 +174,11 @@ object CaveBot {
               val presentCharLocationY = (json \ "characterInfo" \ "PositionY").as[Int]
               val presentCharLocation = Vec(presentCharLocationX, presentCharLocationY)
               updatedState = updatedState.copy(presentCharLocation = presentCharLocation, antiCaveBotStuckStatus = 0)
+              val currentWaypointIndex = updatedState.currentWaypointIndex
 
               // track if character crossed a subwaypoint
               if (updatedState.subWaypoints.nonEmpty) {
-                
+
                 // Get the current subWaypoint
                 val currentWaypoint = updatedState.subWaypoints.head
                 // Check if character is at the current subWaypoint or needs to move towards the next
@@ -191,7 +192,6 @@ object CaveBot {
 
 
               // track if character crossed a waypoint
-              val currentWaypointIndex = updatedState.currentWaypointIndex
               if (updatedState.fixedWaypoints.isDefinedAt(currentWaypointIndex)) {
                 val currentWaypoint = updatedState.fixedWaypoints(currentWaypointIndex)
                 if (Math.abs(currentWaypoint.waypointX - presentCharLocationX) <= 4 && Math.abs(currentWaypoint.waypointY - presentCharLocationY) <= 4) {

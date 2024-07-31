@@ -43,11 +43,10 @@ class SwingApp(playerClassList: List[Player],
   val autoLootBot = new AutoLootBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val runeMakerBot = new RuneMakerBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val fishingBot = new FishingBot(currentPlayer, uiAppActor, jsonProcessorActor)
-  val protectionZoneBot = new ProtectionZoneBot(currentPlayer, uiAppActor, jsonProcessorActor)
+  val guardianBot = new GuardianBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val trainingBot = new TrainingBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val autoResponderBot = new AutoResponderBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val teamHuntBot = new TeamHuntBot(currentPlayer, uiAppActor, jsonProcessorActor)
-  val emailAlertsBot = new EmailAlertsBot(currentPlayer, uiAppActor, jsonProcessorActor)
 
 
   val exampleNames = playerClassList.map(_.characterName)
@@ -133,19 +132,13 @@ class SwingApp(playerClassList: List[Player],
   )
 
 
-  def collectProtectionZoneSettings(): ProtectionZoneSettings = ProtectionZoneSettings(
-    enabled = protectionZoneCheckbox.selected,
-    playerOnScreenAlert = protectionZoneBot.playerOnScreenAlertCheckbox.selected,
-    escapeToProtectionZone = protectionZoneBot.escapeToProtectionZoneCheckbox.selected,
-    ignoredCreatures = protectionZoneBot.getIgnoredCreatures
+  def collectGuardianSettings(): GuardianSettings = GuardianSettings(
+    enabled = guardianCheckbox.selected,
+//    playerOnScreenAlert = guardianBot.playerOnScreenAlertCheckbox.selected,
+//    escapeToProtectionZone = guardianBot.escapeToProtectionZoneCheckbox.selected,
+//    ignoredCreatures = guardianBot.getIgnoredCreatures
   )
 
-  def collectEmailAlertsSettings(): EmailAlertsSettings = EmailAlertsSettings(
-    enabled = emailAlertsCheckbox.selected,
-    emailAlert = emailAlertsBot.emailAlert.text,
-    passwordAlert = emailAlertsBot.passwordAlert.text,
-    recipientAlert = emailAlertsBot.recipientAlert.text,
-  )
 
   def collectFishingSettings(): FishingSettings = FishingSettings(
     enabled = fishingCheckbox.selected,
@@ -205,7 +198,7 @@ class SwingApp(playerClassList: List[Player],
     healingSettings = collectHealingSettings(),
     hotkeysSettings = collectHotkeysSettings(),
     runeMakingSettings = collectRuneMakingSettings(),
-    protectionZoneSettings = collectProtectionZoneSettings(),
+    guardianSettings = collectGuardianSettings(),
     fishingSettings = collectFishingSettings(),
     caveBotSettings = collectCaveBotSettings(),
     autoTargetSettings = collectAutoTargetSettings(),
@@ -214,7 +207,6 @@ class SwingApp(playerClassList: List[Player],
     trainingSettings = collectTrainingSettings(),
     teamHuntSettings = collectTeamHuntSettings(),
     mouseMovements = mouseMovementsCheckbox.selected,
-    emailAlertsSettings = collectEmailAlertsSettings(),
   )
 
 
@@ -386,13 +378,6 @@ class SwingApp(playerClassList: List[Player],
     setListModelFromGridInfos(caveBotBot.gridInfoList, caveBotSettings.gridInfoList)
   }
 
-  def applyEmailAlertsSettings(emailAlertsSettings: EmailAlertsSettings): Unit = {
-    emailAlertsCheckbox.selected = emailAlertsSettings.enabled
-    emailAlertsBot.emailAlert.text = emailAlertsSettings.emailAlert
-    emailAlertsBot.passwordAlert.text = emailAlertsSettings.passwordAlert
-    emailAlertsBot.recipientAlert.text = emailAlertsSettings.recipientAlert
-  }
-
 
   def applyTeamHuntSettings(teamHuntSettings: TeamHuntSettings): Unit = {
     teamHuntCheckbox.selected = teamHuntSettings.enabled
@@ -456,19 +441,15 @@ class SwingApp(playerClassList: List[Player],
     fishingBot.selectedRectangles = fishingSettings.selectedRectangles
     fishingBot.fishThrowoutRectangles = fishingSettings.fishThrowoutRectangles
 
-    // Optionally, if there are UI components directly showing these rectangles (like lists or grids),
-    // you would update them here. Example:
-    // setListModel(fishingBot.uiSelectedRectanglesList, fishingSettings.selectedRectangles)
-    // setListModel(fishingBot.uiFishThrowoutRectanglesList, fishingSettings.fishThrowoutRectangles)
   }
 
 
 
-  def applyProtectionZoneSettings(protectionZoneSettings: ProtectionZoneSettings): Unit = {
-    protectionZoneCheckbox.selected = protectionZoneSettings.enabled
-    protectionZoneBot.playerOnScreenAlertCheckbox.selected = protectionZoneSettings.playerOnScreenAlert
-    protectionZoneBot.escapeToProtectionZoneCheckbox.selected = protectionZoneSettings.escapeToProtectionZone
-    protectionZoneBot.setIgnoredCreatures(protectionZoneSettings.ignoredCreatures)
+  def applyGuardianSettings(guardianSettings: GuardianSettings): Unit = {
+    guardianCheckbox.selected = guardianSettings.enabled
+//    guardianBot.playerOnScreenAlertCheckbox.selected = guardianSettings.playerOnScreenAlert
+//    guardianBot.escapeToProtectionZoneCheckbox.selected = guardianSettings.escapeToProtectionZone
+//    guardianBot.setIgnoredCreatures(guardianSettings.ignoredCreatures)
     // Apply any additional protection zone settings
   }
 
@@ -525,7 +506,6 @@ class SwingApp(playerClassList: List[Player],
         periodicFunctionActorRef ! MainApp.UpdateSettings(updatedSettings)
         uiAppActorRef ! MainApp.UpdateSettings(updatedSettings)
         mainActorRef ! MainApp.UpdateSettings(updatedSettings)
-        // Add more actors if necessary
 
         println("Settings have been updated and sent to the actors.")
     }
@@ -542,7 +522,7 @@ class SwingApp(playerClassList: List[Player],
   val fishingCheckbox = new CheckBox("Fishing")
   val autoResponderCheckbox = new CheckBox("Auto Responder")
   val mouseMovementsCheckbox = new CheckBox("Mouse Movements")
-  val protectionZoneCheckbox = new CheckBox("Protection Zone")
+  val guardianCheckbox = new CheckBox("Guardian")
   val autoTargetCheckbox = new CheckBox("Auto Target")
   val autoLootCheckbox = new CheckBox("Auto Loot")
   val emailAlertsCheckbox = new CheckBox("Email Alerts")
@@ -551,11 +531,11 @@ class SwingApp(playerClassList: List[Player],
 
   // Define UI behavior and event handling here, similar to the second snippet...
   listenTo(autoHealCheckbox, runeMakerCheckbox, trainingCheckbox, caveBotCheckbox,
-    autoResponderCheckbox, protectionZoneCheckbox, fishingCheckbox,
-    mouseMovementsCheckbox, protectionZoneCheckbox, autoTargetCheckbox,
+    autoResponderCheckbox, guardianCheckbox, fishingCheckbox,
+    mouseMovementsCheckbox, guardianCheckbox, autoTargetCheckbox,
     autoLootCheckbox,teamHuntCheckbox,hotkeysCheckbox,emailAlertsCheckbox
   )
-  //  exampleDropdown.selection
+
   reactions += {
     case ButtonClicked(`autoHealCheckbox`) =>
       println("Auto Heal Checkbox clicked")
@@ -579,27 +559,21 @@ class SwingApp(playerClassList: List[Player],
       println("Auto Target Checkbox clicked")
     // Add logic for when caveBotCheckbox is clicked
 
-    case ButtonClicked(`protectionZoneCheckbox`) =>
-      println("Protection Zone Checkbox clicked")
-    // Add logic for when protectionZoneCheckbox is clicked
+    case ButtonClicked(`guardianCheckbox`) =>
+      println("Guardian Checkbox clicked")
 
     case ButtonClicked(`autoResponderCheckbox`) =>
       println("Auto Responder Checkbox clicked")
-    // Add logic for when caveBotCheckbox is clicked
 
     case ButtonClicked(`fishingCheckbox`) =>
       println("Fishing Checkbox clicked")
-    // Add logic for when caveBotCheckbox is clicked
 
     case ButtonClicked(`mouseMovementsCheckbox`) =>
       println("Mouse Movements Checkbox clicked")
-    // Add logic for when caveBotCheckbox is clicked
 
     case ButtonClicked(`autoLootCheckbox`) =>
       println("Auto Loot Checkbox clicked")
 
-    case ButtonClicked(`emailAlertsCheckbox`) =>
-      println("Email Alerts Checkbox clicked")
 
     case SelectionChanged(`exampleDropdown`) =>
       println("Dropdown selection changed")
@@ -622,7 +596,7 @@ class SwingApp(playerClassList: List[Player],
       // Adding Checkboxes in the first column
       val checkBoxComponents = Seq(autoHealCheckbox, hotkeysCheckbox, runeMakerCheckbox, trainingCheckbox,
         caveBotCheckbox, teamHuntCheckbox, fishingCheckbox, mouseMovementsCheckbox,autoResponderCheckbox,
-        protectionZoneCheckbox, autoTargetCheckbox, autoLootCheckbox, emailAlertsCheckbox)
+        guardianCheckbox, autoTargetCheckbox, autoLootCheckbox, emailAlertsCheckbox)
 
       for ((checkbox, idx) <- checkBoxComponents.zipWithIndex) {
         c.gridx = 0
@@ -664,9 +638,8 @@ class SwingApp(playerClassList: List[Player],
 
     pages += new TabbedPane.Page("Fishing", fishingBot.fishingTab)
 
-    pages += new TabbedPane.Page("Protection Zone", protectionZoneBot.protectionZoneTab)
+    pages += new TabbedPane.Page("Guardian", guardianBot.guardianTab)
 
-    pages += new TabbedPane.Page("Email Alerts", emailAlertsBot.emailAlertsTab)
 
   }
 

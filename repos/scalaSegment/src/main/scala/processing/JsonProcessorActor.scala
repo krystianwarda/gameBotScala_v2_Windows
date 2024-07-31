@@ -4,7 +4,7 @@ import akka.actor.{Actor, ActorRef}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json, Writes}
 import player.Player
 import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, Mouse, TextCommand}
-import keyboard.{AutoResponderCommand, PressControlAndArrows, AutoResponderManager, ComboKeyAction, TypeText}
+import keyboard.{AutoResponderCommand, AutoResponderManager, ComboKeyAction, PressControlAndArrows, TypeText}
 import processing.ActionDetail
 import main.scala.MainApp
 import main.scala.MainApp.{autoResponderManagerRef, mouseMovementActorRef}
@@ -12,7 +12,7 @@ import processing.AutoHeal.computeHealingActions
 import processing.AutoResponder.computeAutoRespondActions
 import processing.Fishing.computeFishingActions
 import processing.Process.{detectPlayersAndMonsters, findBackpackPosition, findBackpackSlotForBlank, findRats, isPlayerDetected}
-import processing.ProtectionZone.computeProtectionZoneActions
+import processing.Guardian.computeGuardianActions
 import processing.RuneMaker.computeRuneMakingActions
 import processing.Training.computeTrainingActions
 import userUI.SettingsUtils
@@ -20,7 +20,6 @@ import userUI.SettingsUtils.UISettings
 import processing.CaveBot.{Vec, computeCaveBotActions}
 import processing.AutoTarget.computeAutoTargetActions
 import processing.AutoLoot.computeAutoLootActions
-import processing.EmailAlerts.computeEmailAlertsActions
 import processing.GMDetector.computeGMDetectorActions
 import processing.TeamHunt.computeTeamHuntActions
 
@@ -111,10 +110,17 @@ case class ProcessorState(
                            waypointsLoaded: Boolean = false, // Added list of subway point
                            lastDirection: Option[String] = None,
                            lastAutoTargetCommandSend: Long = 0,
+
+                           chosenTargetId: Int = 0,
+                           chosenTargetName: String = "",
+                           lastChosenTargetPos: (Int, Int, Int) = (0,0,0),
+                           attackPlayers: Boolean = false,
+
                            creatureTarget: Int = 0,
                            lastTargetName: String = "",
                            lastTargetPos: (Int, Int, Int) = (0,0,0),
                            lastBlockerPos: (Int, Int, Int) = (0,0,0),
+
                            positionStagnantCount: Int = 0,
                            lastPosition: Option[Vec] = None,
                            uhRuneContainerName: String = "not_set",
@@ -294,13 +300,12 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     // Sequentially apply action handlers, each updating the state based on its own logic
     val updatedState = initialState.copy(currentTime = Instant.now().toEpochMilli())
     val afterGMDetectorState = performGMDetector(json, updatedState)
-//    val afterEmailAlertsState = performEmailAlerts(json, afterGMDetectorState)
-    val afterFishingState = performFishing(json, afterGMDetectorState)
+    val afterProtectionZoneState = performProtectionZone(json, afterGMDetectorState)
+    val afterFishingState = performFishing(json, afterProtectionZoneState)
     val afterHealingState = performAutoHealing(json, afterFishingState)
     val afterRuneMakingState = performRuneMaking(json, afterHealingState)
     val afterTrainingState = performTraining(json, afterRuneMakingState)
-    val afterProtectionZoneState = performProtectionZone(json, afterTrainingState)
-    val afterAutoResponderState = performAutoResponder(json, afterProtectionZoneState)
+    val afterAutoResponderState = performAutoResponder(json, afterTrainingState)
     val afterAutoLootState = performAutoLoot(json, afterAutoResponderState)
     val afterAutoTargetState = performAutoTarget(json, afterAutoLootState)
     val afterCaveBotState = performCaveBot(json, afterAutoTargetState)
@@ -352,15 +357,6 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     }.getOrElse(currentState) // If the settings flatMap results in None, return the original currentState
   }
 
-  def performEmailAlerts(json: JsValue, currentState: ProcessorState): ProcessorState = {
-    currentState.settings.flatMap { settings =>
-
-      val ((actions, logs), updatedState) = computeEmailAlertsActions(json, settings, currentState)
-      executeActionsAndLogsNew(actions, logs, Some(settings), Some("emailAlerts"))
-      Some(updatedState)
-
-    }.getOrElse(currentState) // If the settings flatMap results in None, return the original currentState
-  }
 
   def performAutoHealing(json: JsValue, currentState: ProcessorState): ProcessorState = {
     val currentTime = System.currentTimeMillis()
@@ -400,8 +396,8 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
   def performProtectionZone(json: JsValue, currentState: ProcessorState): ProcessorState = {
     val currentTime = System.currentTimeMillis()
     currentState.settings.flatMap { settings =>
-      if (settings.protectionZoneSettings.enabled) {
-        val ((actions, logs), updatedState) = computeProtectionZoneActions(json, settings, currentState)
+      if (settings.guardianSettings.enabled) {
+        val ((actions, logs), updatedState) = computeGuardianActions(json, settings, currentState)
 
         //        executeActionsAndLogs(actions, logs, Some(settings))
         executeActionsAndLogsNew(actions, logs, Some(settings), Some("protectionZone"))

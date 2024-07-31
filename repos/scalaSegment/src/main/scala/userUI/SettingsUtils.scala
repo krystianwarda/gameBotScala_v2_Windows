@@ -102,14 +102,7 @@ object SettingsUtils {
                                     additionalStory: String = ""
                                   )
 
-  case class EmailAlertsSettings(
-                                    enabled: Boolean = false,
-                                    emailAlert: String = "",
-                                    passwordAlert: String = "",
-                                    recipientAlert: String = "",
-                                  )
-
-  case class ProtectionZoneSettings(
+  case class GuardianSettings(
                                      enabled: Boolean = false,
                                      playerOnScreenAlert: Boolean = false,
                                      escapeToProtectionZone: Boolean = false,
@@ -168,9 +161,8 @@ object SettingsUtils {
   implicit val healingSettingsFormat: Format[HealingSettings] = Json.format[HealingSettings]
   implicit val runeMakingSettingsFormat: Format[RuneMakingSettings] = Json.format[RuneMakingSettings]
   implicit val hotkeysSettingsFormat: Format[HotkeysSettings] = Json.format[HotkeysSettings]
-  implicit val protectionZoneSettingsFormat: Format[ProtectionZoneSettings] = Json.format[ProtectionZoneSettings]
+  implicit val protectionZoneSettingsFormat: Format[GuardianSettings] = Json.format[GuardianSettings]
   implicit val autoResponderSettingsFormat: Format[AutoResponderSettings] = Json.format[AutoResponderSettings]
-  implicit val emailAlertsSettingsFormat: Format[EmailAlertsSettings] = Json.format[EmailAlertsSettings]
   implicit val fishingSettingsFormat: Format[FishingSettings] = Json.format[FishingSettings]
   implicit val trainingSettingsFormat: Format[TrainingSettings] = Json.format[TrainingSettings]
   implicit val caveBotSettingsFormat: Format[CaveBotSettings] = Json.format[CaveBotSettings]
@@ -184,7 +176,7 @@ object SettingsUtils {
                          healingSettings: HealingSettings,
                          runeMakingSettings: RuneMakingSettings,
                          hotkeysSettings: HotkeysSettings,
-                         protectionZoneSettings: ProtectionZoneSettings,
+                         guardianSettings: GuardianSettings,
                          fishingSettings: FishingSettings,
                          autoResponderSettings: AutoResponderSettings,
                          trainingSettings: TrainingSettings,
@@ -193,7 +185,6 @@ object SettingsUtils {
                          autoLootSettings: AutoLootSettings,
                          autoTargetSettings: AutoTargetSettings,
                          teamHuntSettings: TeamHuntSettings,
-                         emailAlertsSettings: EmailAlertsSettings,
 
 
                          // Add other settings or groups of settings as needed

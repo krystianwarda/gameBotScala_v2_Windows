@@ -173,8 +173,104 @@ object AutoTarget {
 
       val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
 
+      // new logic
+
+      // detect monster
+        // case1 no attack, because wrong floor
+        // case2 check if monsters if pathable (list of monsters - sort by danger, hp)
+              //
+              // check if aleardy attacking (maybe switch is needed)
+                //
+                //no attacking -> is mark on battle needed
+                    //no -> is shootable
+                        //yes -> check monster and shoot rune
+                        //no -> pass
+                    //yes -> mark on battle
+
+//      chosenTargetId: Int = 0
+//      chosenTargetName: String = ""
+//      lastChosenTargetPos: (Int, Int, Int) = (0, 0, 0)
+
+      if ((settings.caveBotSettings.enabled &&
+        updatedState.caveBotLevelsList.contains(presentCharLocationZ) &&
+        settings.autoTargetSettings.enabled) ||
+        (!settings.caveBotSettings.enabled && settings.autoTargetSettings.enabled)) {
+
+        val battleTargets: Seq[(Long, String, String, String)] = (json \ "battleInfo").as[JsObject].values.flatMap { creature =>
+          val id = (creature \ "Id").as[Long]
+          val name = (creature \ "Name").as[String]
+          val isMonster = (creature \ "isMonster").as[String]
+          val isPlayer = (creature \ "isPlayer").as[String]
+
+          // Check if attacking players is allowed or if the creature is not a player
+          if (updatedState.attackPlayers || isPlayer == "false") {
+            Some((id, name, isMonster, isPlayer))
+          } else {
+            None // Exclude player creatures if updatedState.attackPlayers is false
+          }
+        }.toSeq
+
+        if (!(updatedState.chosenTargetId == 0)) {
+          // target not chosen - select target
+
+          // Use the existing creatureList from settings
+          val targetMonstersJsons = transformToJSON(settings.autoTargetSettings.creatureList)
+
+          // Checking if 'All' creatures are targeted
+          val targetAllCreatures = targetMonstersJsons.exists { json =>
+            (json \ "name").as[String].equalsIgnoreCase("All")
+          }
+
+          // Now use Reads from the Creature object
+          val creatureDangerMap = targetMonstersJsons.map { json =>
+            val creature = Json.parse(json.toString()).as[Creature](Creature.reads)
+            (creature.name, creature.danger)
+          }.toMap
+
+          // Filter and sort based on the danger level, sorting by descending danger
+          var sortedMonsters = if (targetAllCreatures) {
+            battleTargets // If targeting all, skip the danger level filtering
+          } else {
+            battleTargets
+              .filter { case (_, name, _, _) => creatureDangerMap.contains(name) }
+              .sortBy { case (_, name, _ ,_) => -creatureDangerMap(name) } // Descending order of danger
+          }
+
+          // target on battle or on the screen
+          
 
 
+          // Further filtering based on IDs or other conditions should be adjusted based on whether "All" is targeted
+          sortedMonsters = if (targetAllCreatures) {
+            sortedMonsters.filter { case (id, _, _ , _) => id >= 5 }
+          } else {
+            sortedMonsters
+              .filter { case (id, _, _ , _) => id >= 5 }
+              .sortBy { case (id, _, _ , _) =>
+                val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ id.toString).asOpt[JsObject]
+                battleCreaturePosition.flatMap(pos => (pos \ "PosY").asOpt[Int]).getOrElse(Int.MaxValue)
+              }
+          }
+
+          var topFourMonsters = sortedMonsters.take(4)
+            .sortBy { case (_, name, _ , _) => -creatureDangerMap.getOrElse(name, 0) }
+
+
+
+
+        } else {
+          // target selected - consider chaning target, check if freezed or proceed
+        }
+
+
+
+        // is targetCHosen?
+            // yes -> should target change?
+                  // no -> proceed
+                  // yes -> switch target
+            // no
+
+      }
 
 
       if ((settings.caveBotSettings.enabled && updatedState.caveBotLevelsList.contains(presentCharLocationZ)) || (!(settings.caveBotSettings.enabled) && settings.autoTargetSettings.enabled)) {
@@ -199,7 +295,7 @@ object AutoTarget {
       }
     } else if (settings.autoTargetSettings.enabled && updatedState.stateHunting == "attacking") {
       // Safely attempt to extract the attacked creature's target ID
-      println(s"AutoTarget is ON, (ELSE) status ${updatedState.stateHunting}")
+      println(s"AutoTarget is ON, (ELSE IF) status ${updatedState.stateHunting}")
 
 
       (json \ "attackInfo" \ "Id").asOpt[Int] match {
