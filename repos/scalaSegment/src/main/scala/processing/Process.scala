@@ -43,10 +43,11 @@ object Process {
   def isJsonNotEmpty(json: JsValue): Boolean = !isJsonEmpty(json)
 
   import com.sun.speech.freetts.VoiceManager
+  System.setProperty("freetts.voices", "com.sun.speech.freetts.en.us.cmu_us_kal.KevinVoiceDirectory")
 
   def generateNoise(message: String): Unit = {
     println("generateNoise activated.")
-    System.setProperty("freetts.voices", "com.sun.speech.freetts.en.us.cmu_us_kal.KevinVoiceDirectory")
+
     val voiceName = "kevin" // Adjust this name based on the output of listAvailableVoices
 
     val voiceManager = VoiceManager.getInstance()

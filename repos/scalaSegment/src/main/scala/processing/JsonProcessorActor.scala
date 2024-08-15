@@ -38,6 +38,8 @@ import scala.util.Random
 //import src.main.scala.Main.JsonData
 import mouse.{MouseMoveCommand, MouseMovementSettings}
 import utils.consoleColorPrint._
+import utils.UpdatePauseStatus
+
 case class cpResult(message: String, additionalData: Option[JsValue] = None)
 
 trait CommandProcessor {
@@ -154,7 +156,7 @@ case class ProcessorState(
                            retryMergeFishStatus: Int = 0,
                            retryMergeFishDelay: Long = 0,
                            retryThroughoutFishesStatus: Int = 0,
-                           retryAttempts: Int = 6,
+                           retryAttempts: Int = 4,
                            retryAttemptsShort: Int = 15,
                            retryAttemptsMid: Int = 23,
                            retryMidDelay: Long = 3000,
@@ -189,7 +191,7 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
   var settings: Option[UISettings] = None
   // var state: ProcessorState = ProcessorState()
   var state: ProcessorState = ProcessorState(settings = settings)
-
+  var settingsSave: Option[UISettings] = None
 
 
   // Initialize lastFishingCommandTime to a value ensuring the first check will always pass
@@ -216,6 +218,28 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
 
 
   def receive: Receive = {
+
+    case MainApp.UpdateSettings(newSettings) =>
+      println(s"Received UpdateSettings with: $newSettings")
+      settings = Some(newSettings)
+      state = ProcessorState(settings = settings)
+
+    case MainApp.UpdatePauseStatus(isPaused) =>
+      if (isPaused == "running") {
+        settingsSave = settings
+        println(s"Bot stopped")
+        settings = None
+        state = ProcessorState(settings = settings)
+      } else if (isPaused == "paused") {
+        println(s"Bot resumed")
+        if (settings == None) {
+          settings = settingsSave
+          state = ProcessorState(settings = settings)
+        } else {
+          println(s"Bot did not stop")
+        }
+      }
+
 
     case MainApp.JsonData(json) =>
 
@@ -275,9 +299,7 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     case msg =>
       println(s"JsonProcessorActor received an unhandled message type: $msg")
 
-    case UpdateSettings(newSettings) =>
-      println(s"Received UpdateSettings with: $newSettings")
-      settings = Some(newSettings)
+
 
   }
 
@@ -300,8 +322,8 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     // Sequentially apply action handlers, each updating the state based on its own logic
     val updatedState = initialState.copy(currentTime = Instant.now().toEpochMilli())
     val afterGMDetectorState = performGMDetector(json, updatedState)
-    val afterProtectionZoneState = performProtectionZone(json, afterGMDetectorState)
-    val afterFishingState = performFishing(json, afterProtectionZoneState)
+    val afterGuardianState = performGuardian(json, afterGMDetectorState)
+    val afterFishingState = performFishing(json, afterGuardianState)
     val afterHealingState = performAutoHealing(json, afterFishingState)
     val afterRuneMakingState = performRuneMaking(json, afterHealingState)
     val afterTrainingState = performTraining(json, afterRuneMakingState)
@@ -316,36 +338,20 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
 
 
 
-  def executeActionsAndLogsNew(actions: Seq[FakeAction], logs: Seq[Log], settingsOption: Option[SettingsUtils.UISettings], source: Option[String] = None): Unit = {
-    logs.foreach(log => println(log.message))
 
-    settingsOption.foreach { settings =>
-      actions.foreach {
-        case FakeAction("pressKey", _, Some(actionDetail: PushTheButton)) =>
-          println(s"Fake action - use keyboard - press and release key: ${actionDetail.key}")
-          actionKeyboardManager ! actionDetail
+  def performGuardian(json: JsValue, currentState: ProcessorState): ProcessorState = {
+    val currentTime = System.currentTimeMillis()
+    currentState.settings.flatMap { settings =>
+      if (settings.guardianSettings.enabled) {
+        val ((actions, logs), updatedState) = computeGuardianActions(json, settings, currentState)
 
-        case FakeAction("typeText", _, Some(actionDetail: KeyboardText)) =>
-          println("Fake action - use keyboard - type text")
-          actionKeyboardManager ! TypeText(actionDetail.text)
-
-        case FakeAction("pressMultipleKeys", _, Some(actionDetail: ComboKeyActions)) =>
-          println(s"Executing complex key press action: Control + ${actionDetail.arrowKeys.mkString(", ")}")
-          actionKeyboardManager ! PressControlAndArrows(actionDetail.controlKey, actionDetail.arrowKeys)
-
-
-
-        case FakeAction("useOnYourselfFunction", Some(itemInfo), None) =>
-          // Handle function-based actions: sendJson with itemInfo for specific use
-          sendJson(Json.obj("__command" -> "useOnYourself", "itemInfo" -> Json.toJson(itemInfo)))
-
-
-        case FakeAction("useMouse", _, Some(actionDetail: MouseActions)) =>
-          println("Fake action - use mouse")
-          actionStateManager ! MouseMoveCommand(actionDetail.actions, settings.mouseMovements, source)
-      }
-    }
+        //        executeActionsAndLogs(actions, logs, Some(settings))
+        executeActionsAndLogsNew(actions, logs, Some(settings), Some("guardian"))
+        Some(updatedState)
+      } else None
+    }.getOrElse(currentState)
   }
+
 
   def performGMDetector(json: JsValue, currentState: ProcessorState): ProcessorState = {
     currentState.settings.flatMap { settings =>
@@ -393,18 +399,7 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     }.getOrElse(currentState) // If the settings flatMap results in None, return the original currentState
   }
 
-  def performProtectionZone(json: JsValue, currentState: ProcessorState): ProcessorState = {
-    val currentTime = System.currentTimeMillis()
-    currentState.settings.flatMap { settings =>
-      if (settings.guardianSettings.enabled) {
-        val ((actions, logs), updatedState) = computeGuardianActions(json, settings, currentState)
 
-        //        executeActionsAndLogs(actions, logs, Some(settings))
-        executeActionsAndLogsNew(actions, logs, Some(settings), Some("protectionZone"))
-        Some(updatedState)
-      } else None
-    }.getOrElse(currentState)
-  }
 
   def performAutoTarget(json: JsValue, currentState: ProcessorState): ProcessorState = {
     val currentTime = System.currentTimeMillis()
@@ -509,7 +504,39 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     }.getOrElse(currentState)
   }
 
-//  def executeActionsAndLogs(actions: Seq[FakeAction], logs: Seq[Log], settingsOption: Option[SettingsUtils.UISettings]): Unit = {
+
+  def executeActionsAndLogsNew(actions: Seq[FakeAction], logs: Seq[Log], settingsOption: Option[SettingsUtils.UISettings], source: Option[String] = None): Unit = {
+    logs.foreach(log => println(log.message))
+
+    settingsOption.foreach { settings =>
+      actions.foreach {
+        case FakeAction("pressKey", _, Some(actionDetail: PushTheButton)) =>
+          println(s"Fake action - use keyboard - press and release key: ${actionDetail.key}")
+          actionKeyboardManager ! actionDetail
+
+        case FakeAction("typeText", _, Some(actionDetail: KeyboardText)) =>
+          println("Fake action - use keyboard - type text")
+          actionKeyboardManager ! TypeText(actionDetail.text)
+
+        case FakeAction("pressMultipleKeys", _, Some(actionDetail: ComboKeyActions)) =>
+          println(s"Executing complex key press action: Control + ${actionDetail.arrowKeys.mkString(", ")}")
+          actionKeyboardManager ! PressControlAndArrows(actionDetail.controlKey, actionDetail.arrowKeys)
+
+
+        case FakeAction("useOnYourselfFunction", Some(itemInfo), None) =>
+          // Handle function-based actions: sendJson with itemInfo for specific use
+          sendJson(Json.obj("__command" -> "useOnYourself", "itemInfo" -> Json.toJson(itemInfo)))
+
+
+        case FakeAction("useMouse", _, Some(actionDetail: MouseActions)) =>
+          println("Fake action - use mouse")
+          actionStateManager ! MouseMoveCommand(actionDetail.actions, settings.mouseMovements, source)
+      }
+    }
+  }
+
+
+  //  def executeActionsAndLogs(actions: Seq[FakeAction], logs: Seq[Log], settingsOption: Option[SettingsUtils.UISettings]): Unit = {
 //    logs.foreach(log => println(log.message))
 //
 //    settingsOption.foreach { settings =>

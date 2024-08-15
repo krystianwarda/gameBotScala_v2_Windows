@@ -15,6 +15,7 @@ import scala.concurrent.duration.Duration
 import scala.util.control.NonFatal
 import scala.util.{Random, Try}
 import play.api.libs.json._
+//import utils.GlobalKeyListener.startListeningForKeys
 
 import java.io.IOException
 import java.nio.charset.StandardCharsets
@@ -40,6 +41,7 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
     case "startListening" =>
       startListening()
 
+
     case json: JsValue =>
       jsonProcessorActor ! MainApp.JsonData(json)
       latestJson = Some(json)
@@ -54,6 +56,8 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
       }
       startListening()
       initiateSendFunction("periodicEvent")
+      println("Listening for keys started!")
+//      startListeningForKeys()
 
 
     case _ => println("PeriodicFunctionActor received an unhandled message type.")

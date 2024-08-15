@@ -174,36 +174,36 @@ object AutoHeal {
 //        println(s"mana: ${mana}")
 
         val friend1HealthPercentage = if (
-          settings.healingSettings.friendsHeal.head.friend1HealSpell.length > 1 &&
-            settings.healingSettings.friendsHeal.head.friend1Name.length > 1 &&
-            settings.healingSettings.friendsHeal.head.friend1HealHealth > 0
+          settings.healingSettings.friendsHealSettings.head.friend1HealSpell.length > 1 &&
+            settings.healingSettings.friendsHealSettings.head.friend1Name.length > 1 &&
+            settings.healingSettings.friendsHealSettings.head.friend1HealHealth > 0
         ) {
           (json \ "spyLevelInfo").as[JsObject].value.collectFirst {
-            case (_, playerInfo) if (playerInfo \ "Name").as[String] == settings.healingSettings.friendsHeal.head.friend1Name => (playerInfo \ "HealthPercent").as[Int]
+            case (_, playerInfo) if (playerInfo \ "Name").as[String] == settings.healingSettings.friendsHealSettings.head.friend1Name => (playerInfo \ "HealthPercent").as[Int]
           }.getOrElse(100)
         } else {
           100
         }
 
         val friend2HealthPercentage = if (
-          settings.healingSettings.friendsHeal.head.friend2HealSpell.length > 1 &&
-            settings.healingSettings.friendsHeal.head.friend2Name.length > 1 &&
-            settings.healingSettings.friendsHeal.head.friend2HealHealth > 0
+          settings.healingSettings.friendsHealSettings.head.friend2HealSpell.length > 1 &&
+            settings.healingSettings.friendsHealSettings.head.friend2Name.length > 1 &&
+            settings.healingSettings.friendsHealSettings.head.friend2HealHealth > 0
         ) {
           (json \ "spyLevelInfo").as[JsObject].value.collectFirst {
-            case (_, playerInfo) if (playerInfo \ "Name").as[String] == settings.healingSettings.friendsHeal.head.friend2Name => (playerInfo \ "HealthPercent").as[Int]
+            case (_, playerInfo) if (playerInfo \ "Name").as[String] == settings.healingSettings.friendsHealSettings.head.friend2Name => (playerInfo \ "HealthPercent").as[Int]
           }.getOrElse(100)
         } else {
           100
         }
 
         val friend3HealthPercentage = if (
-          settings.healingSettings.friendsHeal.head.friend3HealSpell.length > 1 &&
-            settings.healingSettings.friendsHeal.head.friend3Name.length > 1 &&
-            settings.healingSettings.friendsHeal.head.friend3HealHealth > 0
+          settings.healingSettings.friendsHealSettings.head.friend3HealSpell.length > 1 &&
+            settings.healingSettings.friendsHealSettings.head.friend3Name.length > 1 &&
+            settings.healingSettings.friendsHealSettings.head.friend3HealHealth > 0
         ) {
           (json \ "spyLevelInfo").as[JsObject].value.collectFirst {
-            case (_, playerInfo) if (playerInfo \ "Name").as[String] == settings.healingSettings.friendsHeal.head.friend3Name => (playerInfo \ "HealthPercent").as[Int]
+            case (_, playerInfo) if (playerInfo \ "Name").as[String] == settings.healingSettings.friendsHealSettings.head.friend3Name => (playerInfo \ "HealthPercent").as[Int]
           }.getOrElse(100)
         } else {
           100
@@ -354,21 +354,21 @@ object AutoHeal {
             actions = actions :+ FakeAction("useOnYourselfFunction", Some(ItemInfo(2874, Option(7))), None)
           }
         }
-        else if (settings.healingSettings.spellsHeal.head.strongHealSpell.length > 1 &&
-          settings.healingSettings.spellsHeal.head.strongHealHealth > 0 &&
-          health <= settings.healingSettings.spellsHeal.head.strongHealHealth &&
-          mana >= settings.healingSettings.spellsHeal.head.strongHealMana) {
+        else if (settings.healingSettings.spellsHealSettings.head.strongHealSpell.length > 1 &&
+          settings.healingSettings.spellsHealSettings.head.strongHealHealth > 0 &&
+          health <= settings.healingSettings.spellsHealSettings.head.strongHealHealth &&
+          mana >= settings.healingSettings.spellsHealSettings.head.strongHealMana) {
           println(s"Inside strong heal section")
 
           if (settings.mouseMovements) {
 
-            if (settings.healingSettings.spellsHeal.head.strongHealHotkeyEnabled) {
-              val hotkeyHeal = settings.healingSettings.spellsHeal.head.strongHealHotkey
+            if (settings.healingSettings.spellsHealSettings.head.strongHealHotkeyEnabled) {
+              val hotkeyHeal = settings.healingSettings.spellsHealSettings.head.strongHealHotkey
               logs = logs :+ Log(s"use hotkey for strong healing spell: ${hotkeyHeal}")
               actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(hotkeyHeal)))
             } else {
               logs = logs :+ Log("use keyboard for strong healing spell")
-              actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(settings.healingSettings.spellsHeal.head.strongHealSpell)))
+              actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(settings.healingSettings.spellsHealSettings.head.strongHealSpell)))
             }
           } else {
 //            logs = logs :+ Log("use function for strong healing spell")
@@ -376,21 +376,21 @@ object AutoHeal {
           }
         }
 
-        else if (settings.healingSettings.spellsHeal.head.lightHealSpell.length > 1 &&
-          settings.healingSettings.spellsHeal.head.lightHealHealth > 0 &&
-          health <= settings.healingSettings.spellsHeal.head.lightHealHealth &&
-          mana >= settings.healingSettings.spellsHeal.head.lightHealMana) {
+        else if (settings.healingSettings.spellsHealSettings.head.lightHealSpell.length > 1 &&
+          settings.healingSettings.spellsHealSettings.head.lightHealHealth > 0 &&
+          health <= settings.healingSettings.spellsHealSettings.head.lightHealHealth &&
+          mana >= settings.healingSettings.spellsHealSettings.head.lightHealMana) {
           println(s"Inside light heal section")
 
           if (settings.mouseMovements) {
 
-            if (settings.healingSettings.spellsHeal.head.lightHealHotkeyEnabled) {
-              val hotkeyHeal = settings.healingSettings.spellsHeal.head.lightHealHotkey
+            if (settings.healingSettings.spellsHealSettings.head.lightHealHotkeyEnabled) {
+              val hotkeyHeal = settings.healingSettings.spellsHealSettings.head.lightHealHotkey
               logs = logs :+ Log(s"use hotkey for light healing spell: ${hotkeyHeal}")
               actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(hotkeyHeal)))
             } else {
               logs = logs :+ Log("use keyboard for light healing spell")
-              actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(settings.healingSettings.spellsHeal.head.lightHealSpell)))
+              actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(settings.healingSettings.spellsHealSettings.head.lightHealSpell)))
             }
           } else {
 
@@ -398,21 +398,21 @@ object AutoHeal {
             //            actions = actions :+ FakeAction("sayText", None, Some(KeyboardText(spellText)))
           }
         }
-        else if (settings.healingSettings.friendsHeal.head.friend1HealSpell.length > 1 &&
-          settings.healingSettings.friendsHeal.head.friend1Name.length > 1 &&
-          settings.healingSettings.friendsHeal.head.friend1HealHealth > 0 &&
-          friend1HealthPercentage <= settings.healingSettings.friendsHeal.head.friend1HealHealth &&
-          mana >= settings.healingSettings.friendsHeal.head.friend1HealMana) {
+        else if (settings.healingSettings.friendsHealSettings.head.friend1HealSpell.length > 1 &&
+          settings.healingSettings.friendsHealSettings.head.friend1Name.length > 1 &&
+          settings.healingSettings.friendsHealSettings.head.friend1HealHealth > 0 &&
+          friend1HealthPercentage <= settings.healingSettings.friendsHealSettings.head.friend1HealHealth &&
+          mana >= settings.healingSettings.friendsHealSettings.head.friend1HealMana) {
           println(s"Inside friend1 heal section")
 
           if (settings.mouseMovements) {
 
-            if (settings.healingSettings.friendsHeal.head.friend1HealHotkeyEnabled) {
-              val hotkeyHeal = settings.healingSettings.friendsHeal.head.friend1HealHotkey
+            if (settings.healingSettings.friendsHealSettings.head.friend1HealHotkeyEnabled) {
+              val hotkeyHeal = settings.healingSettings.friendsHealSettings.head.friend1HealHotkey
               logs = logs :+ Log(s"use hotkey for friend healing spell: ${hotkeyHeal}")
               actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(hotkeyHeal)))
             } else {
-              val mergedString = settings.healingSettings.friendsHeal.head.friend1HealSpell + settings.healingSettings.friendsHeal.head.friend1Name
+              val mergedString = settings.healingSettings.friendsHealSettings.head.friend1HealSpell + settings.healingSettings.friendsHealSettings.head.friend1Name
               logs = logs :+ Log("use keyboard for light healing spell")
               actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(mergedString)))
             }
@@ -423,21 +423,21 @@ object AutoHeal {
           }
         }
 
-        else if (settings.healingSettings.friendsHeal.head.friend2HealSpell.length > 1 &&
-          settings.healingSettings.friendsHeal.head.friend2Name.length > 1 &&
-          settings.healingSettings.friendsHeal.head.friend2HealHealth > 0 &&
-          friend2HealthPercentage <= settings.healingSettings.friendsHeal.head.friend2HealHealth &&
-          mana >= settings.healingSettings.friendsHeal.head.friend2HealMana) {
+        else if (settings.healingSettings.friendsHealSettings.head.friend2HealSpell.length > 1 &&
+          settings.healingSettings.friendsHealSettings.head.friend2Name.length > 1 &&
+          settings.healingSettings.friendsHealSettings.head.friend2HealHealth > 0 &&
+          friend2HealthPercentage <= settings.healingSettings.friendsHealSettings.head.friend2HealHealth &&
+          mana >= settings.healingSettings.friendsHealSettings.head.friend2HealMana) {
           println(s"Inside friend2 heal section")
 
           if (settings.mouseMovements) {
 
-            if (settings.healingSettings.friendsHeal.head.friend2HealHotkeyEnabled) {
-              val hotkeyHeal = settings.healingSettings.friendsHeal.head.friend2HealHotkey
+            if (settings.healingSettings.friendsHealSettings.head.friend2HealHotkeyEnabled) {
+              val hotkeyHeal = settings.healingSettings.friendsHealSettings.head.friend2HealHotkey
               logs = logs :+ Log(s"use hotkey for friend healing spell: ${hotkeyHeal}")
               actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(hotkeyHeal)))
             } else {
-              val mergedString = settings.healingSettings.friendsHeal.head.friend2HealSpell + settings.healingSettings.friendsHeal.head.friend2Name
+              val mergedString = settings.healingSettings.friendsHealSettings.head.friend2HealSpell + settings.healingSettings.friendsHealSettings.head.friend2Name
               logs = logs :+ Log("use keyboard for light healing spell")
               actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(mergedString)))
             }
@@ -448,21 +448,21 @@ object AutoHeal {
           }
         }
 
-        else if (settings.healingSettings.friendsHeal.head.friend3HealSpell.length > 1 &&
-          settings.healingSettings.friendsHeal.head.friend3Name.length > 1 &&
-          settings.healingSettings.friendsHeal.head.friend3HealHealth > 0 &&
-          friend3HealthPercentage <= settings.healingSettings.friendsHeal.head.friend3HealHealth &&
-          mana >= settings.healingSettings.friendsHeal.head.friend3HealMana) {
+        else if (settings.healingSettings.friendsHealSettings.head.friend3HealSpell.length > 1 &&
+          settings.healingSettings.friendsHealSettings.head.friend3Name.length > 1 &&
+          settings.healingSettings.friendsHealSettings.head.friend3HealHealth > 0 &&
+          friend3HealthPercentage <= settings.healingSettings.friendsHealSettings.head.friend3HealHealth &&
+          mana >= settings.healingSettings.friendsHealSettings.head.friend3HealMana) {
           println(s"Inside friend3 heal section")
 
           if (settings.mouseMovements) {
 
-            if (settings.healingSettings.friendsHeal.head.friend3HealHotkeyEnabled) {
-              val hotkeyHeal = settings.healingSettings.friendsHeal.head.friend3HealHotkey
+            if (settings.healingSettings.friendsHealSettings.head.friend3HealHotkeyEnabled) {
+              val hotkeyHeal = settings.healingSettings.friendsHealSettings.head.friend3HealHotkey
               logs = logs :+ Log(s"use hotkey for friend healing spell: ${hotkeyHeal}")
               actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(hotkeyHeal)))
             } else {
-              val mergedString = settings.healingSettings.friendsHeal.head.friend3HealSpell + settings.healingSettings.friendsHeal.head.friend3Name
+              val mergedString = settings.healingSettings.friendsHealSettings.head.friend3HealSpell + settings.healingSettings.friendsHealSettings.head.friend3Name
               logs = logs :+ Log("use keyboard for light healing spell")
               actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(mergedString)))
             }

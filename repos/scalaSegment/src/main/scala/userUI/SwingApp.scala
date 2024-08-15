@@ -56,19 +56,17 @@ class SwingApp(playerClassList: List[Player],
   val exampleLabel = new Label()
 
   def collectHealingSettings(): HealingSettings = {
-    val spellsHeal = List(
-      HealingSpellsSettings(
-        lightHealSpell = autoHealBot.lightHealSpellField.text,
-        lightHealHealth = parseTextFieldToInt(autoHealBot.lightHealHealthField.text),
-        lightHealMana = parseTextFieldToInt(autoHealBot.lightHealManaField.text),
-        lightHealHotkeyEnabled = autoHealBot.lightHealHotkeyCheckbox.selected,
-        lightHealHotkey = autoHealBot.lightHealHotkeyDropdown.getSelectedItem.toString,
-        strongHealSpell = autoHealBot.strongHealSpellField.text,
-        strongHealHealth = parseTextFieldToInt(autoHealBot.strongHealHealthField.text),
-        strongHealMana = parseTextFieldToInt(autoHealBot.strongHealManaField.text),
-        strongHealHotkeyEnabled = autoHealBot.strongHealHotkeyCheckbox.selected,
-        strongHealHotkey = autoHealBot.strongHealHotkeyDropdown.getSelectedItem.toString
-      )
+    val spellsHeal = HealingSpellsSettings(
+      lightHealSpell = autoHealBot.lightHealSpellField.text,
+      lightHealHealth = parseTextFieldToInt(autoHealBot.lightHealHealthField.text),
+      lightHealMana = parseTextFieldToInt(autoHealBot.lightHealManaField.text),
+      lightHealHotkeyEnabled = autoHealBot.lightHealHotkeyCheckbox.selected,
+      lightHealHotkey = autoHealBot.lightHealHotkeyDropdown.getSelectedItem.toString,
+      strongHealSpell = autoHealBot.strongHealSpellField.text,
+      strongHealHealth = parseTextFieldToInt(autoHealBot.strongHealHealthField.text),
+      strongHealMana = parseTextFieldToInt(autoHealBot.strongHealManaField.text),
+      strongHealHotkeyEnabled = autoHealBot.strongHealHotkeyCheckbox.selected,
+      strongHealHotkey = autoHealBot.strongHealHotkeyDropdown.getSelectedItem.toString
     )
 
     val friendsHeal = HealingFriendsSettings(
@@ -94,7 +92,7 @@ class SwingApp(playerClassList: List[Player],
 
     HealingSettings(
       enabled = autoHealCheckbox.selected,
-      spellsHeal = spellsHeal,
+      spellsHealSettings = List(spellsHeal),
       ihHealHealth = parseTextFieldToInt(autoHealBot.ihHealHealthField.text),
       ihHealMana = parseTextFieldToInt(autoHealBot.ihHealManaField.text),
       uhHealHealth = parseTextFieldToInt(autoHealBot.uhHealHealthField.text),
@@ -102,12 +100,13 @@ class SwingApp(playerClassList: List[Player],
       hPotionHealHealth = parseTextFieldToInt(autoHealBot.hPotionHealHealthField.text),
       hPotionHealMana = parseTextFieldToInt(autoHealBot.hPotionHealManaField.text),
       mPotionHealManaMin = parseTextFieldToInt(autoHealBot.mPotionHealManaMinField.text),
-      friendsHeal = List(friendsHeal)
+      friendsHealSettings = List(friendsHeal)
     )
   }
 
 
   def collectRuneMakingSettings(): RuneMakingSettings = RuneMakingSettings(
+
     enabled = runeMakerCheckbox.selected,
     makeRunes = runeMakerBot.makeRunesCheckbox.selected,
     selectedSpell = runeMakerBot.spellComboBox.selection.item,
@@ -132,12 +131,97 @@ class SwingApp(playerClassList: List[Player],
   )
 
 
-  def collectGuardianSettings(): GuardianSettings = GuardianSettings(
-    enabled = guardianCheckbox.selected,
-//    playerOnScreenAlert = guardianBot.playerOnScreenAlertCheckbox.selected,
-//    escapeToProtectionZone = guardianBot.escapeToProtectionZoneCheckbox.selected,
-//    ignoredCreatures = guardianBot.getIgnoredCreatures
-  )
+  def collectGuardianSettings(): GuardianSettings = {
+
+    val playerOnScreen = GuardianPlayerOnScreenSettings(
+      playerOnScreenSound = guardianBot.playerOnScreenSoundCheckbox.selected,
+      playerOnScreenMessage = guardianBot.playerOnScreenMessageCheckbox.selected,
+      playerOnScreenDiscord = guardianBot.playerOnScreenDiscordCheckbox.selected,
+      playerOnScreenLogout = guardianBot.playerOnScreenLogoutCheckbox.selected,
+      playerOnScreenPz = guardianBot.playerOnScreenPzCheckbox.selected,
+    )
+
+    val playerDetected = GuardianPlayerDetectedSettings(
+      playerDetectedSound = guardianBot.playerDetectedSoundCheckbox.selected,
+      playerDetectedMessage = guardianBot.playerDetectedMessageCheckbox.selected,
+      playerDetectedDiscord = guardianBot.playerDetectedDiscordCheckbox.selected,
+      playerDetectedLogout = guardianBot.playerDetectedLogoutCheckbox.selected,
+      playerDetectedPz = guardianBot.playerDetectedPzCheckbox.selected,
+    )
+
+    val playerAttacked = GuardianPlayerAttackedSettings(
+      playerAttackedSound = guardianBot.playerAttackedSoundCheckbox.selected,
+      playerAttackedMessage = guardianBot.playerAttackedMessageCheckbox.selected,
+      playerAttackedDiscord = guardianBot.playerAttackedDiscordCheckbox.selected,
+      playerAttackedLogout = guardianBot.playerAttackedLogoutCheckbox.selected,
+      playerAttackedPz = guardianBot.playerAttackedPzCheckbox.selected,
+    )
+
+    val monsterOnScreen = GuardianMonsterOnScreenSettings(
+      monsterOnScreenSound = guardianBot.monsterOnScreenSoundCheckbox.selected,
+      monsterOnScreenMessage = guardianBot.monsterOnScreenMessageCheckbox.selected,
+      monsterOnScreenDiscord = guardianBot.monsterOnScreenDiscordCheckbox.selected,
+      monsterOnScreenLogout = guardianBot.monsterOnScreenLogoutCheckbox.selected,
+      monsterOnScreenPz = guardianBot.monsterOnScreenPzCheckbox.selected,
+    )
+
+    val gmDetected = GuardianGMDetectedSettings(
+      gmDetectedSound = guardianBot.gmDetectedSoundCheckbox.selected,
+      gmDetectedMessage = guardianBot.gmDetectedMessageCheckbox.selected,
+      gmDetectedDiscord = guardianBot.gmDetectedDiscordCheckbox.selected,
+      gmDetectedLogout = guardianBot.gmDetectedLogoutCheckbox.selected,
+      gmDetectedPz = guardianBot.gmDetectedPzCheckbox.selected,
+    )
+
+    val defaultMessage = GuardianDefaultMessageSettings(
+      defaultMessageSound = guardianBot.defaultMessageSoundCheckbox.selected,
+      defaultMessageMessage = guardianBot.defaultMessageMessageCheckbox.selected,
+      defaultMessageDiscord = guardianBot.defaultMessageDiscordCheckbox.selected,
+      defaultMessageLogout = guardianBot.defaultMessageLogoutCheckbox.selected,
+      defaultMessagePz = guardianBot.defaultMessagePzCheckbox.selected,
+    )
+
+    val privateMessage = GuardianPrivateMessageSettings(
+      privateMessageSound = guardianBot.privateMessageSoundCheckbox.selected,
+      privateMessageMessage = guardianBot.privateMessageMessageCheckbox.selected,
+      privateMessageDiscord = guardianBot.privateMessageDiscordCheckbox.selected,
+      privateMessageLogout = guardianBot.privateMessageLogoutCheckbox.selected,
+      privateMessagePz = guardianBot.privateMessagePzCheckbox.selected,
+    )
+
+    val lowCap = GuardianLowCapSettings(
+      lowCapSound = guardianBot.lowCapSoundCheckbox.selected,
+      lowCapMessage = guardianBot.lowCapMessageCheckbox.selected,
+      lowCapDiscord = guardianBot.lowCapDiscordCheckbox.selected,
+      lowCapLogout = guardianBot.lowCapLogoutCheckbox.selected,
+      lowCapPz = guardianBot.lowCapPzCheckbox.selected,
+    )
+
+    val lowSupplies = GuardianLowSuppliesSettings(
+      lowSuppliesSound = guardianBot.lowSuppliesSoundCheckbox.selected,
+      lowSuppliesMessage = guardianBot.lowSuppliesMessageCheckbox.selected,
+      lowSuppliesDiscord = guardianBot.lowSuppliesDiscordCheckbox.selected,
+      lowSuppliesLogout = guardianBot.lowSuppliesLogoutCheckbox.selected,
+      lowSuppliesPz = guardianBot.lowSuppliesPzCheckbox.selected,
+    )
+
+    GuardianSettings(
+      enabled = guardianCheckbox.selected,
+      ignoredCreatures = comboBoxToList(guardianBot.ignoredCreaturesDropdown.peer),
+      discordWebhook = guardianBot.discordWebhookField.text,
+      messageReceiverName = guardianBot.messageReceiverNameField.text,
+      playerOnScreenSettings = List(playerOnScreen),
+      playerDetectedSettings = List(playerDetected),
+      playerAttackedSettings = List(playerAttacked),
+      monsterOnScreenSettings = List(monsterOnScreen),
+      gmDetectedSettings = List(gmDetected),
+      defaultMessageSettings = List(defaultMessage),
+      privateMessageSettings = List(privateMessage),
+      lowCapSettings = List(lowCap),
+      lowSuppliesSettings = List(lowSupplies)
+    )
+  }
+
 
 
   def collectFishingSettings(): FishingSettings = FishingSettings(
@@ -298,9 +382,11 @@ class SwingApp(playerClassList: List[Player],
     applyAutoLootSettings(settings.autoLootSettings)
     applyAutoResponderSettings(settings.autoResponderSettings)
     applyRuneMakingSettings(settings.runeMakingSettings)
+    applyGuardianSettings(settings.guardianSettings)
     applyFishingSettings(settings.fishingSettings)
     applyTeamHuntSettings(settings.teamHuntSettings)
     applyHotkeysSettings(settings.hotkeysSettings)
+    applyTrainingSettings(settings.trainingSettings)
   }
 
   def setDropdownSelection(dropdown: JComboBox[String], value: String): Unit = {
@@ -314,24 +400,28 @@ class SwingApp(playerClassList: List[Player],
     autoHealCheckbox.selected = healingSettings.enabled
 
     // Assuming the list of spellsHeal contains exactly two elements: light and strong heal
-    val spellHeal = healingSettings.spellsHeal.headOption.getOrElse(
+    val spellsHeal= healingSettings.spellsHealSettings.headOption.getOrElse(
       HealingSpellsSettings("", 0, 0, false, "", "", 0, 0, false, "")
     )
 
+    // Assuming the list of friendsHeal contains exactly one element
+    val friendsHeal = healingSettings.friendsHealSettings.headOption.getOrElse(
+      HealingFriendsSettings("", "", 0, 0, false, "", "", "", 0, 0, false, "", "", "", 0, 0, false, "")
+    )
 
     // Light spell
-    autoHealBot.lightHealSpellField.text = spellHeal.lightHealSpell
-    autoHealBot.lightHealHealthField.text = spellHeal.lightHealHealth.toString
-    autoHealBot.lightHealManaField.text = spellHeal.lightHealMana.toString
-    autoHealBot.lightHealHotkeyCheckbox.selected = spellHeal.lightHealHotkeyEnabled
-    setDropdownSelection(autoHealBot.lightHealHotkeyDropdown, spellHeal.lightHealHotkey)
+    autoHealBot.lightHealSpellField.text = spellsHeal.lightHealSpell
+    autoHealBot.lightHealHealthField.text = spellsHeal.lightHealHealth.toString
+    autoHealBot.lightHealManaField.text = spellsHeal.lightHealMana.toString
+    autoHealBot.lightHealHotkeyCheckbox.selected = spellsHeal.lightHealHotkeyEnabled
+    setDropdownSelection(autoHealBot.lightHealHotkeyDropdown, spellsHeal.lightHealHotkey)
 
     // Strong spell
-    autoHealBot.strongHealSpellField.text = spellHeal.strongHealSpell
-    autoHealBot.strongHealHealthField.text = spellHeal.strongHealHealth.toString
-    autoHealBot.strongHealManaField.text = spellHeal.strongHealMana.toString
-    autoHealBot.strongHealHotkeyCheckbox.selected = spellHeal.strongHealHotkeyEnabled
-    setDropdownSelection(autoHealBot.strongHealHotkeyDropdown, spellHeal.strongHealHotkey)
+    autoHealBot.strongHealSpellField.text = spellsHeal.strongHealSpell
+    autoHealBot.strongHealHealthField.text = spellsHeal.strongHealHealth.toString
+    autoHealBot.strongHealManaField.text = spellsHeal.strongHealMana.toString
+    autoHealBot.strongHealHotkeyCheckbox.selected = spellsHeal.strongHealHotkeyEnabled
+    setDropdownSelection(autoHealBot.strongHealHotkeyDropdown, spellsHeal.strongHealHotkey)
 
     // Other healing settings
     autoHealBot.ihHealHealthField.text = healingSettings.ihHealHealth.toString
@@ -342,10 +432,7 @@ class SwingApp(playerClassList: List[Player],
     autoHealBot.hPotionHealManaField.text = healingSettings.hPotionHealMana.toString
     autoHealBot.mPotionHealManaMinField.text = healingSettings.mPotionHealManaMin.toString
 
-    // Assuming the list of friendsHeal contains exactly one element
-    val friendsHeal = healingSettings.friendsHeal.headOption.getOrElse(
-      HealingFriendsSettings("", "", 0, 0, false, "", "", "", 0, 0, false, "", "", "", 0, 0, false, "")
-    )
+
 
     // Friend 1 settings
     autoHealBot.friend1HealSpellField.text = friendsHeal.friend1HealSpell
@@ -444,13 +531,103 @@ class SwingApp(playerClassList: List[Player],
   }
 
 
-
   def applyGuardianSettings(guardianSettings: GuardianSettings): Unit = {
+
+    val playerOnScreen = guardianSettings.playerOnScreenSettings.headOption.getOrElse(
+      GuardianPlayerOnScreenSettings(false, false, false, false, false)
+    )
+
+    val playerDetected = guardianSettings.playerDetectedSettings.headOption.getOrElse(
+      GuardianPlayerDetectedSettings(false, false, false, false, false)
+    )
+
+    val playerAttacked = guardianSettings.playerAttackedSettings.headOption.getOrElse(
+      GuardianPlayerAttackedSettings(false, false, false, false, false)
+    )
+
+    val monsterOnScreen = guardianSettings.monsterOnScreenSettings.headOption.getOrElse(
+      GuardianMonsterOnScreenSettings(false, false, false, false, false)
+    )
+
+    val gmDetected = guardianSettings.gmDetectedSettings.headOption.getOrElse(
+      GuardianGMDetectedSettings(false, false, false, false, false)
+    )
+
+    val defaultMessage = guardianSettings.defaultMessageSettings.headOption.getOrElse(
+      GuardianDefaultMessageSettings(false, false, false, false, false)
+    )
+
+    val privateMessage = guardianSettings.privateMessageSettings.headOption.getOrElse(
+      GuardianPrivateMessageSettings(false, false, false, false, false)
+    )
+
+    val lowCap = guardianSettings.lowCapSettings.headOption.getOrElse(
+      GuardianLowCapSettings(false, false, false, false, false)
+    )
+
+    val lowSupplies = guardianSettings.lowSuppliesSettings.headOption.getOrElse(
+      GuardianLowSuppliesSettings(false, false, false, false, false)
+    )
+
     guardianCheckbox.selected = guardianSettings.enabled
-//    guardianBot.playerOnScreenAlertCheckbox.selected = guardianSettings.playerOnScreenAlert
-//    guardianBot.escapeToProtectionZoneCheckbox.selected = guardianSettings.escapeToProtectionZone
-//    guardianBot.setIgnoredCreatures(guardianSettings.ignoredCreatures)
-    // Apply any additional protection zone settings
+//    setComboBoxModel(guardianBot.ignoredCreaturesDropdown.peer, guardianSettings.ignoredCreatures)
+    guardianBot.discordWebhookField.text = guardianSettings.discordWebhook
+    guardianBot.messageReceiverNameField.text = guardianSettings.messageReceiverName
+
+    guardianBot.playerOnScreenSoundCheckbox.selected = playerOnScreen.playerOnScreenSound
+    guardianBot.playerOnScreenMessageCheckbox.selected = playerOnScreen.playerOnScreenMessage
+    guardianBot.playerOnScreenDiscordCheckbox.selected = playerOnScreen.playerOnScreenDiscord
+    guardianBot.playerOnScreenLogoutCheckbox.selected = playerOnScreen.playerOnScreenLogout
+    guardianBot.playerOnScreenPzCheckbox.selected = playerOnScreen.playerOnScreenPz
+
+    guardianBot.playerDetectedSoundCheckbox.selected = playerDetected.playerDetectedSound
+    guardianBot.playerDetectedMessageCheckbox.selected = playerDetected.playerDetectedMessage
+    guardianBot.playerDetectedDiscordCheckbox.selected = playerDetected.playerDetectedDiscord
+    guardianBot.playerDetectedLogoutCheckbox.selected = playerDetected.playerDetectedLogout
+    guardianBot.playerDetectedPzCheckbox.selected = playerDetected.playerDetectedPz
+
+    guardianBot.playerAttackedSoundCheckbox.selected = playerAttacked.playerAttackedSound
+    guardianBot.playerAttackedMessageCheckbox.selected = playerAttacked.playerAttackedMessage
+    guardianBot.playerAttackedDiscordCheckbox.selected = playerAttacked.playerAttackedDiscord
+    guardianBot.playerAttackedLogoutCheckbox.selected = playerAttacked.playerAttackedLogout
+    guardianBot.playerAttackedPzCheckbox.selected = playerAttacked.playerAttackedPz
+
+    guardianBot.monsterOnScreenSoundCheckbox.selected = monsterOnScreen.monsterOnScreenSound
+    guardianBot.monsterOnScreenMessageCheckbox.selected = monsterOnScreen.monsterOnScreenMessage
+    guardianBot.monsterOnScreenDiscordCheckbox.selected = monsterOnScreen.monsterOnScreenDiscord
+    guardianBot.monsterOnScreenLogoutCheckbox.selected = monsterOnScreen.monsterOnScreenLogout
+    guardianBot.monsterOnScreenPzCheckbox.selected = monsterOnScreen.monsterOnScreenPz
+
+    guardianBot.gmDetectedSoundCheckbox.selected = gmDetected.gmDetectedSound
+    guardianBot.gmDetectedMessageCheckbox.selected = gmDetected.gmDetectedMessage
+    guardianBot.gmDetectedDiscordCheckbox.selected = gmDetected.gmDetectedDiscord
+    guardianBot.gmDetectedLogoutCheckbox.selected = gmDetected.gmDetectedLogout
+    guardianBot.gmDetectedPzCheckbox.selected = gmDetected.gmDetectedPz
+
+    guardianBot.defaultMessageSoundCheckbox.selected = defaultMessage.defaultMessageSound
+    guardianBot.defaultMessageMessageCheckbox.selected = defaultMessage.defaultMessageMessage
+    guardianBot.defaultMessageDiscordCheckbox.selected = defaultMessage.defaultMessageDiscord
+    guardianBot.defaultMessageLogoutCheckbox.selected = defaultMessage.defaultMessageLogout
+    guardianBot.defaultMessagePzCheckbox.selected = defaultMessage.defaultMessagePz
+
+    guardianBot.privateMessageSoundCheckbox.selected = privateMessage.privateMessageSound
+    guardianBot.privateMessageMessageCheckbox.selected = privateMessage.privateMessageMessage
+    guardianBot.privateMessageDiscordCheckbox.selected = privateMessage.privateMessageDiscord
+    guardianBot.privateMessageLogoutCheckbox.selected = privateMessage.privateMessageLogout
+    guardianBot.privateMessagePzCheckbox.selected = privateMessage.privateMessagePz
+
+    guardianBot.lowCapSoundCheckbox.selected = lowCap.lowCapSound
+    guardianBot.lowCapMessageCheckbox.selected = lowCap.lowCapMessage
+    guardianBot.lowCapDiscordCheckbox.selected = lowCap.lowCapDiscord
+    guardianBot.lowCapLogoutCheckbox.selected = lowCap.lowCapLogout
+    guardianBot.lowCapPzCheckbox.selected = lowCap.lowCapPz
+
+    guardianBot.lowSuppliesSoundCheckbox.selected = lowSupplies.lowSuppliesSound
+    guardianBot.lowSuppliesMessageCheckbox.selected = lowSupplies.lowSuppliesMessage
+    guardianBot.lowSuppliesDiscordCheckbox.selected = lowSupplies.lowSuppliesDiscord
+    guardianBot.lowSuppliesLogoutCheckbox.selected = lowSupplies.lowSuppliesLogout
+    guardianBot.lowSuppliesPzCheckbox.selected = lowSupplies.lowSuppliesPz
+
   }
 
   def applyTrainingSettings(trainingSettings: TrainingSettings): Unit = {
@@ -503,9 +680,9 @@ class SwingApp(playerClassList: List[Player],
         // Send the updated settings to the actors
         println(s"Sending UpdateSettings to JsonProcessorActor: $updatedSettings")
         jsonProcessorActorRef ! MainApp.UpdateSettings(updatedSettings)
-        periodicFunctionActorRef ! MainApp.UpdateSettings(updatedSettings)
-        uiAppActorRef ! MainApp.UpdateSettings(updatedSettings)
-        mainActorRef ! MainApp.UpdateSettings(updatedSettings)
+//        periodicFunctionActorRef ! MainApp.UpdateSettings(updatedSettings)
+//        uiAppActorRef ! MainApp.UpdateSettings(updatedSettings)
+//        mainActorRef ! MainApp.UpdateSettings(updatedSettings)
 
         println("Settings have been updated and sent to the actors.")
     }
@@ -525,15 +702,15 @@ class SwingApp(playerClassList: List[Player],
   val guardianCheckbox = new CheckBox("Guardian")
   val autoTargetCheckbox = new CheckBox("Auto Target")
   val autoLootCheckbox = new CheckBox("Auto Loot")
-  val emailAlertsCheckbox = new CheckBox("Email Alerts")
+
 
   // ...and other fields and buttons as in the second snippet
 
   // Define UI behavior and event handling here, similar to the second snippet...
   listenTo(autoHealCheckbox, runeMakerCheckbox, trainingCheckbox, caveBotCheckbox,
     autoResponderCheckbox, guardianCheckbox, fishingCheckbox,
-    mouseMovementsCheckbox, guardianCheckbox, autoTargetCheckbox,
-    autoLootCheckbox,teamHuntCheckbox,hotkeysCheckbox,emailAlertsCheckbox
+    mouseMovementsCheckbox, autoTargetCheckbox,
+    autoLootCheckbox,teamHuntCheckbox,hotkeysCheckbox
   )
 
   reactions += {
@@ -596,7 +773,7 @@ class SwingApp(playerClassList: List[Player],
       // Adding Checkboxes in the first column
       val checkBoxComponents = Seq(autoHealCheckbox, hotkeysCheckbox, runeMakerCheckbox, trainingCheckbox,
         caveBotCheckbox, teamHuntCheckbox, fishingCheckbox, mouseMovementsCheckbox,autoResponderCheckbox,
-        guardianCheckbox, autoTargetCheckbox, autoLootCheckbox, emailAlertsCheckbox)
+        guardianCheckbox, autoTargetCheckbox, autoLootCheckbox)
 
       for ((checkbox, idx) <- checkBoxComponents.zipWithIndex) {
         c.gridx = 0

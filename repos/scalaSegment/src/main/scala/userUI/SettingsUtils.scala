@@ -25,7 +25,7 @@ object SettingsUtils {
   // Define the nested case classes
   case class HealingSettings(
                               enabled: Boolean = false,
-                              spellsHeal: List[HealingSpellsSettings] = List.empty,
+                              spellsHealSettings: List[HealingSpellsSettings] = List.empty,
                               ihHealHealth: Int = 0,
                               ihHealMana: Int = 0,
                               uhHealHealth: Int = 0,
@@ -33,7 +33,7 @@ object SettingsUtils {
                               hPotionHealHealth: Int = 0,
                               hPotionHealMana: Int = 0,
                               mPotionHealManaMin: Int = 0,
-                              friendsHeal: List[HealingFriendsSettings] = List.empty
+                              friendsHealSettings: List[HealingFriendsSettings] = List.empty
                             )
 
 
@@ -102,13 +102,93 @@ object SettingsUtils {
                                     additionalStory: String = ""
                                   )
 
-  case class GuardianSettings(
-                                     enabled: Boolean = false,
-                                     playerOnScreenAlert: Boolean = false,
-                                     escapeToProtectionZone: Boolean = false,
-                                     ignoredCreatures: Seq[String] = Seq.empty,
-                                     selectedRectangles: Seq[String] = Seq.empty
+  case class GuardianPlayerOnScreenSettings(
+                               playerOnScreenSound: Boolean = false,
+                               playerOnScreenMessage: Boolean = false,
+                               playerOnScreenDiscord: Boolean = false,
+                               playerOnScreenLogout: Boolean = false,
+                               playerOnScreenPz: Boolean = false
+                                           )
+
+  case class GuardianPlayerDetectedSettings(
+                                             playerDetectedSound: Boolean = false,
+                                             playerDetectedMessage: Boolean = false,
+                                             playerDetectedDiscord: Boolean = false,
+                                             playerDetectedLogout: Boolean = false,
+                                             playerDetectedPz: Boolean = false,
+                                           )
+
+  case class GuardianPlayerAttackedSettings(
+                                             playerAttackedSound: Boolean = false,
+                                             playerAttackedMessage: Boolean = false,
+                                             playerAttackedDiscord: Boolean = false,
+                                             playerAttackedLogout: Boolean = false,
+                                             playerAttackedPz: Boolean = false,
+                                           )
+
+  case class GuardianMonsterOnScreenSettings(
+                                            monsterOnScreenSound: Boolean = false,
+                                            monsterOnScreenMessage: Boolean = false,
+                                            monsterOnScreenDiscord: Boolean = false,
+                                            monsterOnScreenLogout: Boolean = false,
+                                            monsterOnScreenPz: Boolean = false,
+                                           )
+
+  case class GuardianGMDetectedSettings(
+                                         gmDetectedSound: Boolean = false,
+                                         gmDetectedMessage: Boolean = false,
+                                         gmDetectedDiscord: Boolean = false,
+                                         gmDetectedLogout: Boolean = false,
+                                         gmDetectedPz: Boolean = false,
+                                       )
+
+  case class GuardianDefaultMessageSettings(
+                                             defaultMessageSound: Boolean = false,
+                                             defaultMessageMessage: Boolean = false,
+                                             defaultMessageDiscord: Boolean = false,
+                                             defaultMessageLogout: Boolean = false,
+                                             defaultMessagePz: Boolean = false,
+                                       )
+
+  case class GuardianPrivateMessageSettings(
+                                             privateMessageSound: Boolean = false,
+                                             privateMessageMessage: Boolean = false,
+                                             privateMessageDiscord: Boolean = false,
+                                             privateMessageLogout: Boolean = false,
+                                             privateMessagePz: Boolean = false,
+                                           )
+
+  case class GuardianLowCapSettings(
+                                             lowCapSound: Boolean = false,
+                                             lowCapMessage: Boolean = false,
+                                             lowCapDiscord: Boolean = false,
+                                             lowCapLogout: Boolean = false,
+                                             lowCapPz: Boolean = false,
+                                           )
+
+  case class GuardianLowSuppliesSettings(
+                                     lowSuppliesSound: Boolean = false,
+                                     lowSuppliesMessage: Boolean = false,
+                                     lowSuppliesDiscord: Boolean = false,
+                                     lowSuppliesLogout: Boolean = false,
+                                     lowSuppliesPz: Boolean = false
                                    )
+
+  case class GuardianSettings(
+                               enabled: Boolean = false,
+                               ignoredCreatures: List[String] = List(),
+                               discordWebhook: String = "",
+                               messageReceiverName: String = "",
+                               playerOnScreenSettings: List[GuardianPlayerOnScreenSettings] = List.empty,
+                               playerDetectedSettings: List[GuardianPlayerDetectedSettings] = List.empty,
+                               playerAttackedSettings: List[GuardianPlayerAttackedSettings] = List.empty,
+                               monsterOnScreenSettings: List[GuardianMonsterOnScreenSettings] = List.empty,
+                               gmDetectedSettings: List[GuardianGMDetectedSettings] = List.empty,
+                               defaultMessageSettings: List[GuardianDefaultMessageSettings] = List.empty,
+                               privateMessageSettings: List[GuardianPrivateMessageSettings] = List.empty,
+                               lowCapSettings: List[GuardianLowCapSettings] = List.empty,
+                               lowSuppliesSettings: List[GuardianLowSuppliesSettings] = List.empty,
+                             )
 
   case class FishingSettings(
                               enabled: Boolean = false,
@@ -161,7 +241,18 @@ object SettingsUtils {
   implicit val healingSettingsFormat: Format[HealingSettings] = Json.format[HealingSettings]
   implicit val runeMakingSettingsFormat: Format[RuneMakingSettings] = Json.format[RuneMakingSettings]
   implicit val hotkeysSettingsFormat: Format[HotkeysSettings] = Json.format[HotkeysSettings]
-  implicit val protectionZoneSettingsFormat: Format[GuardianSettings] = Json.format[GuardianSettings]
+
+  implicit val guardianPlayerOnScreenSettingsFormat: Format[GuardianPlayerOnScreenSettings] = Json.format[GuardianPlayerOnScreenSettings]
+  implicit val guardianPlayerDetectedSettingsFormat: Format[GuardianPlayerDetectedSettings] = Json.format[GuardianPlayerDetectedSettings]
+  implicit val guardianPlayerAttackedSettingsFormat: Format[GuardianPlayerAttackedSettings] = Json.format[GuardianPlayerAttackedSettings]
+  implicit val guardianMonsterOnScreenSettingsFormat: Format[GuardianMonsterOnScreenSettings] = Json.format[GuardianMonsterOnScreenSettings]
+  implicit val guardianGMDetectedSettingsFormat: Format[GuardianGMDetectedSettings] = Json.format[GuardianGMDetectedSettings]
+  implicit val guardianDefaultMessageSettingsFormat: Format[GuardianDefaultMessageSettings] = Json.format[GuardianDefaultMessageSettings]
+  implicit val guardianPrivateMessageSettingsFormat: Format[GuardianPrivateMessageSettings] = Json.format[GuardianPrivateMessageSettings]
+  implicit val guardianLowCapSettingsFormat: Format[GuardianLowCapSettings] = Json.format[GuardianLowCapSettings]
+  implicit val guardianLowSuppliesSettingsFormat: Format[GuardianLowSuppliesSettings] = Json.format[GuardianLowSuppliesSettings]
+
+  implicit val guardianSettingsFormat: Format[GuardianSettings] = Json.format[GuardianSettings]
   implicit val autoResponderSettingsFormat: Format[AutoResponderSettings] = Json.format[AutoResponderSettings]
   implicit val fishingSettingsFormat: Format[FishingSettings] = Json.format[FishingSettings]
   implicit val trainingSettingsFormat: Format[TrainingSettings] = Json.format[TrainingSettings]
@@ -185,9 +276,6 @@ object SettingsUtils {
                          autoLootSettings: AutoLootSettings,
                          autoTargetSettings: AutoTargetSettings,
                          teamHuntSettings: TeamHuntSettings,
-
-
-                         // Add other settings or groups of settings as needed
                        )
 
 
