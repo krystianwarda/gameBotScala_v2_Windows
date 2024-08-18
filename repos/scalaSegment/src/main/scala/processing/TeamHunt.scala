@@ -6,11 +6,13 @@ import userUI.SettingsUtils.UISettings
 import utils.consoleColorPrint.{ANSI_RED, printInColor}
 import processing.CaveBot.{Vec, aStarSearch, adjustGoalWithinBounds, calculateDirection, createBooleanGrid, generateSubwaypoints, printGrid}
 import play.api.libs.json._
+import utils.StaticGameInfo
 
 import java.lang.System.currentTimeMillis
 import utils.consoleColorPrint._
 
 import scala.collection.immutable.Seq
+import scala.math.abs
 
 
 
@@ -58,6 +60,7 @@ object TeamHunt {
                 if (blockerZ != currentState.presentCharZLocation) {
                   // Blocker is on a different level, so we change levels
                   val result = changeLevel(
+                    blockerPos,
                     blockerZ,
                     presentCharLocationZ,
                     json,
@@ -545,9 +548,11 @@ object TeamHunt {
 
 
   def changeLevel(
+                   blockerPos: Vec,
                    blockerPosZ: Int,
                    presentCharLocationZ: Int,
-                   json: JsValue, tiles: Map[String, JsObject],
+                   json: JsValue,
+                   tiles: Map[String, JsObject],
                    initialActions: Seq[FakeAction],
                    intialLogs: Seq[Log],
                    currentState: ProcessorState
@@ -562,61 +567,73 @@ object TeamHunt {
 
     if (blockerPosZ < presentCharLocationZ) {
       logs :+= Log("Blocker went up")
-      levelMovementEnablersIdsList = List(
-        1948, // ladder up
-        1947, // stairs up
-        1952, // stone stairs up
-        386, // rope up
-        1958 // stairs up
-      )
+      levelMovementEnablersIdsList = StaticGameInfo.LevelMovementEnablers.AllUpIds
+
     } else if (blockerPosZ > presentCharLocationZ) {
       logs :+= Log("Blocker went down")
-      levelMovementEnablersIdsList = List(
-        414, // ladder down
-        385, // hole down
-        428, // stairs down
-        435, // grate down
-        434, // stairs down
-        593, // closed shovel hole
-        594, // opened shovel hole
-        469 // stone stairs down
-      )
+      levelMovementEnablersIdsList = StaticGameInfo.LevelMovementEnablers.AllDownIds
     }
 
-    // Collect tiles which contain items that are present in the current levelMovementEnablersIdsList
+
     val potentialTiles = tiles.collect {
-      case (tileId, tileData) if (tileData \ "items").as[Map[String, JsObject]].values.exists(itemData =>
-        levelMovementEnablersIdsList.contains((itemData \ "id").as[Int])
-      ) =>
+      case (tileId, tileData) if {
+        // Create a list of item IDs from the items on the tile
+        val itemIds = (tileData \ "items").as[Map[String, JsObject]].values.map(itemData => (itemData \ "id").as[Int]).toList
+        // Check if any item in the tile is in the levelMovementEnablersIdsList
+        itemIds.exists(id => levelMovementEnablersIdsList.contains(id))
+      } =>
         // Extract both the index and the items from the tileData
         val index = (tileData \ "index").as[String]
         val items = (tileData \ "items").as[Map[String, JsObject]] // Extract items data
-        (tileId, index, items)
+        val itemIds = items.values.map(itemData => (itemData \ "id").as[Int]).toList
+        (tileId, index, itemIds)
     }
 
 
-    // Retrieve screen coordinates from the index and map them, while keeping the items data available
-    val tileScreenCoordinates = potentialTiles.flatMap { case (tileId, index, items) =>
+    // Convert the tile's ID to coordinates and calculate distance from blockerPos
+    val sortedTiles = potentialTiles.flatMap { case (tileId, index, itemIds) =>
+      // Extract x, y, z from the tile ID
+      val tileX = tileId.take(5).toInt
+      val tileY = tileId.slice(5, 10).toInt
+      val tileZ = tileId.takeRight(2).toInt
+
+      // Only consider tiles on the same Z-level as the blocker
+      if (tileZ == presentCharLocationZ) {
+        val distance = manhattanDistance(blockerPos.x, blockerPos.y, tileX, tileY)
+        Some((tileId, index, itemIds, distance)) // Include distance in the tuple
+      } else {
+        None
+      }
+    }.toList.sortBy(_._4) // Sort by distance (ascending)
+
+
+    // Retrieve screen coordinates from the index and map them, while keeping the itemIds available
+    val tileScreenCoordinates = sortedTiles.flatMap { case (tileId, index, itemIds, distance) =>
       (json \ "screenInfo" \ "mapPanelLoc" \ index).asOpt[JsObject].map { screenData =>
         val x = (screenData \ "x").as[Int]
         val y = (screenData \ "y").as[Int]
-        logs :+= Log(s"[WRONG FLOOR] Tile check ID: $tileId ($x, $y)")
+        logs :+= Log(s"[WRONG FLOOR] Tile check ID: $tileId ($x, $y) - Distance: $distance")
 
-        (tileId, x, y, items) // Return the items along with screen coordinates
+        (tileId, x, y, itemIds) // Return the itemIds along with screen coordinates
       }
     }.headOption // Get the first available screen coordinate
 
-
+    println(s"Test tile: $tileScreenCoordinates")
     tileScreenCoordinates match {
-      case Some((tileId, screenX, screenY, items)) =>
+      case Some((tileId, screenX, screenY, itemIds)) =>
         logs :+= Log(s"[WRONG FLOOR] Found valid tile ($tileId) on screen at ($screenX, $screenY), Character location: (current: $presentCharLocationZ, blocker: $blockerPosZ)")
 
         // Check if it's the first time or if sufficient time has elapsed since the last action
         if (updatedState.chasingBlockerLevelChangeTime == 0 || (updatedState.currentTime - updatedState.chasingBlockerLevelChangeTime > updatedState.longTimeLimit)) {
           logs :+= Log("[WRONG FLOOR] Chasing blocker.")
 
+          val ropeTileId = StaticGameInfo.LevelMovementEnablers.UpRopesIds
+          val ladderTileId = StaticGameInfo.LevelMovementEnablers.UpLadderIds
+          val restTileIds = StaticGameInfo.LevelMovementEnablers.leftClickMovement
           // Handle the special case of using rope, check if there is exactly one item and its id is 386
-          if (items.size == 1 && items.values.exists(itemData => (itemData \ "id").as[Int] == 386)) {
+
+          println(s"Items: $itemIds")
+          if (itemIds.size == 1 && itemIds.contains(ropeTileId)) {
 
             // Step 1: Locate container and slot with itemId 3003 (Rope)
             val containersInfo = (json \ "containersInfo").as[JsObject]
@@ -657,10 +674,28 @@ object TeamHunt {
                 logs :+= Log("Rope not found.")
             }
 
-          } else if (items.size > 1 && items.values.exists(itemData => (itemData \ "id").as[Int] == 386)) {
+          } else if (itemIds.size > 1 && itemIds.contains(ropeTileId)) {
             logs :+= Log("Rope placed trashed.")
-          } else {
-            // Standard case for stairs or ladders
+
+          } else if (itemIds.exists(ladderTileId.contains)) {
+            // If any item in the tile has the ladderTileId, perform the actions
+            logs :+= Log("Clicking on ladder.")
+
+            // Define the mouse actions for interacting with the ladder
+            val actionsSeq = Seq(
+              MouseAction(screenX, screenY, "move"),
+              MouseAction(screenX, screenY, "pressRight"),
+              MouseAction(screenX, screenY, "releaseRight")
+            )
+
+            // Add the new actions to the sequence
+            actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+
+            // Update the state to reflect the ladder interaction
+            updatedState = updatedState.copy(chasingBlockerLevelChangeTime = updatedState.currentTime)
+            StaticGameInfo.LevelMovementEnablers.UpLadderIds
+          } else if (itemIds.exists(restTileIds.contains)) {
+            logs :+= Log("Clicking on stairs.")
             val actionsSeq = Seq(
               MouseAction(screenX, screenY, "move"),
               MouseAction(screenX, screenY, "pressLeft"),
@@ -668,6 +703,8 @@ object TeamHunt {
             )
             actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
             updatedState = updatedState.copy(chasingBlockerLevelChangeTime = updatedState.currentTime)
+          } else {
+            println(s"Tile not matched: ${itemIds}")
           }
 
         } else {
@@ -752,177 +789,11 @@ object TeamHunt {
   }
 
 
+  // Helper function to calculate Manhattan distance
+  def manhattanDistance(x1: Int, y1: Int, x2: Int, y2: Int): Int = {
+    abs(x1 - x2) + abs(y1 - y2)
+  }
+
 }
 
 
-
-
-
-
-//
-//  import scala.collection.mutable
-//  import play.api.libs.json._
-//
-//  object TeamHunt {
-//    case class Vec(x: Int, y: Int) {
-//      def +(other: Vec): Vec = Vec(x + other.x, y + other.y)
-//    }
-//
-//    def computeTeamHuntActions(json: JsValue, settings: UISettings, currentState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
-//      var actions: Seq[FakeAction] = Seq.empty
-//      var logs: Seq[Log] = Seq.empty
-//
-//      if (settings.teamHuntSettings.enabled && settings.teamHuntSettings.followBlocker) {
-//        (json \ "spyLevelInfo").validate[JsObject] match {
-//          case JsSuccess(spyInfo, _) =>
-//            val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
-//            val xs = tiles.keys.map(_.substring(0, 5).trim.toInt)
-//            val ys = tiles.keys.map(_.substring(5, 10).trim.toInt)
-//            val (grid, gridBounds) = createBooleanGrid(tiles, xs.min, ys.min)
-//
-//            val blockerName = settings.teamHuntSettings.blockerName
-//            val maybeBlocker = spyInfo.value.find {
-//              case (_, jsValue) => (jsValue \ "Name").asOpt[String].contains(blockerName)
-//            }
-//
-//            val effectiveTarget = maybeBlocker.orElse(findReachableTeamMember(spyInfo, grid, gridBounds))
-//
-//            effectiveTarget match {
-//              case Some((_, targetInfo)) =>
-//                val targetPosX = (targetInfo \ "PositionX").as[Int]
-//                val targetPosY = (targetInfo \ "PositionY").as[Int]
-//                println(s"Following target at position: X=$targetPosX, Y=$targetPosY")
-//              // Logic to follow the target
-//              case None =>
-//                println("No accessible target found.")
-//            }
-//
-//          case JsError(errors) =>
-//            println(s"Error parsing spyLevelInfo: $errors")
-//        }
-//      }
-//
-//      ((actions, logs), currentState)
-//    }
-//
-//    // Find reachable team member if the blocker isn't found
-//    def findReachableTeamMember(spyInfo: JsObject, grid: Array[Array[Boolean]], gridBounds: (Int, Int, Int, Int)): Option[(String, JsValue)] = {
-//      val teamMembers = extractTeamMembers(spyInfo)
-//      val reachableMembers = teamMembers.filter { case (_, memberPos) =>
-//        isPathAvailable(currentState.presentCharLocation, memberPos, grid, gridBounds)
-//      }
-//
-//      val closestReachableMember = reachableMembers.minByOption { case (_, pos) =>
-//        Math.hypot(pos.x - currentState.presentCharLocation.x, pos.y - currentState.presentCharLocation.y)
-//      }
-//
-//      closestReachableMember
-//    }
-//
-//    // Extract team members from JSON with their positions wrapped in Vec
-//    def extractTeamMembers(spyInfo: JsObject): Seq[(String, Vec)] = {
-//      spyInfo.value.flatMap {
-//        case (id, jsValue) if settings.teamHuntSettings.teamMembersList.contains((jsValue \ "Name").as[String]) =>
-//          val posX = (jsValue \ "PositionX").as[Int]
-//          val posY = (jsValue \ "PositionY").as[Int]
-//          val posZ = (jsValue \ "PositionZ").as[Int]
-//          if (posZ == currentState.presentCharLocationZ) Some(id -> Vec(posX, posY)) else None
-//      }.toSeq
-//    }
-//
-//
-//    def generateSubwaypointsToBlocker(currentWaypointLocation: Vec, initialState: ProcessorState, json: JsValue): ProcessorState = {
-//    println("[DEBUG] Generating subwaypoints for current waypoint")
-//    var updatedState = initialState
-//    // Parse tiles to determine the grid bounds and create a boolean grid
-//    val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
-//    val xs = tiles.keys.map(_.substring(0, 5).trim.toInt)
-//    val ys = tiles.keys.map(_.substring(5, 10).trim.toInt)
-//    val gridBounds = (xs.min, ys.min, xs.max, ys.max)
-//    println(s"[DEBUG] GridBounds: $gridBounds")
-//
-//    val (grid, (min_x, min_y)) = createBooleanGrid(tiles, xs.min, ys.min)
-//
-//    // Determine current waypoint location
-//    println(s"[DEBUG] Current Waypoint: $currentWaypointLocation")
-//
-//    // Adjust waypoint location if out of grid range
-////    if ((currentWaypointLocation.x < gridBounds._1 || currentWaypointLocation.x > gridBounds._3 ||
-////      currentWaypointLocation.y < gridBounds._2 || currentWaypointLocation.y > gridBounds._4)) {
-////
-////      val currentWaypointLocationTemp = adjustGoalWithinBounds(currentWaypointLocation, grid, gridBounds)
-////      println(s"[WARNING] Waypoint is out of grid range. Adjusting from ${currentWaypointLocation} to ${currentWaypointLocationTemp}")
-////      currentWaypointLocation = currentWaypointLocationTemp
-////    }
-//
-//    // Determine character's current location and perform A* search
-//    val presentCharLocation = updatedState.presentCharLocation
-//    println(s"[DEBUG] Character location: $presentCharLocation")
-//    var newPath: List[Vec] = List()
-//
-//    if (presentCharLocation != currentWaypointLocation) {
-//      // Make sure to include min_x and min_y when calling aStarSearch
-//      newPath = aStarSearch(presentCharLocation, currentWaypointLocation, grid, min_x, min_y)
-//      printInColor(ANSI_BLUE, f"[WAYPOINTS] Path: $newPath.")
-//    } else {
-//      println("[DEBUG] Current location matches the current waypoint, moving to the next waypoint.")
-////      // Increment the waypoint index safely with modulo to cycle through the list
-////      val nextWaypointIndex = (updatedState.currentWaypointIndex + 1) % updatedState.fixedWaypoints.size
-////      updatedState = updatedState.copy(currentWaypointIndex = nextWaypointIndex)
-////
-////      // Retrieve the new current waypoint from the updated index
-////      val currentWaypoint = updatedState.fixedWaypoints(nextWaypointIndex)
-////      var currentWaypointLocation = Vec(currentWaypoint.waypointX, currentWaypoint.waypointY)
-////
-////      println(s"[DEBUG] New current waypoint set to: $currentWaypointLocation")
-////
-////      // You may choose to trigger a new path calculation here if necessary
-////      // For example, you might want to calculate the path to this new waypoint
-////      newPath = aStarSearch(presentCharLocation, currentWaypointLocation, grid, min_x, min_y)
-////      println(s"[DEBUG] Path: ${newPath.mkString(" -> ")}")
-////      updatedState = updatedState.copy(subWaypoints = newPath)
-//    }
-//
-//    // Remove the presentCharLocation from the newPath if it exists
-//    val filteredPath = newPath.filterNot(loc => loc == presentCharLocation)
-//
-//    println(s"[DEBUG] Path: ${filteredPath.mkString(" -> ")}")
-//    println(s"[DEBUG] Char loc: $presentCharLocation")
-//    println(s"[DEBUG] Waypoint loc: $currentWaypointLocation")
-//
-//
-//    if (presentCharLocation != currentWaypointLocation) {
-//      printGrid(grid, gridBounds, filteredPath, updatedState.presentCharLocation, currentWaypointLocation)
-//      // Locations are different, update state accordingly
-//      updatedState.copy(
-//        subWaypoints = filteredPath,
-//        gridBoundsState = gridBounds,
-//        gridState = grid,
-//        currentWaypointLocation = currentWaypointLocation,
-//        presentCharLocation = presentCharLocation
-//      )
-//    } else {
-//      println(s"[DEBUG] presentCharLocation &  Char loc are the same.")
-//      updatedState
-//    }
-//  }
-//  // Function to convert game coordinates to a single string identifier and find screen coordinates from JSON
-//  def gameToScreenCoordinatesByTileId(gameX: Int, gameY: Int, gameZ: Int, json: JsValue): Option[(Int, Int)] = {
-//    val tileId = s"${gameX}${gameY}${gameZ}"
-//
-//    // Extracting the mapPanelLoc part of the JSON
-//    val mapPanelLoc = (json \ "screenInfo" \ "mapPanelLoc").as[JsObject]
-//
-//    // Finding the matching tile by id
-//    mapPanelLoc.values.find {
-//      case JsObject(obj) if obj.apply("id").asOpt[String].contains(tileId) => true
-//      case _ => false
-//    }.flatMap { tileJsValue =>
-//      for {
-//        x <- (tileJsValue \ "x").asOpt[Int]
-//        y <- (tileJsValue \ "y").asOpt[Int]
-//      } yield (x, y)
-//    }
-//  }
-//
-//}

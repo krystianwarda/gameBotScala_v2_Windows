@@ -246,12 +246,15 @@ object AutoTarget {
         updatedState.caveBotLevelsList.contains(presentCharLocationZ) &&
         settings.autoTargetSettings.enabled) ||
         (!settings.caveBotSettings.enabled && settings.autoTargetSettings.enabled)) {
+        println("Start autotarget")
 
-        val battleTargets: Seq[(Long, String, String, String)] = (json \ "battleInfo").as[JsObject].values.flatMap { creature =>
+        val battleTargets: Seq[(Long, String, Boolean, Boolean)] = (json \ "battleInfo").as[JsObject].values.flatMap { creature =>
           val id = (creature \ "Id").as[Long]
           val name = (creature \ "Name").as[String]
-          val isMonster = (creature \ "isMonster").as[String]
-          val isPlayer = (creature \ "isPlayer").as[String]
+          println("Gate1")
+          val isMonster = (creature \ "IsMonster").as[Boolean]
+          println("Gate2")
+          val isPlayer = (creature \ "IsPlayer").as[Boolean]
 
           // Check if attacking players is allowed or if the creature is not a player
           if (updatedState.attackPlayers || isPlayer == "false") {
@@ -327,10 +330,12 @@ object AutoTarget {
       if ((settings.caveBotSettings.enabled && updatedState.caveBotLevelsList.contains(presentCharLocationZ)) || (!(settings.caveBotSettings.enabled) && settings.autoTargetSettings.enabled)) {
         println(s"AutoTarget is ON, status ${updatedState.stateHunting}")
         (json \ "battleInfo").validate[Map[String, JsValue]] match {
-          case JsSuccess(battleInfo, _) =>1
+          case JsSuccess(battleInfo, _) => 1
+            println("gate3")
             val hasMonsters = battleInfo.exists { case (_, creature) =>
               (creature \ "IsMonster").asOpt[Boolean].getOrElse(false)
             }
+            println("gate4")
             if (hasMonsters) {
               val result = executeWhenMonstersOnScreen(json, settings, updatedState, actions, logs)
               actions = result._1._1
@@ -607,7 +612,9 @@ object AutoTarget {
 
           // Extract monsters, their IDs, and Names
           val monsters: Seq[(Long, String)] = (json \ "battleInfo").as[JsObject].values.flatMap { creature =>
+            println("gate5")
             val isMonster = (creature \ "IsMonster").as[Boolean]
+            println("gate6")
             if (isMonster) {
               Some((creature \ "Id").as[Long], (creature \ "Name").as[String])
             } else None

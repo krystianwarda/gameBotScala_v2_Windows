@@ -11,7 +11,7 @@ import keyboard.{ActionKeyboardManager, AutoResponderManager, KeyboardActor}
 import play.api.libs.json._
 import processing.JsonProcessorActor
 import userUI.UIAppActor
-import utils.{AlertSenderActor, FunctionExecutorActor, InitialJsonProcessorActor, InitialRunActor, KeyListenerActor, MainActor, PeriodicFunctionActor}
+import utils.{AlertSenderActor, FunctionExecutorActor, InitialJsonProcessorActor, InitialRunActor, MainActor, PeriodicFunctionActor}
 
 import java.awt.Robot
 import java.io.EOFException
@@ -105,7 +105,7 @@ object MainApp extends App {
   val autoResponderManagerRef: ActorRef = system.actorOf(AutoResponderManager.props(keyboardActorRef, jsonProcessorActorRef), "autoResponderManager")
   lazy val jsonProcessorActorRef: ActorRef = system.actorOf(Props(new JsonProcessorActor(mouseMovementActorRef, actionStateManagerRef, actionKeyboardManagerRef)), "jsonProcessor")
 
-  val keyListenerActorRef: ActorRef = system.actorOf(Props(new KeyListenerActor(jsonProcessorActorRef)), "keyListenerActor")
+//  val keyListenerActorRef: ActorRef = system.actorOf(Props(new KeyListenerActor(jsonProcessorActorRef)), "keyListenerActor")
   val functionExecutorActorRef: ActorRef = system.actorOf(Props[FunctionExecutorActor], "functionExecutorActor")
   val initialJsonProcessorActorRef: ActorRef = system.actorOf(Props[InitialJsonProcessorActor], "initialJsonProcessor")
   val initialRunActorRef: ActorRef = system.actorOf(Props(new InitialRunActor(initialJsonProcessorActorRef)), "initialRunActor")

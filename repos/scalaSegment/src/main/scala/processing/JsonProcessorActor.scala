@@ -38,7 +38,7 @@ import scala.util.Random
 //import src.main.scala.Main.JsonData
 import mouse.{MouseMoveCommand, MouseMovementSettings}
 import utils.consoleColorPrint._
-import utils.UpdatePauseStatus
+//import utils.UpdatePauseStatus
 
 case class cpResult(message: String, additionalData: Option[JsValue] = None)
 
