@@ -10,6 +10,8 @@ import play.api.libs.json._
 import java.lang.System.currentTimeMillis
 import utils.consoleColorPrint._
 
+import scala.collection.immutable.Seq
+
 
 
 
@@ -60,6 +62,8 @@ object TeamHunt {
                     presentCharLocationZ,
                     json,
                     tiles,
+                    actions,
+                    logs,
                     updatedState)
 
                   actions ++= result._1._1
@@ -75,6 +79,8 @@ object TeamHunt {
                       blockerPos,
                       presentCharLocation,
                       json,
+                      actions,
+                      logs,
                       updatedState
                     )
 
@@ -91,6 +97,8 @@ object TeamHunt {
                         teamMemberPos,
                         presentCharLocation,
                         json,
+                        actions,
+                        logs,
                         updatedState
                       )
 
@@ -540,11 +548,15 @@ object TeamHunt {
                    blockerPosZ: Int,
                    presentCharLocationZ: Int,
                    json: JsValue, tiles: Map[String, JsObject],
+                   initialActions: Seq[FakeAction],
+                   intialLogs: Seq[Log],
                    currentState: ProcessorState
                  ): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
-    var actions: Seq[FakeAction] = Seq.empty
-    var logs: Seq[Log] = Seq.empty // Add logs to keep track of actions taken
+
+    var actions: Seq[FakeAction] = initialActions
+    var logs: Seq[Log] = intialLogs
     var updatedState = currentState
+
     // Declare the level movement enablers lists based on whether the blocker is above or below
     var levelMovementEnablersIdsList: List[Int] = List()
 
@@ -669,16 +681,21 @@ object TeamHunt {
     ((actions, logs), updatedState)
   }
 
+
+  var actions: Seq[FakeAction] = Seq.empty
+  var logs: Seq[Log] = Seq.empty
   def followTarget(
                     target: Vec, // The location of the target (blocker)
                     presentCharLocation: Vec, // The character's current location
                     json: JsValue, // The game state JSON
+                    initialActions: Seq[FakeAction],
+                    intialLogs: Seq[Log],
                     currentState: ProcessorState // The current state of the character
                   ): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
 
+    var actions: Seq[FakeAction] = initialActions
+    var logs: Seq[Log] = intialLogs
     var updatedState = currentState
-    var actions: Seq[FakeAction] = Seq.empty
-    var logs: Seq[Log] = Seq.empty
 
     // Calculate Chebyshev Distance between the character and the target
     val chebyshevDistance = Math.max(

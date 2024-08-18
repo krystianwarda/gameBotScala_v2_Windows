@@ -21,63 +21,50 @@ object AutoHeal {
     val currentTime = System.currentTimeMillis()
 
     if (settings.healingSettings.enabled) {
-//      println(s"Status stateHealingWithRune : ${updatedState.stateHealingWithRune}")
-//      println(s"Status runeContainer : ${updatedState.uhRuneContainerName}")
+
+      if (updatedState.statusOfRuneAutoheal == "verifying") {
+        // Step 2: Verify if the newly opened backpack contains UH runes
+        logs = logs :+ Log(s"Verifying if container ${updatedState.uhRuneContainerName} contains UH runes...")
+
+        // Check for UH runes in the new backpack
+        (json \ "containersInfo" \ updatedState.uhRuneContainerName).asOpt[JsObject].foreach { containerInfo =>
+          val items = (containerInfo \ "items").asOpt[JsObject].getOrElse(Json.obj())
+
+          val containsUHRunes = items.fields.exists {
+            case (_, itemInfo) =>
+              val itemId = (itemInfo \ "itemId").asOpt[Int].getOrElse(-1)
+              val itemSubType = (itemInfo \ "itemSubType").asOpt[Int].getOrElse(-1)
+              itemId == 3160 && itemSubType == 1
+          }
+
+          // If UH runes are found, set the status to 'ready'
+          if (containsUHRunes) {
+            logs = logs :+ Log(s"UH Runes found in ${updatedState.uhRuneContainerName}.")
+            updatedState = updatedState.copy(statusOfRuneAutoheal = "ready")
+          } else {
+            logs = logs :+ Log(s"No UH Runes found in ${updatedState.uhRuneContainerName}.")
+          }
+        }
+      }
 
       if (updatedState.statusOfRuneAutoheal == "open_new_backpack") {
-        val newBpPosition = (json \ "screenInfo" \ "inventoryPanelLoc" \ updatedState.uhRuneContainerName \ "contentsPanel" \ "item0").as[JsObject]
-        val newBpPositionX = (newBpPosition \ "x").as[Int]
-        val newBpPositionY = (newBpPosition \ "y").as[Int]
-        println(s"New bp x: $newBpPositionX, Y: $newBpPositionY")
-        var actionsSeq = Seq(
-          MouseAction(newBpPositionX, newBpPositionY, "move"),
-          MouseAction(newBpPositionX, newBpPositionY, "pressRight"),
-          MouseAction(newBpPositionX, newBpPositionY, "releaseRight")
-        )
-        actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+        // Step 1: Open the new backpack
+        val result = openNewBackpack(updatedState.uhRuneContainerName, json, actions, logs, updatedState)
+        actions ++= result._1._1
+        logs ++= result._1._2
+        updatedState = result._2
 
-        // New Code: Check for UH runes in the specified container and update state if found
-        val containerInfo = (json \ "containersInfo" \ updatedState.uhRuneContainerName).as[JsObject]
-        val items = (containerInfo \ "items").as[JsObject]
-        val uhRuneItemId = 3160
-        val uhRuneItemSubType = 1
-
-        // Check if any item in the container is a UH rune
-        val containsUHRunes = items.fields.exists {
-          case (_, itemInfo) =>
-            val itemId = (itemInfo \ "itemId").asOpt[Int].getOrElse(-1)
-            val itemSubType = (itemInfo \ "itemSubType").asOpt[Int].getOrElse(-1)
-            itemId == uhRuneItemId && itemSubType == uhRuneItemSubType
-        }
-
-        if (containsUHRunes) {
-          updatedState = updatedState.copy(statusOfRuneAutoheal = "ready")
-        }
-
+        // Change status to 'verifying' to delay UH runes check to the next loop
+        updatedState = updatedState.copy(statusOfRuneAutoheal = "verifying")
       }
 
-      // remove bp remove_backpack
+
       if (updatedState.statusOfRuneAutoheal == "remove_backpack") {
-        println(s"updatedState.statusOfRuneAutoheal set to remove_backpack")
-        val presentCharLocation = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
-        val presentCharLocationX = (presentCharLocation \ "x").as[Int]
-        val presentCharLocationY = (presentCharLocation \ "y").as[Int]
-
-        val emptyBPPosition = (json \ "screenInfo" \ "inventoryPanelLoc" \ updatedState.uhRuneContainerName \ "contentsPanel" \ "item0").as[JsObject]
-        val emptyBPX = (emptyBPPosition \ "x").as[Int]
-        val emptyBPY = (emptyBPPosition \ "y").as[Int]
-
-        var actionsSeq = Seq(
-          MouseAction(emptyBPX, emptyBPY, "move"),
-          MouseAction(emptyBPX, emptyBPY, "pressLeft"),
-          MouseAction(presentCharLocationX, presentCharLocationY, "move"),
-          MouseAction(presentCharLocationX, presentCharLocationY, "releaseLeft")
-        )
-        actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-        logs = logs :+ Log(s"Using item 3160 at position ($presentCharLocationX, $presentCharLocationY) - Actions: $actionsSeq")
-        updatedState = updatedState.copy(statusOfRuneAutoheal = "open_new_backpack")
+        val result = removeEmptyBackpack(updatedState.uhRuneContainerName, json, actions, logs, updatedState)
+        actions ++= result._1._1
+        logs ++= result._1._2
+        updatedState = result._2
       }
-
 
       if (updatedState.uhRuneContainerName == "not_set") {
         logs = logs :+ Log(s"Checking for UH Rune container..")
@@ -109,26 +96,15 @@ object AutoHeal {
 
 
           if (freeSpace.contains(20) && hasParent.contains(true)) {
-
-            logs = logs :+ Log(s"Container ${updatedState.uhRuneContainerName} has 20 free spaces and a parent. Finding upButton...")
-            (json \ "screenInfo" \ "inventoryPanelLoc" \ updatedState.uhRuneContainerName \ "upButton").asOpt[JsObject].foreach { upButtonCoords =>
-              val targetX = (upButtonCoords \ "x").asOpt[Int]
-              val targetY = (upButtonCoords \ "y").asOpt[Int]
-
-              logs = logs :+ Log(s"Located upButton for ${updatedState.uhRuneContainerName} at [$targetX, $targetY]. Simulating click.")
-
-              var actionsSeq = Seq(
-                MouseAction(targetX.getOrElse(0), targetY.getOrElse(0), "move"),
-                MouseAction(targetX.getOrElse(0), targetY.getOrElse(0), "pressLeft"),
-                MouseAction(targetX.getOrElse(0), targetY.getOrElse(0), "releaseLeft")
-              )
-              actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-              logs = logs :+ Log(s"Container ${updatedState.uhRuneContainerName} is out of uh runes.")
-              updatedState = updatedState.copy(statusOfRuneAutoheal = "remove_backpack")
-            }
+            val result = noRunesInBpGoUp(updatedState.uhRuneContainerName, json, actions, logs, updatedState)
+            actions ++= result._1._1
+            logs ++= result._1._2
+            updatedState = result._2
           }
+
         }
       }
+
 
 //    } else if (settings.healingSettings.spellsHeal.length > 1 &&
 //      settings.healingSettings.spellsHeal(1).strongHealHealth > 0 &&
@@ -483,6 +459,124 @@ object AutoHeal {
     ((actions, logs), updatedState)
   }
 
+  def noRunesInBpGoUp(
+                       containerName: String,
+                       json: JsValue,
+                       initialActions: Seq[FakeAction],
+                       initialLogs: Seq[Log],
+                       currentState: ProcessorState
+                     ): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
+
+    // Initializing mutable variables with passed values
+    var actions = initialActions
+    var logs = initialLogs
+    var updatedState = currentState
+
+    logs = logs :+ Log(s"Container $containerName has 20 free spaces and a parent. Finding upButton...")
+
+    // Find the upButton's coordinates and simulate the click
+    (json \ "screenInfo" \ "inventoryPanelLoc" \ containerName \ "upButton").asOpt[JsObject].foreach { upButtonCoords =>
+      val targetX = (upButtonCoords \ "x").asOpt[Int].getOrElse(0)
+      val targetY = (upButtonCoords \ "y").asOpt[Int].getOrElse(0)
+
+      // Adding mouse actions for clicking the upButton
+      val actionsSeq = Seq(
+        MouseAction(targetX, targetY, "move"),
+        MouseAction(targetX, targetY, "pressLeft"),
+        MouseAction(targetX, targetY, "releaseLeft")
+      )
+
+      actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+
+      logs = logs :+ Log(s"Simulated click on upButton for $containerName.")
+    }
+
+    // Update state to indicate the next action is removing the backpack
+    updatedState = updatedState.copy(statusOfRuneAutoheal = "remove_backpack")
+
+
+
+    // Return the updated actions, logs, and state
+    ((actions, logs), updatedState)
+  }
+
+
+  def removeEmptyBackpack(
+                           containerName: String,
+                           json: JsValue,
+                           initialActions: Seq[FakeAction],
+                           initialLogs: Seq[Log],
+                           currentState: ProcessorState
+                         ): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
+
+    // Initialize mutable variables from input parameters
+    var actions = initialActions
+    var logs = initialLogs
+    var updatedState = currentState
+
+    logs = logs :+ Log(s"Removing empty backpack for container $containerName.")
+
+    val presentCharLocation = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
+    val presentCharLocationX = (presentCharLocation \ "x").as[Int]
+    val presentCharLocationY = (presentCharLocation \ "y").as[Int]
+
+    val emptyBPPosition = (json \ "screenInfo" \ "inventoryPanelLoc" \ containerName \ "contentsPanel" \ "item0").as[JsObject]
+    val emptyBPX = (emptyBPPosition \ "x").as[Int]
+    val emptyBPY = (emptyBPPosition \ "y").as[Int]
+
+    // Create mouse actions for removing the backpack
+    val actionsSeq = Seq(
+      MouseAction(emptyBPX, emptyBPY, "move"),
+      MouseAction(emptyBPX, emptyBPY, "pressLeft"),
+      MouseAction(presentCharLocationX, presentCharLocationY, "move"),
+      MouseAction(presentCharLocationX, presentCharLocationY, "releaseLeft")
+    )
+
+    actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+    logs = logs :+ Log(s"Removing backpack at position ($emptyBPX, $emptyBPY). Actions: $actionsSeq")
+
+    // Update state to indicate the next action is opening a new backpack
+    updatedState = updatedState.copy(statusOfRuneAutoheal = "open_new_backpack")
+
+    // Return the updated actions, logs, and state
+    ((actions, logs), updatedState)
+  }
+
+
+  def openNewBackpack(
+                       containerName: String,
+                       json: JsValue,
+                       initialActions: Seq[FakeAction],
+                       initialLogs: Seq[Log],
+                       currentState: ProcessorState
+                     ): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
+
+    // Initialize mutable variables from input parameters
+    var actions = initialActions
+    var logs = initialLogs
+    var updatedState = currentState
+
+    val newBpPosition = (json \ "screenInfo" \ "inventoryPanelLoc" \ containerName \ "contentsPanel" \ "item0").as[JsObject]
+    val newBpPositionX = (newBpPosition \ "x").as[Int]
+    val newBpPositionY = (newBpPosition \ "y").as[Int]
+
+    logs = logs :+ Log(s"Opening new backpack at position ($newBpPositionX, $newBpPositionY).")
+
+    // Create mouse actions for opening the new backpack
+    val actionsSeq = Seq(
+      MouseAction(newBpPositionX, newBpPositionY, "move"),
+      MouseAction(newBpPositionX, newBpPositionY, "pressRight"),
+      MouseAction(newBpPositionX, newBpPositionY, "releaseRight")
+    )
+
+    actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+
+    // Update state to indicate the next action is checking for runes
+    updatedState = updatedState.copy(statusOfRuneAutoheal = "checking_for_runes")
+
+    // Return the updated actions, logs, and state
+    ((actions, logs), updatedState)
+  }
 
 
 }

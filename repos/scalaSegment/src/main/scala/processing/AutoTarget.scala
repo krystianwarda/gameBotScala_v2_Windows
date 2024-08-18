@@ -4,6 +4,7 @@ import play.api.libs.json.Format.GenericFormat
 import play.api.libs.json.JsValue
 import play.api.libs.json.OFormat.oFormatFromReadsAndOWrites
 import play.api.libs.json._
+import processing.AutoHeal.{openNewBackpack, removeEmptyBackpack}
 import processing.CaveBot.executeWhenNoMonstersOnScreen
 import processing.Process.{generateRandomDelay, performMouseActionSequance, timeToRetry}
 import userUI.SettingsUtils.UISettings
@@ -136,6 +137,56 @@ object AutoTarget {
       // resuply ammo end
 
 
+
+
+      if (updatedState.statusOfAttackRune == "verifying") {
+        // Step 2: Verify if the newly opened backpack contains UH runes
+        logs = logs :+ Log(s"Verifying if container ${updatedState.attackRuneContainerName} contains attack runes...")
+
+        // Check for UH runes in the new backpack
+        (json \ "containersInfo" \ updatedState.attackRuneContainerName).asOpt[JsObject].foreach { containerInfo =>
+          val items = (containerInfo \ "items").asOpt[JsObject].getOrElse(Json.obj())
+
+          // Extract rune IDs from the creature list (you should ensure that runeIds is accessible in this scope)
+          val runeIds = settings.autoTargetSettings.creatureList.flatMap(extractRuneIdFromSetting).toSet
+
+          val containsUHRunes = items.fields.exists {
+            case (_, itemInfo) =>
+              val itemId = (itemInfo \ "itemId").asOpt[Int].getOrElse(-1)
+              val itemSubType = (itemInfo \ "itemSubType").asOpt[Int].getOrElse(-1)
+              // Check if itemId is in the runeIds set and if itemSubType matches 1
+              runeIds.contains(itemId) && itemSubType == 1
+          }
+
+          // If UH runes are found, set the status to 'ready'
+          if (containsUHRunes) {
+            logs = logs :+ Log(s"Runes found in ${updatedState.attackRuneContainerName}.")
+            updatedState = updatedState.copy(statusOfAttackRune = "ready")
+          } else {
+            logs = logs :+ Log(s"No Runes found in ${updatedState.attackRuneContainerName}.")
+          }
+        }
+      }
+
+
+      if (updatedState.statusOfAttackRune == "open_new_backpack") {
+        // Step 1: Open the new backpack
+        val result = openNewBackpack(updatedState.attackRuneContainerName, json, actions, logs, updatedState)
+        actions ++= result._1._1
+        logs ++= result._1._2
+        updatedState = result._2
+
+        // Change status to 'verifying' to delay UH runes check to the next loop
+        updatedState = updatedState.copy(statusOfAttackRune = "verifying")
+      }
+
+
+      if (updatedState.statusOfAttackRune == "remove_backpack") {
+        val result = removeEmptyBackpack(updatedState.attackRuneContainerName, json, actions, logs, updatedState)
+        actions ++= result._1._1
+        logs ++= result._1._2
+        updatedState = result._2
+      }
 
       // Assuming the correct structure of the JSON object and that the JSON parsing is appropriate:
       if (updatedState.attackRuneContainerName == "not_set") {

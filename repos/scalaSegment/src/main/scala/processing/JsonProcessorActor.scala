@@ -125,8 +125,10 @@ case class ProcessorState(
 
                            positionStagnantCount: Int = 0,
                            lastPosition: Option[Vec] = None,
-                           uhRuneContainerName: String = "not_set",
+
                            attackRuneContainerName: String = "not_set",
+                           statusOfAttackRune: String = "not_ready",
+                           uhRuneContainerName: String = "not_set",
                            statusOfRuneAutoheal: String = "not_ready",
                            stateHunting: String = "free",
                            caveBotLevelsList: List[Int] = List(),
