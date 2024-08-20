@@ -1,5 +1,5 @@
 package processing
-import scala.util.{Success, Failure} // Import only the necessary classes
+import scala.util.{Failure, Success}
 import akka.pattern.ask
 import akka.util.Timeout
 import mouse.FakeAction
@@ -12,6 +12,8 @@ import userUI.SettingsUtils
 import userUI.SettingsUtils.UISettings
 import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, Mouse, MouseMoveCommand, MouseMovementSettings}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
+import utils.StaticGameInfo
+
 import scala.util.Try
 import System.currentTimeMillis
 import javax.swing.JList
@@ -20,9 +22,10 @@ import scala.collection.immutable.Seq
 import scala.collection.mutable
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
-import scala.util.{Random}
+import scala.util.Random
 import scala.util.control.Breaks.break
 import utils.consoleColorPrint._
+
 import scala.concurrent.ExecutionContext.Implicits.global
 
 object CaveBot {
@@ -828,7 +831,7 @@ object CaveBot {
 
 
   def createBooleanGrid(tiles: Map[String, JsObject], min_x: Int, min_y: Int): (Array[Array[Boolean]], (Int, Int)) = {
-    val levelMovementEnablersIdsList: List[Int] = List(414, 433, 369, 469, 1977, 1947, 1948, 386, 594)
+    val allMovementEnablerIds: List[Int] = StaticGameInfo.LevelMovementEnablers.AllIds
 
     val maxX = tiles.keys.map(key => key.take(5).trim.toInt).max
     val maxY = tiles.keys.map(key => key.drop(5).take(5).trim.toInt).max
@@ -847,7 +850,7 @@ object CaveBot {
         val tileIsWalkable = (tileObj \ "isWalkable").asOpt[Boolean].getOrElse(false)
         val tileItems = (tileObj \ "items").as[JsObject]
         val hasBlockingItem = tileItems.values.exists(item =>
-          levelMovementEnablersIdsList.contains((item \ "id").as[Int])
+          allMovementEnablerIds.contains((item \ "id").as[Int])
         )
 
         // Consider tile non-walkable if elevation is 2, otherwise use other conditions

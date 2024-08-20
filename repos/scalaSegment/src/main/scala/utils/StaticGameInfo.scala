@@ -38,6 +38,7 @@ object StaticGameInfo {
 
     val AllUpIds: List[Int] = UpStairsIds ++ UpRopesIds ++ UpLadderIds
     val AllDownIds: List[Int] = DownIds ++ DownGrateIds ++ DownShovelHoleIds
+    val AllIds: List[Int] = AllUpIds ++ AllDownIds
     val leftClickMovement: List[Int] = DownIds ++ UpStairsIds
 
   }

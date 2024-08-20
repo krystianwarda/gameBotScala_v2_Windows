@@ -117,6 +117,7 @@ case class ProcessorState(
                            chosenTargetName: String = "",
                            lastChosenTargetPos: (Int, Int, Int) = (0,0,0),
                            attackPlayers: Boolean = false,
+                           lastTargetMarkCommandSend: Long = 0,
 
                            creatureTarget: Int = 0,
                            lastTargetName: String = "",
@@ -407,13 +408,12 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     val currentTime = System.currentTimeMillis()
     currentState.settings.flatMap { settings =>
       if (settings.autoTargetSettings.enabled) {
-        //        println("Performing cave bot action.")
 
+        println("Performing auto target action.")
         // Call computeCaveBotActions with currentState
         val ((actions, logs), updatedState) = computeAutoTargetActions(json, settings, currentState.copy(lastAutoTargetCommandSend = currentTime))
 
-        // Execute actions and logs if necessary
-//        executeActionsAndLogs(actions, logs, Some(settings))
+
         executeActionsAndLogsNew(actions, logs, Some(settings), Some("autotarget"))
         // Return the updated state from computeCaveBotActions, wrapped in an Option
         Some(updatedState)

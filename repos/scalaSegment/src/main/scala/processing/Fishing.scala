@@ -358,7 +358,7 @@ object Fishing {
     }
     val endTime = System.nanoTime()
     val duration = (endTime - startTime) / 1e9d
-    printInColor(ANSI_GREEN, f"[INFO] Processing computeAutoLootActions took $duration%.6f seconds")
+    printInColor(ANSI_GREEN, f"[INFO] Processing computeFishingActions took $duration%.6f seconds")
 
     ((actions, logs),updatedState)
   }

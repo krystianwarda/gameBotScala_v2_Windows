@@ -719,8 +719,7 @@ object TeamHunt {
   }
 
 
-  var actions: Seq[FakeAction] = Seq.empty
-  var logs: Seq[Log] = Seq.empty
+
   def followTarget(
                     target: Vec, // The location of the target (blocker)
                     presentCharLocation: Vec, // The character's current location
@@ -777,7 +776,7 @@ object TeamHunt {
             updatedState = updatedState.copy(subWaypoints = updatedState.subWaypoints.tail)
           }
         } else {
-          logs :+= Log("[DEBUG] Too close to blocker, stopping pursuit.")
+          logs :+= Log("[DEBUG] Too close to target, stopping pursuit.")
         }
 
         ((actions, logs), updatedState)
