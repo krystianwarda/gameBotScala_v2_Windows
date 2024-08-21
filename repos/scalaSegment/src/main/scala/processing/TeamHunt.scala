@@ -77,8 +77,8 @@ object TeamHunt {
                   // Blocker is on the same level, check if path is available
                   if (isPathAvailable(presentCharLocation, blockerPos, grid, gridBounds)) {
 
-                    // following blocker
-                    val result = followTarget(
+                    // engaging Target
+                    val result = followTeamMember(
                       blockerPos,
                       presentCharLocation,
                       json,
@@ -96,7 +96,7 @@ object TeamHunt {
                     // Blocker not reachable, find a reachable team member
                     findReachableTeamMember(settings, currentState, spyInfo, grid, gridBounds).map { teamMemberPos =>
                       // following team member
-                      val result = followTarget(
+                      val result = followTeamMember(
                         teamMemberPos,
                         presentCharLocation,
                         json,
@@ -485,15 +485,6 @@ object TeamHunt {
     // Determine current waypoint location
     println(s"[DEBUG] Current Waypoint: $currentWaypointLocation")
 
-    // Adjust waypoint location if out of grid range
-//    if ((currentWaypointLocation.x < gridBounds._1 || currentWaypointLocation.x > gridBounds._3 ||
-//      currentWaypointLocation.y < gridBounds._2 || currentWaypointLocation.y > gridBounds._4)) {
-//
-//      val currentWaypointLocationTemp = adjustGoalWithinBounds(currentWaypointLocation, grid, gridBounds)
-//      println(s"[WARNING] Waypoint is out of grid range. Adjusting from ${currentWaypointLocation} to ${currentWaypointLocationTemp}")
-//      currentWaypointLocation = currentWaypointLocationTemp
-//    }
-
     // Determine character's current location and perform A* search
     val presentCharLocation = updatedState.presentCharLocation
     println(s"[DEBUG] Character location: $presentCharLocation")
@@ -505,21 +496,6 @@ object TeamHunt {
       printInColor(ANSI_BLUE, f"[WAYPOINTS] Path: $newPath.")
     } else {
       println("[DEBUG] Current location matches the current waypoint, moving to the next waypoint.")
-//      // Increment the waypoint index safely with modulo to cycle through the list
-//      val nextWaypointIndex = (updatedState.currentWaypointIndex + 1) % updatedState.fixedWaypoints.size
-//      updatedState = updatedState.copy(currentWaypointIndex = nextWaypointIndex)
-//
-//      // Retrieve the new current waypoint from the updated index
-//      val currentWaypoint = updatedState.fixedWaypoints(nextWaypointIndex)
-//      var currentWaypointLocation = Vec(currentWaypoint.waypointX, currentWaypoint.waypointY)
-//
-//      println(s"[DEBUG] New current waypoint set to: $currentWaypointLocation")
-//
-//      // You may choose to trigger a new path calculation here if necessary
-//      // For example, you might want to calculate the path to this new waypoint
-//      newPath = aStarSearch(presentCharLocation, currentWaypointLocation, grid, min_x, min_y)
-//      println(s"[DEBUG] Path: ${newPath.mkString(" -> ")}")
-//      updatedState = updatedState.copy(subWaypoints = newPath)
     }
 
     // Remove the presentCharLocation from the newPath if it exists
@@ -720,7 +696,7 @@ object TeamHunt {
 
 
 
-  def followTarget(
+  def followTeamMember(
                     target: Vec, // The location of the target (blocker)
                     presentCharLocation: Vec, // The character's current location
                     json: JsValue, // The game state JSON

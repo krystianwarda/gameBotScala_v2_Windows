@@ -16,10 +16,15 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
   val targetOnBattleLabel = new Label("Target on battle:")
   val lootMonsterLabel = new Label("Loot monster:")
   val chaseMonsterLabel = new Label("Chase monster:")
+  val keepDistanceLabel = new Label("Keep distance:")
+  val avoidWavesLabel = new Label("Avoid waves:")
 
   val targetMonstersOnBattleCheckbox = new CheckBox("Yes")
   val lootMonsterCheckbox = new CheckBox("Yes")
   val chaseMonstersCheckbox = new CheckBox("Yes")
+  val keepDistanceCheckbox = new CheckBox("Yes")
+  val avoidWavesCheckbox = new CheckBox("Yes")
+
 
   val loadButton = new JButton("Load")
   val saveButton = new JButton("Save")
@@ -169,6 +174,18 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
     c.gridx += 1
     add(chaseMonstersCheckbox.peer, c)
 
+    c.gridx = 4
+    c.gridy += 1
+    add(keepDistanceLabel.peer, c)
+    c.gridx += 1
+    add(keepDistanceCheckbox.peer, c)
+
+    c.gridx = 4
+    c.gridy += 1
+    add(avoidWavesLabel.peer, c)
+    c.gridx += 1
+    add(avoidWavesCheckbox.peer, c)
+
 
     c.gridy += 1
     c.gridx = 4
@@ -189,12 +206,14 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
       val dangerLevel = creatureDangerDropdown.getSelectedItem.toString
       val targetOnBattle = if (targetMonstersOnBattleCheckbox.selected) "Yes" else "No"
       val lootMonster = if (lootMonsterCheckbox.selected) "Yes" else "No"
+      val keepDistance = if (keepDistanceCheckbox.selected) "Yes" else "No"
+      val avoidWaves = if (avoidWavesCheckbox.selected) "Yes" else "No"
       val chaseMonster = if (chaseMonstersCheckbox.selected) "Yes" else "No"
       val useRune = if (useRuneCheckbox.selected) "Yes" else "No"
       val runeType = if (useRuneCheckbox.selected) runeTypeDropdown.getSelectedItem.toString else ""
 
       // Concatenate all information into a single string
-      val creatureInfo = s"$creatureName, Count: $count, HP: $hpRangeFrom-$hpRangeTo, Danger: $dangerLevel, Target in Battle: $targetOnBattle, Loot: $lootMonster, Chase: $chaseMonster, Use Rune: $useRune, Rune Type: $runeType"
+      val creatureInfo = s"$creatureName, Count: $count, HP: $hpRangeFrom-$hpRangeTo, Danger: $dangerLevel, Target in Battle: $targetOnBattle, Loot: $lootMonster, Chase: $chaseMonster, Keep Distance: $keepDistance, Avoid waves: $avoidWaves, Use Rune: $useRune, Rune Type: $runeType"
 
       if (creatureName.nonEmpty && !creatureListModel.contains(creatureInfo)) {
         creatureListModel.addElement(creatureInfo)

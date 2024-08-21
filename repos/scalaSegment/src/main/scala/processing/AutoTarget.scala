@@ -5,9 +5,9 @@ import play.api.libs.json.JsValue
 import play.api.libs.json.OFormat.oFormatFromReadsAndOWrites
 import play.api.libs.json._
 import processing.AutoHeal.{openNewBackpack, removeEmptyBackpack}
-import processing.CaveBot.{Vec, aStarSearch, createBooleanGrid, executeWhenNoMonstersOnScreen, printGrid}
+import processing.CaveBot.{Vec, aStarSearch, calculateDirection, createBooleanGrid, executeWhenNoMonstersOnScreen, printGrid}
 import processing.Process.{generateRandomDelay, performMouseActionSequance, timeToRetry}
-import processing.TeamHunt.followTarget
+import processing.TeamHunt.followTeamMember
 import userUI.SettingsUtils.UISettings
 import utils.consoleColorPrint.{ANSI_GREEN, ANSI_RED, printInColor}
 import utils.consoleColorPrint._
@@ -16,7 +16,7 @@ import java.lang.System.currentTimeMillis
 import scala.util.{Random, Try}
 import scala.util.matching.Regex
 
-case class MonsterInfo(id: Int, name: String, healthPercent: Int, isShootable: Boolean, isMonster: Boolean, danger: Int, isPlayer: Boolean, posX: Int, posY: Int, posZ: Int)
+case class CreatureInfo(id: Int, name: String, healthPercent: Int, isShootable: Boolean, isMonster: Boolean, danger: Int, isPlayer: Boolean, posX: Int, posY: Int, posZ: Int)
 
 
 object AutoTarget {
@@ -332,7 +332,7 @@ object AutoTarget {
               case _ =>
                 // If the Id is None or different from chosenTargetId, leave another placeholder
                 println(s"Attack Id is either None or different from chosenTargetId: ${updatedState.chosenTargetId}")
-
+//                println(settings.autoTargetSettings.creatureList)
                 val targetMonstersJsons = transformToJSON(settings.autoTargetSettings.creatureList)
 
 
@@ -360,34 +360,32 @@ object AutoTarget {
 
             }
 
-            val creaturePosition = findCreaturePositionById(updatedState.chosenTargetId, battleInfo)
+            val creatureInfo = findCreatureInfoById(updatedState.chosenTargetId, battleInfo)
 
             val presentCharLocationX = (json \ "characterInfo" \ "PositionX").as[Int]
             val presentCharLocationY = (json \ "characterInfo" \ "PositionY").as[Int]
             val presentCharLocation = Vec(presentCharLocationX, presentCharLocationY)
 
+            creatureInfo match {
+              case Some(creatureData) =>
 
-            if (creaturePosition.isDefined) {
-              // Creature found, execute followTarget
-              val creaturePosVec = creaturePosition.get
+                val resultEngageCreature = engageCreature(
+                  creatureData,
+                  presentCharLocation,
+                  json,
+                  actions,
+                  logs,
+                  updatedState,
+                  settings,
+                )
 
-              val resultFollowTarget = followTarget(
-                creaturePosVec,
-                presentCharLocation,
-                json,
-                actions,
-                logs,
-                updatedState
-              )
-
-              actions = resultFollowTarget._1._1
-              logs = resultFollowTarget._1._2
-              updatedState = resultFollowTarget._2
-
-            } else {
-              // Creature not found, print a message
-              println(s"Creature with ID ${updatedState.chosenTargetId} not found in battleInfo")
+                actions = resultEngageCreature._1._1
+                logs = resultEngageCreature._1._2
+                updatedState = resultEngageCreature._2
+              case None =>
+                println(s"Creature with ID ${updatedState.chosenTargetId} not found in battleInfo")
             }
+
 
 
           }
@@ -770,6 +768,7 @@ object AutoTarget {
             } else None
           }.toSeq
 
+
           // Use the existing creatureList from settings
           val jsonResult = transformToJSON(settings.autoTargetSettings.creatureList)
 //          println(Json.prettyPrint(Json.toJson(jsonResult)))
@@ -782,7 +781,7 @@ object AutoTarget {
 
           // Now use Reads from the Creature object
           val creatureDangerMap = jsonResult.map { json =>
-            val creature = Json.parse(json.toString()).as[Creature](Creature.reads)
+            val creature = Json.parse(json.toString()).as[CreatureSettings](CreatureSettings.reads)
             (creature.name, creature.danger)
           }.toMap
 
@@ -794,7 +793,7 @@ object AutoTarget {
             } else {
               // Parse JSON to List of Creature objects and filter to get names of creatures with loot
               jsonResult.flatMap { json =>
-                Json.parse(json.toString()).validate[Creature] match {
+                Json.parse(json.toString()).validate[CreatureSettings] match {
                   case JsSuccess(creature, _) if creature.loot => Some(creature.name)
                   case _ => None
                 }
@@ -914,24 +913,27 @@ object AutoTarget {
 
 
 
-  // Define the Creature case class along with its companion object
-  case class Creature(
-                       name: String,
-                       count: Int,
-                       hpFrom: Int,
-                       hpTo: Int,
-                       danger: Int,
-                       targetBattle: Boolean,
-                       loot: Boolean,
-                     )
+  case class CreatureSettings(
+                               name: String,
+                               count: Int,
+                               hpFrom: Int,
+                               hpTo: Int,
+                               danger: Int,
+                               targetBattle: Boolean,
+                               loot: Boolean,
+                               chase: Boolean,
+                               keepDistance: Boolean,
+                               avoidWaves: Boolean,
+                               useRune: Boolean,
+                               runeType: Option[String] // Optional, as rune type may not always be provided
+                             )
 
-  object Creature {
-    implicit val writes: Writes[Creature] = Json.writes[Creature]
-    implicit val reads: Reads[Creature] = Json.reads[Creature]
+  object CreatureSettings {
+    implicit val writes: Writes[CreatureSettings] = Json.writes[CreatureSettings]
+    implicit val reads: Reads[CreatureSettings] = Json.reads[CreatureSettings]
   }
 
-  // Parsing function
-  def parseCreature(description: String): Creature = {
+  def parseCreature(description: String): CreatureSettings = {
     val parts = description.split(", ")
     val name = parts(0)
     val count = parts(1).split(": ")(1).toInt
@@ -939,8 +941,15 @@ object AutoTarget {
     val danger = parts(3).split(": ")(1).toInt
     val targetBattle = parts(4).split(": ")(1).equalsIgnoreCase("yes")
     val loot = parts(5).split(": ")(1).equalsIgnoreCase("yes")
-    Creature(name, count, hpRange(0), hpRange(1), danger, targetBattle, loot)
+    val chase = parts(6).split(": ")(1).equalsIgnoreCase("yes")
+    val keepDistance = parts(7).split(": ")(1).equalsIgnoreCase("yes")
+    val avoidWaves = parts(8).split(": ")(1).equalsIgnoreCase("yes")
+    val useRune = parts(9).split(": ")(1).equalsIgnoreCase("yes")
+    val runeType = if (parts.length > 10 && parts(10).split(": ").length > 1) Some(parts(10).split(": ")(1)) else None
+
+    CreatureSettings(name, count, hpRange(0), hpRange(1), danger, targetBattle, loot, chase, keepDistance, avoidWaves, useRune, runeType)
   }
+
 
   // Transform to JSON function
   def transformToJSON(creaturesData: Seq[String]): List[JsValue] = {
@@ -970,7 +979,7 @@ object AutoTarget {
 
 
   // Function to extract battleInfo and sort by danger and healthPercent
-  def extractInfoAndSortMonstersFromBattle(json: JsValue, settings: UISettings): List[MonsterInfo] = {
+  def extractInfoAndSortMonstersFromBattle(json: JsValue, settings: UISettings): List[CreatureInfo] = {
     // Extract battleInfo from JSON
     val battleInfo = (json \ "battleInfo").as[Map[String, JsValue]]
 
@@ -983,19 +992,19 @@ object AutoTarget {
 
     // Map of creature name to danger level
     val creatureDangerMap: Map[String, Int] = targetMonstersJsons.map { creatureJson =>
-      val creature = creatureJson.as[Creature]
+      val creature = creatureJson.as[CreatureSettings]
       (creature.name, creature.danger)
     }.toMap
 
     // Extract and map the battle targets from the battleInfo
-    val battleTargets: List[MonsterInfo] = battleInfo.flatMap { case (_, battleData) =>
+    val battleTargets: List[CreatureInfo] = battleInfo.flatMap { case (_, battleData) =>
       // Extract creature information
       val isMonster = (battleData \ "IsMonster").asOpt[Boolean].getOrElse(false)
       val isPlayer = (battleData \ "IsPlayer").asOpt[Boolean].getOrElse(false)
 
 
       if (isMonster || targetAllCreatures) {
-        Some(MonsterInfo(
+        Some(CreatureInfo(
           id = (battleData \ "Id").as[Int],
           name = (battleData \ "Name").as[String],
           healthPercent = (battleData \ "HealthPercent").as[Int],
@@ -1017,7 +1026,7 @@ object AutoTarget {
   }
 
 
-  def checkPathToTarget(monster: MonsterInfo, presentCharLocation: Vec, json: JsValue): Boolean = {
+  def checkPathToTarget(monster: CreatureInfo, presentCharLocation: Vec, json: JsValue): Boolean = {
     println(s"[DEBUG] Checking path to target: ${monster.name} at position (${monster.posX}, ${monster.posY}, ${monster.posZ})")
 
     // Parse tiles to determine the grid bounds and create a boolean grid
@@ -1053,15 +1062,27 @@ object AutoTarget {
     }
   }
 
-  def findCreaturePositionById(creatureId: Long, battleInfo: Map[String, JsValue]): Option[Vec] = {
+  def findCreatureInfoById(creatureId: Long, battleInfo: Map[String, JsValue]): Option[CreatureInfo] = {
     // Find the creature with the matching Id in battleInfo
     battleInfo.collectFirst {
       case (_, creatureData) if (creatureData \ "Id").as[Long] == creatureId =>
+        // Extract all necessary fields to construct a CreatureInfo object
+        val id = (creatureData \ "Id").as[Int]
+        val name = (creatureData \ "Name").as[String]
+        val healthPercent = (creatureData \ "HealthPercent").as[Int]
+        val isShootable = (creatureData \ "IsShootable").as[Boolean]
+        val isMonster = (creatureData \ "IsMonster").as[Boolean]
+        val danger = (creatureData \ "Danger").asOpt[Int].getOrElse(0) // Optional field
+        val isPlayer = (creatureData \ "IsPlayer").as[Boolean]
         val posX = (creatureData \ "PositionX").as[Int]
         val posY = (creatureData \ "PositionY").as[Int]
-        Vec(posX, posY)
+        val posZ = (creatureData \ "PositionZ").as[Int]
+
+        // Return the CreatureInfo object
+        CreatureInfo(id, name, healthPercent, isShootable, isMonster, danger, isPlayer, posX, posY, posZ)
     }
   }
+
 
   // Get the target settings for the chosen creature or for "All"
   def getTargetBattle(creatureName: String, targetMonstersJsons: Seq[JsValue]): Option[Boolean] = {
@@ -1127,6 +1148,289 @@ object AutoTarget {
 
     // Return the tuple of (actions, logs) and updated state
     ((actions, logs), updatedState)
+  }
+
+  def engageCreature(
+                      creatureData: CreatureInfo, // Data about the creature
+                      presentCharLocation: Vec, // The character's current location
+                      json: JsValue, // The game state JSON
+                      initialActions: Seq[FakeAction],
+                      initialLogs: Seq[Log],
+                      currentState: ProcessorState, // The current state of the character
+                      settings: UISettings // The settings that include creature settings
+                    ): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
+
+    var actions: Seq[FakeAction] = initialActions
+    var logs: Seq[Log] = initialLogs
+    var updatedState = currentState
+    var mode = "none" // Default mode in case no match is found
+
+    // Convert settings to a CreatureSettings object for the targeted creature
+    val targetedCreatureSettings = transformToObject(creatureData, settings.autoTargetSettings.creatureList)
+
+    targetedCreatureSettings match {
+      case Some(creatureSettings) =>
+        // Determine the mode based on the settings
+        if (creatureSettings.chase) {
+          mode = "chase"
+        } else if (creatureSettings.keepDistance) {
+          mode = "keepDistance"
+        } else {
+          mode = "none"
+          logs :+= Log("[DEBUG] No engagement mode selected.")
+        }
+
+        logs :+= Log(s"[DEBUG] Engagement mode for ${creatureData.name} set to: $mode")
+
+        // Call the engage logic with the determined mode
+        mode match {
+          case "chase" =>
+            // Move toward the creature
+            logs :+= Log("[DEBUG] Engaging creature in chase mode.")
+            updatedState = generateSubwaypointsToCreature(Vec(creatureData.posX, creatureData.posY), updatedState, json)
+
+            if (updatedState.subWaypoints.nonEmpty) {
+              val nextWaypoint = updatedState.subWaypoints.head
+              val direction = calculateDirection(presentCharLocation, nextWaypoint, updatedState.lastDirection)
+              logs :+= Log(f"[DEBUG] Calculated Next Direction (Chase): $direction")
+
+              updatedState = updatedState.copy(lastDirection = direction)
+
+              direction.foreach { dir =>
+                actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(dir)))
+                logs :+= Log(s"Moving toward the creature in direction: $dir")
+              }
+
+              updatedState = updatedState.copy(subWaypoints = updatedState.subWaypoints.tail)
+            }
+
+          case "keepDistance" =>
+            // Try to maintain distance from the creature
+            val requiredDistance = 5 // Keep a distance of 5-6 tiles
+
+            val chebyshevDistance = Math.max(
+              Math.abs(creatureData.posX - presentCharLocation.x),
+              Math.abs(creatureData.posY - presentCharLocation.y)
+            )
+
+            if (chebyshevDistance < requiredDistance) {
+              // Run away from the creature
+              logs :+= Log("[DEBUG] Creature is too close, running away.")
+
+              updatedState = generateSubwaypointsToEscape(Vec(creatureData.posX, creatureData.posY), updatedState, json)
+
+              if (updatedState.subWaypoints.nonEmpty) {
+                val nextWaypoint = updatedState.subWaypoints.head
+                val direction = calculateDirection(presentCharLocation, nextWaypoint, updatedState.lastDirection)
+                logs :+= Log(f"[DEBUG] Calculated Next Direction (Escape): $direction")
+
+                updatedState = updatedState.copy(lastDirection = direction)
+
+                direction.foreach { dir =>
+                  actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(dir)))
+                  logs :+= Log(s"Running away from the creature in direction: $dir")
+                }
+
+                updatedState = updatedState.copy(subWaypoints = updatedState.subWaypoints.tail)
+              }
+            } else {
+              logs :+= Log("[DEBUG] Safe distance maintained, no action needed.")
+            }
+
+          case _ =>
+            logs :+= Log("[DEBUG] No valid engagement mode, no action taken.")
+        }
+
+      case None =>
+        logs :+= Log(s"[DEBUG] No matching settings found for creature: ${creatureData.name}")
+    }
+
+    ((actions, logs), updatedState)
+  }
+
+
+  def generateSubwaypointsToCreature(targetLocation: Vec, initialState: ProcessorState, json: JsValue): ProcessorState = {
+    println("[DEBUG] Generating subwaypoints to creature.")
+    var updatedState = initialState
+
+    // Parse the game state to create the boolean grid
+    val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+    val xs = tiles.keys.map(_.substring(0, 5).trim.toInt)
+    val ys = tiles.keys.map(_.substring(5, 10).trim.toInt)
+    val gridBounds = (xs.min, ys.min, xs.max, ys.max)
+
+    val (grid, (min_x, min_y)) = createBooleanGrid(tiles, xs.min, ys.min)
+
+    // Get the character's current location
+    val presentCharLocation = updatedState.presentCharLocation
+    println(s"[DEBUG] Character location: $presentCharLocation")
+
+    // Use A* search to calculate the path to the target location (creature)
+    var newPath: List[Vec] = List()
+
+    if (presentCharLocation != targetLocation) {
+      newPath = aStarSearch(presentCharLocation, targetLocation, grid, min_x, min_y)
+      println(f"[DEBUG] Path to creature: $newPath")
+    } else {
+      println("[DEBUG] Already at creature's location.")
+    }
+
+    // Remove the presentCharLocation from the newPath if it exists
+    val filteredPath = newPath.filterNot(loc => loc == presentCharLocation)
+
+    updatedState.copy(
+      subWaypoints = filteredPath,
+      gridBoundsState = gridBounds,
+      gridState = grid,
+      currentWaypointLocation = targetLocation,
+      presentCharLocation = presentCharLocation
+    )
+  }
+  def generateSubwaypointsToEscape(creatureLocation: Vec, initialState: ProcessorState, json: JsValue): ProcessorState = {
+    println("[DEBUG] Generating subwaypoints to escape creature.")
+    var updatedState = initialState
+
+    // Parse the game state to create the boolean grid
+    val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+    val xs = tiles.keys.map(_.substring(0, 5).trim.toInt)
+    val ys = tiles.keys.map(_.substring(5, 10).trim.toInt)
+    val gridBounds = (xs.min, ys.min, xs.max, ys.max)
+
+    val (grid, (min_x, min_y)) = createBooleanGrid(tiles, xs.min, ys.min)
+
+    // Get the character's current location
+    val presentCharLocation = updatedState.presentCharLocation
+
+    // Calculate the distance between the creature and the character
+    val distanceToCreature = presentCharLocation.distanceTo(creatureLocation)
+
+    // Define the maximum and minimum safe distances
+    val minSafeDistance = 5
+    val maxSafeDistance = 6
+
+    // Get a list of potential targets around the character within 6 tiles that are walkable
+    val potentialTargets = getWalkableTargets(presentCharLocation, minSafeDistance, maxSafeDistance, grid, min_x, min_y)
+
+    // Filter out targets that don't have a clear path using A* to verify if the path exists
+    val validTargets = potentialTargets.filter(target => {
+      val path = aStarSearch(presentCharLocation, target, grid, min_x, min_y)
+      path.nonEmpty // Only consider targets where a valid path exists
+    })
+
+    // If no valid targets are found, stay in place
+    var escapeTarget: Vec = presentCharLocation
+    if (validTargets.nonEmpty) {
+      // Choose the farthest valid target from the creature that has a clear path
+      escapeTarget = validTargets.maxBy(_.distanceTo(creatureLocation))
+    }
+
+    // Use A* search to calculate the escape path
+    var escapePath: List[Vec] = List()
+
+    if (presentCharLocation != escapeTarget) {
+      escapePath = aStarSearch(presentCharLocation, escapeTarget, grid, min_x, min_y)
+      println(f"[DEBUG] Escape path: $escapePath")
+    } else {
+      println("[DEBUG] Already safe or unable to move.")
+    }
+
+    val filteredPath = escapePath.filterNot(loc => loc == presentCharLocation)
+
+    printGridCreatures(grid, gridBounds, filteredPath, presentCharLocation, escapeTarget, List(creatureLocation))
+
+    updatedState.copy(
+      subWaypoints = filteredPath,
+      gridBoundsState = gridBounds,
+      gridState = grid,
+      currentWaypointLocation = escapeTarget,
+      presentCharLocation = presentCharLocation
+    )
+  }
+
+  // Function to get potential walkable targets within a safe distance range
+  def getWalkableTargets(charPos: Vec, minDistance: Int, maxDistance: Int, grid: Array[Array[Boolean]], minX: Int, minY: Int): List[Vec] = {
+    val targets = for {
+      x <- charPos.x - maxDistance to charPos.x + maxDistance
+      y <- charPos.y - maxDistance to charPos.y + maxDistance
+      pos = Vec(x, y)
+      if charPos.distanceTo(pos) >= minDistance && charPos.distanceTo(pos) <= maxDistance
+      if isTileWalkable(pos, grid, minX, minY)
+    } yield pos
+    targets.toList
+  }
+
+  // Utility function to check if a tile is walkable
+  def isTileWalkable(pos: Vec, grid: Array[Array[Boolean]], minX: Int, minY: Int): Boolean = {
+    val x = pos.x - minX
+    val y = pos.y - minY
+    if (x >= 0 && y >= 0 && x < grid(0).length && y < grid.length) {
+      grid(y)(x)
+    } else false
+  }
+
+
+  // Utility function to find the closest walkable tile
+  def findClosestWalkableTile(pos: Vec, grid: Array[Array[Boolean]], minX: Int, minY: Int): Vec = {
+    val neighbors = List(
+      Vec(pos.x + 1, pos.y),
+      Vec(pos.x - 1, pos.y),
+      Vec(pos.x, pos.y + 1),
+      Vec(pos.x, pos.y - 1)
+    )
+
+    neighbors.find(n => isTileWalkable(n, grid, minX, minY)).getOrElse(pos)
+  }
+
+  def transformToObject(creatureData: CreatureInfo, creatureSettingsList: Seq[String]): Option[CreatureSettings] = {
+      // Parse each creature setting description into CreatureSettings objects
+    val parsedSettings = creatureSettingsList.map(parseCreature)
+
+      // Find the matching creature settings by name
+    parsedSettings.find(_.name.equalsIgnoreCase(creatureData.name))
+  }
+
+  def printGridCreatures(grid: Array[Array[Boolean]], gridBounds: (Int, Int, Int, Int), path: List[Vec], charPos: Vec, waypointPos: Vec, creaturePositions: List[Vec]): Unit = {
+    val (min_x, min_y, maxX, maxY) = gridBounds
+
+    // ANSI escape codes for colors
+    val red = "\u001B[31m" // Non-walkable
+    val green = "\u001B[32m" // Walkable
+    val gold = "\u001B[33m" // Character position
+    val pink = "\u001B[35m" // Path
+    val lightBlue = "\u001B[34m" // Waypoint
+    val cyan = "\u001B[36m" // Creature
+    val reset = "\u001B[0m" // Reset to default
+
+    // Calculate offset for mapping game coordinates to grid indices
+    val offsetX = min_x
+    val offsetY = min_y
+    val width = maxX - min_x + 1
+    val height = maxY - min_y + 1
+
+    // Ensure the grid dimensions match expected size based on bounds
+    require(grid.length >= height && grid(0).length >= width, "Grid size does not match the provided bounds.")
+
+    for (y <- 0 until height) {
+      for (x <- 0 until width) {
+        // Translate grid indices back to game coordinates
+        val gameX = x + offsetX
+        val gameY = y + offsetY
+        val cellVec = Vec(gameX, gameY)
+
+        // Determine which symbol and color to use for the current cell
+        val symbol = (cellVec, path.contains(cellVec), cellVec == charPos, cellVec == waypointPos, creaturePositions.contains(cellVec), grid(y)(x)) match {
+          case (_, _, true, _, _, _) => s"${gold}[P]$reset" // Character position
+          case (_, _, _, true, _, _) => s"${lightBlue}[T]$reset" // Waypoint position
+          case (_, true, _, _, _, _) => s"${pink}[W]$reset" // Path position
+          case (_, _, _, _, true, _) => s"${cyan}[C]$reset" // Creature position
+          case (_, _, _, _, _, true) => s"${green}[O]$reset" // Walkable tile
+          case _ => s"${red}[X]$reset" // Non-walkable tile
+        }
+
+        print(symbol)
+      }
+      println() // New line after each row
+    }
   }
 
 

@@ -812,6 +812,43 @@ object CaveBot {
   case class Vec(x: Int, y: Int) {
     def +(other: Vec): Vec = Vec(x + other.x, y + other.y)
     def manhattanDistance(other: Vec): Int = (x - other.x).abs + (y - other.y).abs
+
+    // Euclidean distance between two points
+    def distanceTo(other: Vec): Double = {
+      val dx = this.x - other.x
+      val dy = this.y - other.y
+      Math.sqrt(dx * dx + dy * dy)
+    }
+
+    // Normalize the vector to unit length
+    def normalize(): Vec = {
+      val magnitude = distanceTo(Vec(0, 0))
+      if (magnitude != 0) {
+        Vec((x / magnitude).toInt, (y / magnitude).toInt)
+      } else {
+        this
+      }
+    }
+
+    // Add another Vec to this Vec
+//    def +(other: Vec): Vec = {
+//      Vec(this.x + other.x, this.y + other.y)
+//    }
+
+    // Subtract another Vec from this Vec
+    def -(other: Vec): Vec = {
+      Vec(this.x - other.x, this.y - other.y)
+    }
+
+    // Multiply by a scalar value
+    def *(scalar: Int): Vec = {
+      Vec(this.x * scalar, this.y * scalar)
+    }
+
+    // Round to the nearest grid point (e.g., for grid alignment)
+    def roundToGrid(): Vec = {
+      Vec(Math.round(x).toInt, Math.round(y).toInt)
+    }
   }
 
 
@@ -874,6 +911,7 @@ object CaveBot {
   def heuristic(a: Vec, b: Vec): Int = {
     Math.abs(a.x - b.x) + Math.abs(a.y - b.y)
   }
+
 
   def aStarSearch(start: Vec, goal: Vec, grid: Array[Array[Boolean]], min_x: Int, min_y: Int): List[Vec] = {
     println(s"Starting aStarSearch with start=$start, goal=$goal, min_x=$min_x, min_y=$min_y")
