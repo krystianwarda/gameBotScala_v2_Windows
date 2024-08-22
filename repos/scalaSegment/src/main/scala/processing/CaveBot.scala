@@ -933,6 +933,57 @@ object CaveBot {
     while (frontier.nonEmpty) {
       val (_, current) = frontier.dequeue()
 
+      // If the current tile is adjacent (including diagonal) to the goal, stop the search
+      if (isAdjacent(current, goal)) {
+        var path = List[Vec]()
+        var temp = current
+        while (temp != start) {
+          path = temp :: path
+          temp = cameFrom.getOrElse(temp, start)
+        }
+        println("Path found: " + (start :: path).mkString(" -> "))
+        return start :: path
+      }
+
+      val directions = List(Vec(-1, 0), Vec(1, 0), Vec(0, -1), Vec(0, 1), Vec(-1, -1), Vec(1, 1), Vec(-1, 1), Vec(1, -1))
+      directions.foreach { direction =>
+        val next = current + direction
+        if ((next.x - min_x) >= 0 && (next.x - min_x) < grid(0).length && (next.y - min_y) >= 0 && (next.y - min_y) < grid.length && grid(next.y - min_y)(next.x - min_x)) {
+          val newCost = costSoFar(current) + (if (direction.x != 0 && direction.y != 0) 21 else 10)
+          if (!costSoFar.contains(next) || newCost < costSoFar(next)) {
+            costSoFar(next) = newCost
+            val priority = newCost + heuristic(next, goal)
+            frontier.enqueue((priority, next))
+            cameFrom(next) = current
+          }
+        }
+      }
+    }
+
+    println("Path not found")
+    List()
+  }
+
+  def aStarSearchOldGood(start: Vec, goal: Vec, grid: Array[Array[Boolean]], min_x: Int, min_y: Int): List[Vec] = {
+    println(s"Starting aStarSearch with start=$start, goal=$goal, min_x=$min_x, min_y=$min_y")
+
+    if ((start.x - min_x) < 0 || (start.y - min_y) < 0 || (start.x - min_x) >= grid(0).length || (start.y - min_y) >= grid.length ||
+      (goal.x - min_x) < 0 || (goal.y - min_y) < 0 || (goal.x - min_x) >= grid(0).length || (goal.y - min_y) >= grid.length) {
+      println(s"Error: Start or goal position out of grid bounds. Start: (${start.x - min_x}, ${start.y - min_y}), Goal: (${goal.x - min_x}, ${goal.y - min_y})")
+      return List()
+    }
+
+    grid(start.y - min_y)(start.x - min_x) = true
+    grid(goal.y - min_y)(goal.x - min_x) = true
+
+    val frontier = mutable.PriorityQueue.empty[(Int, Vec)](Ordering.by(-_._1))
+    frontier.enqueue((0, start))
+    val cameFrom = mutable.Map[Vec, Vec]()
+    val costSoFar = mutable.Map[Vec, Int](start -> 0)
+
+    while (frontier.nonEmpty) {
+      val (_, current) = frontier.dequeue()
+
       if (current == goal) {
         var path = List[Vec]()
         var temp = current
@@ -963,7 +1014,12 @@ object CaveBot {
     List()
   }
 
-
+  // Helper function to check if the current position is adjacent to the goal (including diagonal)
+  def isAdjacent(current: Vec, goal: Vec): Boolean = {
+    val dx = math.abs(current.x - goal.x)
+    val dy = math.abs(current.y - goal.y)
+    (dx <= 1 && dy <= 1) // If the current position is adjacent (1 tile away in any direction, including diagonals)
+  }
 
   //  def aStarSearch(start: Vec, goal: Vec, grid: Array[Array[Boolean]], min_x: Int, min_y: Int): List[Vec] = {
   //    println(s"Starting aStarSearch with start=$start, goal=$goal, min_x=$min_x, min_y=$min_y")
@@ -1091,7 +1147,7 @@ object CaveBot {
 
 //  def heuristic(a: Vec, b: Vec): Int = a.manhattanDistance(b)
 
-  def aStarSearchOldGood(start: Vec, goal: Vec, grid: Array[Array[Boolean]], min_x: Int, min_y: Int): List[Vec] = {
+  def aStarSearchOldGood2(start: Vec, goal: Vec, grid: Array[Array[Boolean]], min_x: Int, min_y: Int): List[Vec] = {
     println(s"Starting aStarSearch with start=$start, goal=$goal min_x=$min_x, min_y=$min_y")
 
     // Adjust start and goal coordinates within the grid index without changing their actual values
