@@ -134,8 +134,6 @@ object Gpt3ApiClient {
   }
 }
 
-
-
 class AutoResponderManager(keyboardActorRef: ActorRef, jsonProcessorActorRef: ActorRef) extends Actor {
 //  import context.dispatcher
   import ApplicationSetup._

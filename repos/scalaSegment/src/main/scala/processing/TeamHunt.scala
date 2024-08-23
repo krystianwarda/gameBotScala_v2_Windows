@@ -609,7 +609,7 @@ object TeamHunt {
           // Handle the special case of using rope, check if there is exactly one item and its id is 386
 
           println(s"Items: $itemIds")
-          if (itemIds.size == 1 && itemIds.contains(ropeTileId)) {
+          if (itemIds.size == 1 && itemIds.exists(ropeTileId.contains)) {
 
             // Step 1: Locate container and slot with itemId 3003 (Rope)
             val containersInfo = (json \ "containersInfo").as[JsObject]
@@ -650,7 +650,7 @@ object TeamHunt {
                 logs :+= Log("Rope not found.")
             }
 
-          } else if (itemIds.size > 1 && itemIds.contains(ropeTileId)) {
+          } else if (itemIds.size > 1 && itemIds.exists(ropeTileId.contains)) {
             logs :+= Log("Rope placed trashed.")
 
           } else if (itemIds.exists(ladderTileId.contains)) {

@@ -111,7 +111,7 @@ class KeyboardActor extends Actor {
   }
 
 
-  private def scheduleKeyRelease(keyCode: Int, delay: FiniteDuration = 400.milliseconds): Unit = {
+  private def scheduleKeyRelease(keyCode: Int, delay: FiniteDuration = 500.milliseconds): Unit = {
     keyReleaseTasks.get(keyCode).foreach(task => {
       task.cancel()
       println(s"[DEBUG] Previously scheduled key release for $keyCode cancelled.")

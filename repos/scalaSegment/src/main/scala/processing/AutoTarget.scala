@@ -422,7 +422,6 @@ object AutoTarget {
             }
 
             // shootrune section
-
             // Step 1: Transform creatureList into a list of JSON objects (name -> danger, keepDistance, etc.)
             val targetMonstersJsons = transformToJSON(settings.autoTargetSettings.creatureList)
             println(targetMonstersJsons)
@@ -1090,8 +1089,66 @@ object AutoTarget {
     }.headOption
   }
 
+
   // Function to extract battleInfo and sort by danger, healthPercent, and keepDistance
   def extractInfoAndSortMonstersFromBattle(json: JsValue, settings: UISettings): List[CreatureInfo] = {
+    println(s"extractInfoAndSortMonstersFromBattle start")
+
+    // Extract battleInfo from JSON
+    val battleInfo = (json \ "battleInfo").as[Map[String, JsValue]]
+
+    // Transform creatureList from settings into a map of (name -> danger, keepDistance)
+    val targetMonstersJsons = transformToJSON(settings.autoTargetSettings.creatureList)
+    println(targetMonstersJsons)
+
+    val targetAllCreatures = targetMonstersJsons.exists { creatureJson =>
+      (creatureJson \ "name").as[String].equalsIgnoreCase("All")
+    }
+
+    // Map of creature name to (danger, keepDistance)
+    val creatureSettingsMap: Map[String, (Int, Boolean)] = targetMonstersJsons.map { creatureJson =>
+      val creature = creatureJson.as[CreatureSettings]
+      (creature.name, (creature.danger, creature.keepDistance))
+    }.toMap
+
+    // Extract and map the battle targets from the battleInfo
+    val battleTargets: List[CreatureInfo] = battleInfo.flatMap { case (_, battleData) =>
+      // Extract creature information
+      val isMonster = (battleData \ "IsMonster").asOpt[Boolean].getOrElse(false)
+      val isPlayer = (battleData \ "IsPlayer").asOpt[Boolean].getOrElse(false)
+
+      if ((isMonster || targetAllCreatures) && !isPlayer) {
+        val creatureName = (battleData \ "Name").as[String]
+
+        // Get danger and keepDistance from the map, or default to (0, false) if not found
+        val (danger, keepDistance) = creatureSettingsMap.getOrElse(creatureName, (0, false))
+
+        Some(CreatureInfo(
+          id = (battleData \ "Id").as[Int],
+          name = creatureName,
+          healthPercent = (battleData \ "HealthPercent").as[Int],
+          isShootable = (battleData \ "IsShootable").as[Boolean],
+          isMonster = isMonster,
+          danger = danger, // Set danger from settings
+          keepDistance = keepDistance, // Set keepDistance from settings
+          isPlayer = isPlayer,
+          posX = (battleData \ "PositionX").as[Int],
+          posY = (battleData \ "PositionY").as[Int],
+          posZ = (battleData \ "PositionZ").as[Int]
+        ))
+      } else {
+        None
+      }
+    }.toList
+
+    // Sort creatures by danger (descending) and healthPercent (ascending)
+    battleTargets
+      .sortBy(monster => (monster.danger * -1, monster.healthPercent))
+  }
+
+
+  // Function to extract battleInfo and sort by danger, healthPercent, and keepDistance
+  def extractInfoAndSortMonstersFromBattleOld(json: JsValue, settings: UISettings): List[CreatureInfo] = {
     println(s"extractInfoAndSortMonstersFromBattle start")
 
     // Extract battleInfo from JSON
