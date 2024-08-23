@@ -98,7 +98,7 @@ case class ProcessorState(
                            lastRuneUseTime: Long = 0,
                            runeUseCooldown: Long = 2000,
                            runeUseRandomness: Long = 0,
-                           runeUseTimeRange: Vec = Vec(500, 2000),
+                           runeUseTimeRange:  (Int, Int) = (500,1500),
                            lastMoveTime: Long = 0,
                            lastTrainingCommandSend: Long = 0,
                            lastProtectionZoneCommandSend: Long = 0,

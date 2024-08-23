@@ -174,10 +174,12 @@ object Process {
   }
 
   // Adjusted function to use the x and y values of Vec as min and max
-  def generateRandomDelay(timeRange: Vec): Long = {
+  def generateRandomDelay(timeRange: (Int, Int)): Long = {
     val rand = new Random
-    timeRange.x + (rand.nextLong() % (timeRange.y - timeRange.x + 1))
+    val (minDelay, maxDelay) = timeRange
+    minDelay + (rand.nextLong() % (maxDelay - minDelay + 1))
   }
+
 
   // Function to safely extract posX and posY if the 'Ok' button exists
   def extractOkButtonPosition(json: JsValue): Option[(Int, Int)] = {

@@ -432,7 +432,6 @@ object AutoTarget {
               (monsterJson \ "useRune").asOpt[Boolean].getOrElse(false)
             }
 
-
             if (hasRuneTarget) {
               // Find the current targeted creature by its ID
               val creatureInfoOpt = findCreatureInfoById(updatedState.chosenTargetId, battleInfo)
@@ -446,25 +445,48 @@ object AutoTarget {
                       (monsterJson \ "name").as[String] == creatureData.name
                     }
 
+                    // If no exact match for creatureData.name, look for the "All" entry
+                    val allCreatureJsonOpt = targetMonstersJsons.find { monsterJson =>
+                      (monsterJson \ "name").as[String] == "All"
+                    }
+
                     matchingCreatureJsonOpt match {
                       case Some(matchingCreatureJson) =>
                         // Check if the creature's JSON entry has useRune set to true
                         val useRune = (matchingCreatureJson \ "useRune").asOpt[Boolean].getOrElse(false)
                         if (useRune) {
-
-                          val resultshootRuneOnTarget = shootRuneOnTarget (creatureData,targetMonstersJsons, json, updatedState, settings, actions, logs)
+                          val resultshootRuneOnTarget = shootRuneOnTarget(creatureData, targetMonstersJsons, json, updatedState, settings, actions, logs)
 
                           actions = resultshootRuneOnTarget._1._1
                           logs = resultshootRuneOnTarget._1._2
                           updatedState = resultshootRuneOnTarget._2
-
                         } else {
                           println(s"Creature ${creatureData.name} does not have useRune set to true.")
                         }
 
                       case None =>
-                        println(s"No matching creature found in targetMonstersJsons for creature: ${creatureData.name}")
+                        // No exact match, check if "All" is available
+                        allCreatureJsonOpt match {
+                          case Some(allCreatureJson) =>
+                            // Apply the same settings as 'All' to the targeted creature
+                            val useRune = (allCreatureJson \ "useRune").asOpt[Boolean].getOrElse(false)
+                            if (useRune) {
+                              val resultshootRuneOnTarget = shootRuneOnTarget(creatureData, targetMonstersJsons, json, updatedState, settings, actions, logs)
+
+                              actions = resultshootRuneOnTarget._1._1
+                              logs = resultshootRuneOnTarget._1._2
+                              updatedState = resultshootRuneOnTarget._2
+
+                              println(s"Applied 'All' settings to ${creatureData.name}.")
+                            } else {
+                              println(s"Creature 'All' does not have useRune set to true.")
+                            }
+
+                          case None =>
+                            println(s"No matching creature found in targetMonstersJsons for creature: ${creatureData.name}")
+                        }
                     }
+
                   } else {
                     println(s"Targeted creature ${creatureData.name} is not shootable.")
                   }
@@ -476,18 +498,8 @@ object AutoTarget {
               println("No creatures in the creature list have useRune set to true.")
             }
 
-
-
-
-
-
-
-
-
           }
         }
-
-
       }
     }
 
@@ -1579,6 +1591,181 @@ object AutoTarget {
 
 
   def shootRuneOnTarget(
+                         creature: CreatureInfo,
+                         targetCreatureSettings: List[JsValue],
+                         json: JsValue,
+                         currentState: ProcessorState,
+                         settings: UISettings,
+                         initialActions: Seq[FakeAction],
+                         initialLogs: Seq[Log]
+                       ): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
+
+    var actions: Seq[FakeAction] = initialActions
+    var logs: Seq[Log] = initialLogs
+    var updatedState = currentState
+
+    println(s"Shooting rune on target: ${creature.name}")
+
+    // Step 1: Select the creature settings from targetCreatureSettings based on creature.name
+    val creatureSettingsOpt = targetCreatureSettings.find { setting =>
+      (setting \ "name").as[String] == creature.name
+    }
+
+    // If no specific settings found, try finding the "All" settings
+    val allCreatureSettingsOpt = targetCreatureSettings.find { setting =>
+      (setting \ "name").as[String] == "All"
+    }
+
+    creatureSettingsOpt match {
+      case Some(creatureSettingsJson) =>
+        // Proceed with the original logic for shooting rune based on creature's specific settings
+        var resultsprocessRuneShooting =  processRuneShooting(creature, creatureSettingsJson, targetCreatureSettings, json, currentState, settings, actions, logs)
+        actions = resultsprocessRuneShooting._1._1
+        logs = resultsprocessRuneShooting._1._2
+        updatedState = resultsprocessRuneShooting._2
+
+      case None =>
+        allCreatureSettingsOpt match {
+          case Some(allCreatureSettingsJson) =>
+            // "All" found, shoot rune on all creatures in targetCreatureSettings
+            val useRuneOnBattle = (allCreatureSettingsJson \ "useRuneOnBattle").asOpt[Boolean].getOrElse(false)
+            val useRuneOnScreen = (allCreatureSettingsJson \ "useRuneOnScreen").asOpt[Boolean].getOrElse(false)
+
+            if (useRuneOnBattle || useRuneOnScreen) {
+              targetCreatureSettings.foreach { targetCreatureSetting =>
+                val creatureName = (targetCreatureSetting \ "name").asOpt[String].getOrElse("Unknown")
+                println(s"Shooting rune on creature: $creatureName due to 'All' setting.")
+                // Apply rune shooting for each creature in the list
+                var resultsprocessRuneShooting = processRuneShooting(
+                  creature.copy(name = creatureName),
+                  targetCreatureSetting,
+                  targetCreatureSettings,
+                  json,
+                  updatedState,
+                  settings,
+                  actions,
+                  logs
+                )
+                actions = resultsprocessRuneShooting._1._1
+                logs = resultsprocessRuneShooting._1._2
+                updatedState = resultsprocessRuneShooting._2
+
+
+              }
+            } else {
+              println("'All' creature found but useRune is not enabled.")
+            }
+
+          case None =>
+            println(s"No settings found for creature: ${creature.name}, and no 'All' setting found.")
+        }
+    }
+
+    ((actions, logs), updatedState)
+  }
+
+  // Helper function to process rune shooting logic based on creature settings
+  def processRuneShooting(
+                           creature: CreatureInfo,
+                           creatureSettingsJson: JsValue,
+                           targetCreatureSettings: List[JsValue],
+                           json: JsValue,
+                           currentState: ProcessorState,
+                           settings: UISettings,
+                           initialActions: Seq[FakeAction],
+                           initialLogs: Seq[Log]
+                         ): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
+
+    var actions: Seq[FakeAction] = initialActions
+    var logs: Seq[Log] = initialLogs
+    var updatedState = currentState
+
+    val shootOnBattle = (creatureSettingsJson \ "useRuneOnBattle").asOpt[Boolean].getOrElse(false)
+    val shootOnScreen = (creatureSettingsJson \ "useRuneOnScreen").asOpt[Boolean].getOrElse(false)
+
+    if (shootOnBattle) {
+      // Placeholder for shooting rune in battle
+      println(s"Shooting rune on ${creature.name} in battle.")
+      val targetSettingsOpt = settings.autoTargetSettings.creatureList.find(_.contains(creature.name))
+
+      targetSettingsOpt match {
+        case Some(targetSettings) =>
+          extractRuneID(targetSettings) match {
+            case Some(runeID) =>
+              println(s"Extracted Rune ID: $runeID")
+              val currentTime = System.currentTimeMillis()
+              if (currentTime - updatedState.lastRuneUseTime > (updatedState.runeUseCooldown + updatedState.runeUseRandomness.toLong)) {
+                val runeAvailability = (0 to 3).flatMap { slot =>
+                  (json \ "containersInfo" \ updatedState.attackRuneContainerName \ "items" \ s"slot$slot" \ "itemId").asOpt[Int].map(itemId => (itemId, slot))
+                }.find(_._1 == runeID)
+
+                println(s"Attack rune container: ${updatedState.attackRuneContainerName}")
+                runeAvailability match {
+                  case Some((_, slot)) =>
+                    val inventoryPanelLoc = (json \ "screenInfo" \ "inventoryPanelLoc").as[JsObject]
+                    val containerKey = inventoryPanelLoc.keys.find(_.contains(updatedState.attackRuneContainerName)).getOrElse("")
+                    val contentsPath = inventoryPanelLoc \ containerKey \ "contentsPanel"
+                    val runeScreenPos = (contentsPath \ s"item$slot").asOpt[JsObject].map { item =>
+                      (item \ "x").asOpt[Int].getOrElse(-1) -> (item \ "y").asOpt[Int].getOrElse(-1)
+                    }.getOrElse((-1, -1))
+
+                    val monsterPos = (json \ "screenInfo" \ "battlePanelLoc" \ s"${creature.id}").asOpt[JsObject].map { monster =>
+                      ((monster \ "PosX").as[Int], (monster \ "PosY").as[Int])
+                    }.getOrElse((-1, -1))
+
+                    println(s"Rune position on screen: X=${runeScreenPos._1}, Y=${runeScreenPos._2}")
+                    println(s"Monster position on battle screen: X=${monsterPos._1}, Y=${monsterPos._2}")
+
+                    // Check if the monster's position is valid (not -1 or less than 2)
+                    if (monsterPos._1 >= 2 && monsterPos._2 >= 2) {
+                      // Define actions sequence here and ensure they are triggered correctly
+                      val actionsSeq = Seq(
+                        MouseAction(runeScreenPos._1, runeScreenPos._2, "move"),
+                        MouseAction(runeScreenPos._1, runeScreenPos._2, "pressRight"),
+                        MouseAction(runeScreenPos._1, runeScreenPos._2, "releaseRight"),
+                        MouseAction(monsterPos._1, monsterPos._2, "move"),
+                        MouseAction(monsterPos._1, monsterPos._2, "pressLeft"),
+                        MouseAction(monsterPos._1, monsterPos._2, "releaseLeft")
+                      )
+                      actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+
+                      // Generate a new random delay using updatedState.runeUseTimeRange
+                      val newRandomDelay = generateRandomDelay(updatedState.runeUseTimeRange)
+
+                      updatedState = updatedState.copy(
+                        lastRuneUseTime = currentTime,
+                        runeUseRandomness = newRandomDelay
+                      )
+
+                      println("Actions executed: Monster was in a valid position.")
+                    } else {
+                      println("Battle is closed or creature not on battle")
+                    }
+                  case None =>
+                    println("Rune is not available in the first four slots of the specified backpack.")
+                }
+              } else {
+                println("Rune cannot be use d yet due to cooldown.")
+              }
+            case None =>
+              println("Invalid or missing rune ID in settings.")
+          }
+        case None =>
+          println(s"No settings found for creature: ${creature.name}")
+      }
+
+    }
+
+    if (shootOnScreen) {
+      // Placeholder for shooting rune on screen
+      println(s"Shooting rune on ${creature.name} on screen.")
+    }
+
+    ((actions, logs), updatedState)
+  }
+
+
+  def shootRuneOnTargetOld(
                          creature: CreatureInfo,
                          targetCreatureSettings: List[JsValue],
                          json: JsValue,
