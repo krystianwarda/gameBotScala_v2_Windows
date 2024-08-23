@@ -18,13 +18,15 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
   val chaseMonsterLabel = new Label("Chase monster:")
   val keepDistanceLabel = new Label("Keep distance:")
   val avoidWavesLabel = new Label("Avoid waves:")
+  val useRunesOnLabel = new Label("Use runes on:")
 
   val targetMonstersOnBattleCheckbox = new CheckBox("Yes")
   val lootMonsterCheckbox = new CheckBox("Yes")
   val chaseMonstersCheckbox = new CheckBox("Yes")
   val keepDistanceCheckbox = new CheckBox("Yes")
   val avoidWavesCheckbox = new CheckBox("Yes")
-
+  val runesOnBattleCheckbox = new CheckBox("Battle")
+  val runesOnScreenCheckbox = new CheckBox("Screen")
 
   val loadButton = new JButton("Load")
   val saveButton = new JButton("Save")
@@ -196,6 +198,14 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
     c.gridx = 6
     add(runeTypeDropdown, c)
 
+    c.gridx = 4
+    c.gridy += 1
+    add(useRunesOnLabel.peer, c)
+    c.gridx += 1
+    add(runesOnBattleCheckbox.peer, c)
+    c.gridx += 1
+    add(runesOnScreenCheckbox.peer, c)
+
 
     // Event listeners for the buttons
     addCreatureButton.peer.addActionListener(_ => {
@@ -211,9 +221,11 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
       val chaseMonster = if (chaseMonstersCheckbox.selected) "Yes" else "No"
       val useRune = if (useRuneCheckbox.selected) "Yes" else "No"
       val runeType = if (useRuneCheckbox.selected) runeTypeDropdown.getSelectedItem.toString else ""
+      val useRuneOnScreen = if (runesOnScreenCheckbox.selected) "Yes" else "No"
+      val useRuneOnBattle = if (runesOnBattleCheckbox.selected) "Yes" else "No"
 
       // Concatenate all information into a single string
-      val creatureInfo = s"$creatureName, Count: $count, HP: $hpRangeFrom-$hpRangeTo, Danger: $dangerLevel, Target in Battle: $targetOnBattle, Loot: $lootMonster, Chase: $chaseMonster, Keep Distance: $keepDistance, Avoid waves: $avoidWaves, Use Rune: $useRune, Rune Type: $runeType"
+      val creatureInfo = s"$creatureName, Count: $count, HP: $hpRangeFrom-$hpRangeTo, Danger: $dangerLevel, Target in Battle: $targetOnBattle, Loot: $lootMonster, Chase: $chaseMonster, Keep Distance: $keepDistance, Avoid waves: $avoidWaves, Use Rune: $useRune, Rune Type: $runeType, Runes on Screen: ${useRuneOnScreen}, Runes on Battle: ${useRuneOnBattle}"
 
       if (creatureName.nonEmpty && !creatureListModel.contains(creatureInfo)) {
         creatureListModel.addElement(creatureInfo)
@@ -225,16 +237,20 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
         creatureDangerDropdown.setSelectedIndex(0) // Reset to default value if needed
         targetMonstersOnBattleCheckbox.selected = false // Reset to default if needed
         lootMonsterCheckbox.selected = false
+        keepDistanceCheckbox.selected = false
+        avoidWavesCheckbox.selected = false
+        chaseMonstersCheckbox.selected = false
         useRuneCheckbox.selected = false // Reset the rune checkbox
         runeTypeDropdown.setSelectedIndex(0) // Reset the rune dropdown
+        runesOnScreenCheckbox.selected = false
+        runesOnBattleCheckbox.selected = false
       }
     })
-
 
     def updateFieldsWithSelectedCreature(creatureInfo: String): Unit = {
       // Example parsing logic based on the provided file format
       val parts = creatureInfo.split(", ")
-      if (parts.length >= 8) { // Ensure you have all needed parts
+      if (parts.length >= 12) { // Ensure you have all needed parts
         val name = parts(0)
         val count = parts(1).substring("Count: ".length).toInt
         val hpParts = parts(2).substring("HP: ".length).split("-")
@@ -242,8 +258,12 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
         val targetInBattle = parts(4).substring("Target in Battle: ".length).equalsIgnoreCase("Yes")
         val lootMonster = parts(5).substring("Loot: ".length).equalsIgnoreCase("Yes")
         val chaseMonster = parts(6).substring("Chase: ".length).equalsIgnoreCase("Yes")
-        val useRune = parts(7).substring("Use Rune: ".length).equalsIgnoreCase("Yes")
-        val runeType = if (useRune) parts(8).substring("Rune Type: ".length) else ""
+        val keepDistance = parts(7).substring("Keep Distance: ".length).equalsIgnoreCase("Yes")
+        val avoidWaves = parts(8).substring("Avoid Waves: ".length).equalsIgnoreCase("Yes")
+        val useRune = parts(9).substring("Use Rune: ".length).equalsIgnoreCase("Yes")
+        val runeType = if (useRune) parts(10).substring("Rune Type: ".length) else ""
+        val useRuneOnScreen = parts(11).substring("Runes on Screen: ".length).equalsIgnoreCase("Yes")
+        val useRuneOnBattle = parts(12).substring("Runes on Battle: ".length).equalsIgnoreCase("Yes")
 
         creatureNameTextField.text = name
         creaturesCountDropdown.setSelectedItem(count.asInstanceOf[Object])
@@ -253,8 +273,12 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
         targetMonstersOnBattleCheckbox.selected = targetInBattle
         lootMonsterCheckbox.selected = lootMonster
         chaseMonstersCheckbox.selected = chaseMonster
+        keepDistanceCheckbox.selected = keepDistance
+        avoidWavesCheckbox.selected = avoidWaves
         useRuneCheckbox.selected = useRune
         if (useRune) runeTypeDropdown.setSelectedItem(runeType)
+        runesOnScreenCheckbox.selected = useRuneOnScreen
+        runesOnBattleCheckbox.selected = useRuneOnBattle
       }
     }
 
