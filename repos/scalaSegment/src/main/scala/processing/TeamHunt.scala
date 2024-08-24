@@ -91,33 +91,35 @@ object TeamHunt {
                     logs = resultFollowTeamMember._1._2
                     updatedState = resultFollowTeamMember._2
 
-                  } else {
-
-                    // Blocker not reachable, find a reachable team member
-                    findReachableTeamMember(settings, currentState, spyInfo, grid, gridBounds).map { teamMemberPos =>
-                      // following team member
-                      val resultFollowTeamMember = followTeamMember(
-                        teamMemberPos,
-                        presentCharLocation,
-                        json,
-                        actions,
-                        logs,
-                        updatedState
-                      )
-
-                      actions = resultFollowTeamMember._1._1
-                      logs = resultFollowTeamMember._1._2
-                      updatedState = resultFollowTeamMember._2
-
-                    }.getOrElse {
-                      logs :+= Log("Blocker and no team member are reachable.")
-                    }
                   }
                 }
 
               // No blocker found in the spy info
               case None =>
                 logs :+= Log("Blocker not found in spy info.")
+
+                // Blocker not reachable, find a reachable team member
+                findReachableTeamMember(settings, currentState, spyInfo, grid, gridBounds).map { teamMemberPos =>
+
+                  if (isPathAvailable(presentCharLocation, teamMemberPos, grid, gridBounds)) {
+                    // following team member
+                    val resultFollowTeamMember = followTeamMember(
+                      teamMemberPos,
+                      presentCharLocation,
+                      json,
+                      actions,
+                      logs,
+                      updatedState
+                    )
+
+                    actions = resultFollowTeamMember._1._1
+                    logs = resultFollowTeamMember._1._2
+                    updatedState = resultFollowTeamMember._2
+                  } else {
+                    logs :+= Log("Blocker and no team member are reachable.")
+                  }
+                }
+
             }
 
 
