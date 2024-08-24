@@ -59,7 +59,7 @@ object TeamHunt {
               case Some((blockerPos, blockerZ)) =>
                 if (blockerZ != currentState.presentCharZLocation) {
                   // Blocker is on a different level, so we change levels
-                  val result = changeLevel(
+                  val resultChangeLevel = changeLevel(
                     blockerPos,
                     blockerZ,
                     presentCharLocationZ,
@@ -69,16 +69,16 @@ object TeamHunt {
                     logs,
                     updatedState)
 
-                  actions ++= result._1._1
-                  logs ++= result._1._2
-                  updatedState = result._2
+                  actions = resultChangeLevel._1._1
+                  logs = resultChangeLevel._1._2
+                  updatedState = resultChangeLevel._2
 
                 } else {
                   // Blocker is on the same level, check if path is available
                   if (isPathAvailable(presentCharLocation, blockerPos, grid, gridBounds)) {
 
                     // engaging Target
-                    val result = followTeamMember(
+                    val resultFollowTeamMember = followTeamMember(
                       blockerPos,
                       presentCharLocation,
                       json,
@@ -87,16 +87,16 @@ object TeamHunt {
                       updatedState
                     )
 
-                    actions ++= result._1._1
-                    logs ++= result._1._2
-                    updatedState = result._2
+                    actions = resultFollowTeamMember._1._1
+                    logs = resultFollowTeamMember._1._2
+                    updatedState = resultFollowTeamMember._2
 
                   } else {
 
                     // Blocker not reachable, find a reachable team member
                     findReachableTeamMember(settings, currentState, spyInfo, grid, gridBounds).map { teamMemberPos =>
                       // following team member
-                      val result = followTeamMember(
+                      val resultFollowTeamMember = followTeamMember(
                         teamMemberPos,
                         presentCharLocation,
                         json,
@@ -105,9 +105,9 @@ object TeamHunt {
                         updatedState
                       )
 
-                      actions ++= result._1._1
-                      logs ++= result._1._2
-                      updatedState = result._2
+                      actions = resultFollowTeamMember._1._1
+                      logs = resultFollowTeamMember._1._2
+                      updatedState = resultFollowTeamMember._2
 
                     }.getOrElse {
                       logs :+= Log("Blocker and no team member are reachable.")
@@ -755,12 +755,11 @@ object TeamHunt {
           logs :+= Log("[DEBUG] Too close to target, stopping pursuit.")
         }
 
-        ((actions, logs), updatedState)
-
       case JsError(errors) =>
         logs :+= Log(s"Error parsing battleInfo: $errors")
-        ((actions, logs), updatedState)
+
     }
+    ((actions, logs), updatedState)
   }
 
 
