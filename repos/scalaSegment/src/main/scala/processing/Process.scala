@@ -70,8 +70,11 @@ object Process {
     val containerInfo = (json \ "containersInfo" \ updatedState.uhRuneContainerName).as[JsObject]
     println(s"Container Info: $containerInfo") // Log the container information for debugging
 
-    val screenInfoPath = (json \ "screenInfo" \ "inventoryPanelLoc" \ updatedState.uhRuneContainerName \ "contentsPanel").as[JsObject]
-    println(s"Screen Info Path: $screenInfoPath")
+//    val screenInfoPath = (json \ "screenInfo" \ "inventoryPanelLoc" \ updatedState.uhRuneContainerName \ "contentsPanel").as[JsObject]
+    val inventoryPanelLoc = (json \ "screenInfo" \ "inventoryPanelLoc").as[JsObject]
+    val containerKey = inventoryPanelLoc.keys.find(_.contains(updatedState.uhRuneContainerName)).getOrElse("")
+    val containerScreenInfo = (inventoryPanelLoc \ containerKey \ "contentsPanel").as[JsObject]
+
 
     // Iterate over slots 1 to 4 to find the item
     val itemInContainer = (0 until 4).flatMap { slotIndex =>
@@ -92,7 +95,7 @@ object Process {
     val result = itemInContainer.flatMap { _ =>
       // Direct mapping of slot index to screen position based on the assumption slot indexes directly correlate
       (0 until 4).flatMap { slotIndex =>
-        screenInfoPath.fields.collectFirst {
+        containerScreenInfo.fields.collectFirst {
           case (itemName, itemPos) if itemName.endsWith(s"item$slotIndex") =>
             Json.obj("x" -> (itemPos \ "x").as[Int], "y" -> (itemPos \ "y").as[Int])
         }

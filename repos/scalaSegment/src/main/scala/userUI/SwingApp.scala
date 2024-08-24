@@ -58,12 +58,12 @@ class SwingApp(playerClassList: List[Player],
   def collectHealingSettings(): HealingSettings = {
     val spellsHeal = HealingSpellsSettings(
       lightHealSpell = autoHealBot.lightHealSpellField.text,
-      lightHealHealth = parseTextFieldToInt(autoHealBot.lightHealHealthField.text),
+      lightHealHealthPercent = parseTextFieldToInt(autoHealBot.lightHealHealthField.text),
       lightHealMana = parseTextFieldToInt(autoHealBot.lightHealManaField.text),
       lightHealHotkeyEnabled = autoHealBot.lightHealHotkeyCheckbox.selected,
       lightHealHotkey = autoHealBot.lightHealHotkeyDropdown.getSelectedItem.toString,
       strongHealSpell = autoHealBot.strongHealSpellField.text,
-      strongHealHealth = parseTextFieldToInt(autoHealBot.strongHealHealthField.text),
+      strongHealHealthPercent = parseTextFieldToInt(autoHealBot.strongHealHealthField.text),
       strongHealMana = parseTextFieldToInt(autoHealBot.strongHealManaField.text),
       strongHealHotkeyEnabled = autoHealBot.strongHealHotkeyCheckbox.selected,
       strongHealHotkey = autoHealBot.strongHealHotkeyDropdown.getSelectedItem.toString
@@ -72,19 +72,19 @@ class SwingApp(playerClassList: List[Player],
     val friendsHeal = HealingFriendsSettings(
       friend1HealSpell = autoHealBot.friend1HealSpellField.text,
       friend1Name = autoHealBot.friend1NameField.text,
-      friend1HealHealth = parseTextFieldToInt(autoHealBot.friend1HealHealthField.text),
+      friend1HealHealthPercent = parseTextFieldToInt(autoHealBot.friend1HealHealthField.text),
       friend1HealMana = parseTextFieldToInt(autoHealBot.friend1HealManaField.text),
       friend1HealHotkeyEnabled = autoHealBot.friend1HealHotkeyCheckbox.selected,
       friend1HealHotkey = autoHealBot.friend1HealHotkeyDropdown.getSelectedItem.toString,
       friend2HealSpell = autoHealBot.friend2HealSpellField.text,
       friend2Name = autoHealBot.friend2NameField.text,
-      friend2HealHealth = parseTextFieldToInt(autoHealBot.friend2HealHealthField.text),
+      friend2HealHealthPercent = parseTextFieldToInt(autoHealBot.friend2HealHealthField.text),
       friend2HealMana = parseTextFieldToInt(autoHealBot.friend2HealManaField.text),
       friend2HealHotkeyEnabled = autoHealBot.friend2HealHotkeyCheckbox.selected,
       friend2HealHotkey = autoHealBot.friend2HealHotkeyDropdown.getSelectedItem.toString,
       friend3HealSpell = autoHealBot.friend3HealSpellField.text,
       friend3Name = autoHealBot.friend3NameField.text,
-      friend3HealHealth = parseTextFieldToInt(autoHealBot.friend3HealHealthField.text),
+      friend3HealHealthPercent = parseTextFieldToInt(autoHealBot.friend3HealHealthField.text),
       friend3HealMana = parseTextFieldToInt(autoHealBot.friend3HealManaField.text),
       friend3HealHotkeyEnabled = autoHealBot.friend3HealHotkeyCheckbox.selected,
       friend3HealHotkey = autoHealBot.friend3HealHotkeyDropdown.getSelectedItem.toString
@@ -93,11 +93,11 @@ class SwingApp(playerClassList: List[Player],
     HealingSettings(
       enabled = autoHealCheckbox.selected,
       spellsHealSettings = List(spellsHeal),
-      ihHealHealth = parseTextFieldToInt(autoHealBot.ihHealHealthField.text),
+      ihHealHealthPercent = parseTextFieldToInt(autoHealBot.ihHealHealthField.text),
       ihHealMana = parseTextFieldToInt(autoHealBot.ihHealManaField.text),
-      uhHealHealth = parseTextFieldToInt(autoHealBot.uhHealHealthField.text),
+      uhHealHealthPercent = parseTextFieldToInt(autoHealBot.uhHealHealthField.text),
       uhHealMana = parseTextFieldToInt(autoHealBot.uhHealManaField.text),
-      hPotionHealHealth = parseTextFieldToInt(autoHealBot.hPotionHealHealthField.text),
+      hPotionHealHealthPercent = parseTextFieldToInt(autoHealBot.hPotionHealHealthField.text),
       hPotionHealMana = parseTextFieldToInt(autoHealBot.hPotionHealManaField.text),
       mPotionHealManaMin = parseTextFieldToInt(autoHealBot.mPotionHealManaMinField.text),
       friendsHealSettings = List(friendsHeal)
@@ -411,24 +411,24 @@ class SwingApp(playerClassList: List[Player],
 
     // Light spell
     autoHealBot.lightHealSpellField.text = spellsHeal.lightHealSpell
-    autoHealBot.lightHealHealthField.text = spellsHeal.lightHealHealth.toString
+    autoHealBot.lightHealHealthField.text = spellsHeal.lightHealHealthPercent.toString
     autoHealBot.lightHealManaField.text = spellsHeal.lightHealMana.toString
     autoHealBot.lightHealHotkeyCheckbox.selected = spellsHeal.lightHealHotkeyEnabled
     setDropdownSelection(autoHealBot.lightHealHotkeyDropdown, spellsHeal.lightHealHotkey)
 
     // Strong spell
     autoHealBot.strongHealSpellField.text = spellsHeal.strongHealSpell
-    autoHealBot.strongHealHealthField.text = spellsHeal.strongHealHealth.toString
+    autoHealBot.strongHealHealthField.text = spellsHeal.strongHealHealthPercent.toString
     autoHealBot.strongHealManaField.text = spellsHeal.strongHealMana.toString
     autoHealBot.strongHealHotkeyCheckbox.selected = spellsHeal.strongHealHotkeyEnabled
     setDropdownSelection(autoHealBot.strongHealHotkeyDropdown, spellsHeal.strongHealHotkey)
 
     // Other healing settings
-    autoHealBot.ihHealHealthField.text = healingSettings.ihHealHealth.toString
+    autoHealBot.ihHealHealthField.text = healingSettings.ihHealHealthPercent.toString
     autoHealBot.ihHealManaField.text = healingSettings.ihHealMana.toString
-    autoHealBot.uhHealHealthField.text = healingSettings.uhHealHealth.toString
+    autoHealBot.uhHealHealthField.text = healingSettings.uhHealHealthPercent.toString
     autoHealBot.uhHealManaField.text = healingSettings.uhHealMana.toString
-    autoHealBot.hPotionHealHealthField.text = healingSettings.hPotionHealHealth.toString
+    autoHealBot.hPotionHealHealthField.text = healingSettings.hPotionHealHealthPercent.toString
     autoHealBot.hPotionHealManaField.text = healingSettings.hPotionHealMana.toString
     autoHealBot.mPotionHealManaMinField.text = healingSettings.mPotionHealManaMin.toString
 
@@ -437,7 +437,7 @@ class SwingApp(playerClassList: List[Player],
     // Friend 1 settings
     autoHealBot.friend1HealSpellField.text = friendsHeal.friend1HealSpell
     autoHealBot.friend1NameField.text = friendsHeal.friend1Name
-    autoHealBot.friend1HealHealthField.text = friendsHeal.friend1HealHealth.toString
+    autoHealBot.friend1HealHealthField.text = friendsHeal.friend1HealHealthPercent.toString
     autoHealBot.friend1HealManaField.text = friendsHeal.friend1HealMana.toString
     autoHealBot.friend1HealHotkeyCheckbox.selected = friendsHeal.friend1HealHotkeyEnabled
     setDropdownSelection(autoHealBot.friend1HealHotkeyDropdown, friendsHeal.friend1HealHotkey)
@@ -445,7 +445,7 @@ class SwingApp(playerClassList: List[Player],
     // Friend 2 settings
     autoHealBot.friend2HealSpellField.text = friendsHeal.friend2HealSpell
     autoHealBot.friend2NameField.text = friendsHeal.friend2Name
-    autoHealBot.friend2HealHealthField.text = friendsHeal.friend2HealHealth.toString
+    autoHealBot.friend2HealHealthField.text = friendsHeal.friend2HealHealthPercent.toString
     autoHealBot.friend2HealManaField.text = friendsHeal.friend2HealMana.toString
     autoHealBot.friend2HealHotkeyCheckbox.selected = friendsHeal.friend2HealHotkeyEnabled
     setDropdownSelection(autoHealBot.friend2HealHotkeyDropdown, friendsHeal.friend2HealHotkey)
@@ -453,7 +453,7 @@ class SwingApp(playerClassList: List[Player],
     // Friend 3 settings
     autoHealBot.friend3HealSpellField.text = friendsHeal.friend3HealSpell
     autoHealBot.friend3NameField.text = friendsHeal.friend3Name
-    autoHealBot.friend3HealHealthField.text = friendsHeal.friend3HealHealth.toString
+    autoHealBot.friend3HealHealthField.text = friendsHeal.friend3HealHealthPercent.toString
     autoHealBot.friend3HealManaField.text = friendsHeal.friend3HealMana.toString
     autoHealBot.friend3HealHotkeyCheckbox.selected = friendsHeal.friend3HealHotkeyEnabled
     setDropdownSelection(autoHealBot.friend3HealHotkeyDropdown, friendsHeal.friend3HealHotkey)

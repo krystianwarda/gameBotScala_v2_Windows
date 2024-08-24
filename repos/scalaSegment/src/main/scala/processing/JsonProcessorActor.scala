@@ -97,6 +97,16 @@ case class ProcessorState(
                            lastRuneMakingTime: Long = 0,
                            lastRuneUseTime: Long = 0,
                            runeUseCooldown: Long = 2000,
+
+                           healingUseCooldown: Long = 1000,
+                           lastHealUseTime: Long = 0,
+                           healUseRandomness: Long = 0,
+                           highHealUseTimeRange:  (Int, Int) = (200,500),
+                           highHealDelayTimeRange: (Int, Int) = (1500,3000),
+                           lowHealUseTimeRange:  (Int, Int) = (800,1500),
+                           lowHealDelayTimeRange:  (Int, Int) = (3000,6000),
+                           lowHealDelayTime: Long = 0,
+
                            runeUseRandomness: Long = 0,
                            runeUseTimeRange:  (Int, Int) = (500,1500),
                            lastMoveTime: Long = 0,

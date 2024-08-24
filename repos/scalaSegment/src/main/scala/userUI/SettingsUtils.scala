@@ -26,11 +26,11 @@ object SettingsUtils {
   case class HealingSettings(
                               enabled: Boolean = false,
                               spellsHealSettings: List[HealingSpellsSettings] = List.empty,
-                              ihHealHealth: Int = 0,
+                              ihHealHealthPercent: Int = 0,
                               ihHealMana: Int = 0,
-                              uhHealHealth: Int = 0,
+                              uhHealHealthPercent: Int = 0,
                               uhHealMana: Int = 0,
-                              hPotionHealHealth: Int = 0,
+                              hPotionHealHealthPercent: Int = 0,
                               hPotionHealMana: Int = 0,
                               mPotionHealManaMin: Int = 0,
                               friendsHealSettings: List[HealingFriendsSettings] = List.empty
@@ -39,12 +39,12 @@ object SettingsUtils {
 
   case class HealingSpellsSettings(
                                     lightHealSpell: String = "",
-                                    lightHealHealth: Int = 0,
+                                    lightHealHealthPercent: Int = 0,
                                     lightHealMana: Int = 0,
                                     lightHealHotkeyEnabled: Boolean = false,
                                     lightHealHotkey: String = "",
                                     strongHealSpell: String = "",
-                                    strongHealHealth: Int = 0,
+                                    strongHealHealthPercent: Int = 0,
                                     strongHealMana: Int = 0,
                                     strongHealHotkeyEnabled: Boolean = false,
                                     strongHealHotkey: String = ""
@@ -53,19 +53,19 @@ object SettingsUtils {
   case class HealingFriendsSettings(
                                      friend1HealSpell: String = "",
                                      friend1Name: String = "",
-                                     friend1HealHealth: Int = 0,
+                                     friend1HealHealthPercent: Int = 0,
                                      friend1HealMana: Int = 0,
                                      friend1HealHotkeyEnabled: Boolean = false,
                                      friend1HealHotkey: String = "",
                                      friend2HealSpell: String = "",
                                      friend2Name: String = "",
-                                     friend2HealHealth: Int = 0,
+                                     friend2HealHealthPercent: Int = 0,
                                      friend2HealMana: Int = 0,
                                      friend2HealHotkeyEnabled: Boolean = false,
                                      friend2HealHotkey: String = "",
                                      friend3HealSpell: String = "",
                                      friend3Name: String = "",
-                                     friend3HealHealth: Int = 0,
+                                     friend3HealHealthPercent: Int = 0,
                                      friend3HealMana: Int = 0,
                                      friend3HealHotkeyEnabled: Boolean = false,
                                      friend3HealHotkey: String = ""

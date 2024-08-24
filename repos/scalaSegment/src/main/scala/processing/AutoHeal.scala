@@ -6,7 +6,7 @@ import userUI.SettingsUtils
 import userUI.SettingsUtils.UISettings
 import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, Mouse, MouseMoveCommand, MouseMovementSettings}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
-import processing.Process.findItemInContainerSlot14
+import processing.Process.{findItemInContainerSlot14, generateRandomDelay}
 import utils.consoleColorPrint._
 
 import scala.collection.immutable.Seq
@@ -21,7 +21,7 @@ object AutoHeal {
     val currentTime = System.currentTimeMillis()
 
     if (settings.healingSettings.enabled) {
-
+      println("Inside autohealing")
       if (updatedState.statusOfRuneAutoheal == "verifying") {
         // Step 2: Verify if the newly opened backpack contains UH runes
         logs = logs :+ Log(s"Verifying if container ${updatedState.uhRuneContainerName} contains UH runes...")
@@ -82,11 +82,16 @@ object AutoHeal {
               updatedState = updatedState.copy(uhRuneContainerName = containerName, statusOfRuneAutoheal = "ready")
               updatedState
             case None =>
+              updatedState = updatedState.copy(statusOfRuneAutoheal = "ready")
               logs = logs :+ Log("UH Rune not found in any container.")
-              updatedState // No change if uhRune is not found
+              updatedState
           }
         }
       }
+
+
+
+
 
       if (updatedState.uhRuneContainerName != "not_set" && updatedState.statusOfRuneAutoheal == "ready") {
         logs = logs :+ Log(s"UH Rune container set to ${updatedState.uhRuneContainerName}. Checking for free space and parent...")
@@ -107,53 +112,18 @@ object AutoHeal {
       }
 
 
-//    } else if (settings.healingSettings.spellsHeal.length > 1 &&
-//      settings.healingSettings.spellsHeal(1).strongHealHealth > 0 &&
-//      health <= settings.healingSettings.spellsHeal(1).strongHealHealth &&
-//      mana >= settings.healingSettings.spellsHeal(1).strongHealMana) {
-//      println(s"settings.healingSettings.spellsHeal.length: ${settings.healingSettings.spellsHeal.length}")
-//
-//      if (settings.healingSettings.spellsHeal.nonEmpty) {
-//        println(s"settings.healingSettings.spellsHeal.head.lightHealSpell: ${settings.healingSettings.spellsHeal.head.lightHealSpell}")
-//        println(s"settings.healingSettings.spellsHeal.head.lightHealSpell.length: ${settings.healingSettings.spellsHeal.head.lightHealSpell.length}")
-//        println(s"settings.healingSettings.spellsHeal.head.lightHealHealth: ${settings.healingSettings.spellsHeal.head.lightHealHealth}")
-//        println(s"settings.healingSettings.spellsHeal.head.lightHealMana: ${settings.healingSettings.spellsHeal.head.lightHealMana}")
-//
-//
-//      }
-
-//      else if (settings.healingSettings.spellsHeal.head.lightHealSpell.length > 1 &&
-//        settings.healingSettings.spellsHeal.head.lightHealHealth > 0 &&
-//        health <= settings.healingSettings.spellsHeal.head.lightHealHealth &&
-//        mana >= settings.healingSettings.spellsHeal.head.lightHealMana) {
-//      else if (settings.healingSettings.spellsHeal.head.lightHealSpell.length > 1 &&
-//        settings.healingSettings.spellsHeal.head.lightHealHealth > 0 &&
-//        health <= settings.healingSettings.spellsHeal.head.lightHealHealth &&
-//        mana >= settings.healingSettings.spellsHeal.head.lightHealMana) {
-
-
-//      if (settings.healingSettings.spellsHeal.length > 1) {
-//        val strongHeal = settings.healingSettings.spellsHeal(0)
-//        println(s"settings.healingSettings.spellsHeal(0).strongHealHealth: ${strongHeal.strongHealHealth}")
-//        println(s"settings.healingSettings.spellsHeal(0).strongHealMana: ${strongHeal.strongHealMana}")
-//      } else {
-//        println("No spell found at index 1 in spellsHeal list.")
-//      }
-
-
-//      println(s"updatedState.statusOfRuneAutoheal: ${updatedState.statusOfRuneAutoheal} || Should be ready")
-//      println(s"updatedState.stateHealingWithRune: ${updatedState.stateHealingWithRune} || Should be free")
       if (((currentState.currentTime - currentState.lastHealingTime) >= updatedState.healingSpellCooldown) && (updatedState.statusOfRuneAutoheal == "ready") && (updatedState.stateHealingWithRune == "free")) {
-//        println(s"Inside healing function")
-        val health = (json \ "characterInfo" \ "Health").as[Int]
+
+        val healthPercent = (json \ "characterInfo" \ "HealthPercent").as[Int]
         val mana = (json \ "characterInfo" \ "Mana").as[Int]
-//        println(s"health: ${health}")
-//        println(s"mana: ${mana}")
+        val manaMax = (json \ "characterInfo" \ "ManaMax").as[Int]
+        val manaPercent = (mana.toDouble / manaMax.toDouble * 100).toInt
+
 
         val friend1HealthPercentage = if (
           settings.healingSettings.friendsHealSettings.head.friend1HealSpell.length > 1 &&
             settings.healingSettings.friendsHealSettings.head.friend1Name.length > 1 &&
-            settings.healingSettings.friendsHealSettings.head.friend1HealHealth > 0
+            settings.healingSettings.friendsHealSettings.head.friend1HealHealthPercent > 0
         ) {
           (json \ "spyLevelInfo").as[JsObject].value.collectFirst {
             case (_, playerInfo) if (playerInfo \ "Name").as[String] == settings.healingSettings.friendsHealSettings.head.friend1Name => (playerInfo \ "HealthPercent").as[Int]
@@ -165,7 +135,7 @@ object AutoHeal {
         val friend2HealthPercentage = if (
           settings.healingSettings.friendsHealSettings.head.friend2HealSpell.length > 1 &&
             settings.healingSettings.friendsHealSettings.head.friend2Name.length > 1 &&
-            settings.healingSettings.friendsHealSettings.head.friend2HealHealth > 0
+            settings.healingSettings.friendsHealSettings.head.friend2HealHealthPercent > 0
         ) {
           (json \ "spyLevelInfo").as[JsObject].value.collectFirst {
             case (_, playerInfo) if (playerInfo \ "Name").as[String] == settings.healingSettings.friendsHealSettings.head.friend2Name => (playerInfo \ "HealthPercent").as[Int]
@@ -177,7 +147,7 @@ object AutoHeal {
         val friend3HealthPercentage = if (
           settings.healingSettings.friendsHealSettings.head.friend3HealSpell.length > 1 &&
             settings.healingSettings.friendsHealSettings.head.friend3Name.length > 1 &&
-            settings.healingSettings.friendsHealSettings.head.friend3HealHealth > 0
+            settings.healingSettings.friendsHealSettings.head.friend3HealHealthPercent > 0
         ) {
           (json \ "spyLevelInfo").as[JsObject].value.collectFirst {
             case (_, playerInfo) if (playerInfo \ "Name").as[String] == settings.healingSettings.friendsHealSettings.head.friend3Name => (playerInfo \ "HealthPercent").as[Int]
@@ -186,181 +156,184 @@ object AutoHeal {
           100
         }
 
+
+
+
         // UH RUNE 3160
-        if (settings.healingSettings.uhHealHealth > 0 && health <= settings.healingSettings.uhHealHealth && mana <= settings.healingSettings.uhHealMana) {
-          logs = logs :+ Log("I need to use UH!")
-          if (settings.mouseMovements) {
-            logs = logs :+ Log("use UH with mouse")
-            findItemInContainerSlot14(json, updatedState, 3160, 1).foreach { runePosition =>
-              val runeX = (runePosition \ "x").as[Int]
-              val runeY = (runePosition \ "y").as[Int]
+        if (settings.healingSettings.uhHealHealthPercent > 0 && healthPercent <= settings.healingSettings.uhHealHealthPercent && mana >= settings.healingSettings.uhHealMana) {
 
-              // Extracting target position from the mapPanelLoc in the JSON
-              val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
-              val targetX = (mapTarget \ "x").as[Int]
-              val targetY = (mapTarget \ "y").as[Int]
 
-              if (updatedState.healingRestryStatus  == 0) {
-                printInColor(ANSI_RED, f"[DEBUG] HEAL")
+          logs = logs :+ Log("use UH with mouse")
+          findItemInContainerSlot14(json, updatedState, 3160, 1).foreach { runePosition =>
+            val runeX = (runePosition \ "x").as[Int]
+            val runeY = (runePosition \ "y").as[Int]
 
-                val actionsSeq = Seq(
-                  MouseAction(runeX, runeY, "move"),
-                  MouseAction(runeX, runeY, "pressRight"), // Right-click on the runemichal
-                  MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
-                  MouseAction(targetX, targetY, "move"), // Move to target position
-                  MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
-                  MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
-                )
-                // Update the last healing time right after scheduling the action
-                updatedState = updatedState.copy(lastHealingTime = currentState.currentTime, stateHealingWithRune = "healing")
-                actions = actions :+ FakeAction("useMouse", Some(ItemInfo(3160, None)), Some(MouseActions(actionsSeq)))
+            // Extracting target position from the mapPanelLoc in the JSON
+            val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
+            val targetX = (mapTarget \ "x").as[Int]
+            val targetY = (mapTarget \ "y").as[Int]
+
+            if (currentTime - updatedState.lastHealUseTime  > (updatedState.healingUseCooldown + updatedState.healUseRandomness)) {
+              printInColor(ANSI_RED, f"[DEBUG] HEAL")
+              val actionsSeq = Seq(
+                MouseAction(runeX, runeY, "move"),
+                MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
+                MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
+                MouseAction(targetX, targetY, "move"), // Move to target position
+                MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
+                MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
+              )
+              // Update the last healing time right after scheduling the action
+              updatedState = updatedState.copy(lastHealingTime = currentState.currentTime, stateHealingWithRune = "healing")
+              actions = actions :+ FakeAction("useMouse", Some(ItemInfo(3160, None)), Some(MouseActions(actionsSeq)))
 //                logs = logs :+ Log(s"Using item 3160 at position ($runeX, $runeY) - Actions: $actionsSeq")
 
-                updatedState = updatedState.copy(healingRestryStatus = updatedState.healingRestryStatus + 1)
-              } else if (updatedState.healingRestryStatus < updatedState.healingRetryAttempts) {
-                printInColor(ANSI_RED, f"[DEBUG] Refrain from healing. Loop without action (Attempt ${updatedState.healingRestryStatus + 1})")
-                updatedState = updatedState.copy(healingRestryStatus = updatedState.healingRestryStatus + 1)
-              } else if (updatedState.healingRestryStatus >= updatedState.healingRetryAttempts) {
-                printInColor(ANSI_RED, f"[DEBUG] Next loop, heal will be available. Reseting healingRestryStatus. (Attempt ${updatedState.healingRestryStatus + 1})")
-                updatedState = updatedState.copy(healingRestryStatus = 0)
-              }
+              val newHealUseRandomness = generateRandomDelay(updatedState.highHealUseTimeRange)
 
-
-
+              updatedState = updatedState.copy(
+                lastHealUseTime = currentTime,
+                healUseRandomness = newHealUseRandomness,
+              )
+            } else {
+              println("Healing cannot be useed yet due to cooldown.")
             }
-          } else {
-            logs = logs :+ Log("use UH with function")
-            actions = actions :+ FakeAction("useOnYourselfFunction", Some(ItemInfo(3160, None)), None)
-            // Update the last healing time when using function as well
-            updatedState = updatedState.copy(lastHealingTime = currentState.currentTime)
           }
         }
 
         // IH RUNE 3152
-        else if (settings.healingSettings.ihHealHealth > 0 && health <= settings.healingSettings.ihHealHealth && mana <= settings.healingSettings.ihHealMana) {
+        else if (settings.healingSettings.ihHealHealthPercent > 0 && healthPercent <= settings.healingSettings.ihHealHealthPercent && mana >= settings.healingSettings.ihHealMana) {
           logs = logs :+ Log("I need to use IH!")
-          if (settings.mouseMovements) {
-            logs = logs :+ Log("use IH with mouse")
-            findItemInContainerSlot14(json, updatedState, 3152, 1).foreach { runePosition =>
-              val runeX = (runePosition \ "x").as[Int]
-              val runeY = (runePosition \ "y").as[Int]
+//          if (settings.mouseMovements) {
 
-              // Extracting target position from the mapPanelLoc in the JSON
-              val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
-              val targetX = (mapTarget \ "x").as[Int]
-              val targetY = (mapTarget \ "y").as[Int]
+          logs = logs :+ Log("use IH with mouse")
+          findItemInContainerSlot14(json, updatedState, 3152, 1).foreach { runePosition =>
+            val runeX = (runePosition \ "x").as[Int]
+            val runeY = (runePosition \ "y").as[Int]
 
-              val actionsSeq = Seq(
-                MouseAction(runeX, runeY, "move"),
-                MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
-                MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
-                MouseAction(targetX, targetY, "move"), // Move to target position
-                MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
-                MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
-              )
-              actions = actions :+ FakeAction("useMouse", Some(ItemInfo(3152, None)), Some(MouseActions(actionsSeq)))
-              logs = logs :+ Log(s"Using item 3152 at position ($runeX, $runeY) - Actions: $actionsSeq")
+            // Extracting target position from the mapPanelLoc in the JSON
+            val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
+            val targetX = (mapTarget \ "x").as[Int]
+            val targetY = (mapTarget \ "y").as[Int]
 
-            }
-          } else {
-            logs = logs :+ Log("use IH with function")
-            actions = actions :+ FakeAction("useOnYourselfFunction", Some(ItemInfo(3152, None)), None)
+            val actionsSeq = Seq(
+              MouseAction(runeX, runeY, "move"),
+              MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
+              MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
+              MouseAction(targetX, targetY, "move"), // Move to target position
+              MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
+              MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
+            )
+            actions = actions :+ FakeAction("useMouse", Some(ItemInfo(3152, None)), Some(MouseActions(actionsSeq)))
+            logs = logs :+ Log(s"Using item 3152 at position ($runeX, $runeY) - Actions: $actionsSeq")
+
           }
+//          } else {
+//            logs = logs :+ Log("use IH with function")
+//            actions = actions :+ FakeAction("useOnYourselfFunction", Some(ItemInfo(3152, None)), None)
+//          }
         }
 
         // HP Potion 2874, 10
-        else if (settings.healingSettings.hPotionHealHealth > 0 && health <= settings.healingSettings.hPotionHealHealth && mana >= settings.healingSettings.hPotionHealMana) {
-          logs = logs :+ Log("I need to use HP!")
-          if (settings.mouseMovements) {
-            logs = logs :+ Log("use HP with mouse")
-            findItemInContainerSlot14(json, updatedState, 2874, 10).foreach { runePosition =>
-              val runeX = (runePosition \ "x").as[Int]
-              val runeY = (runePosition \ "y").as[Int]
+        else if (settings.healingSettings.hPotionHealHealthPercent > 0 && healthPercent <= settings.healingSettings.hPotionHealHealthPercent && mana >= settings.healingSettings.hPotionHealMana) {
+//          logs = logs :+ Log("I need to use HP!")
+//          if (settings.mouseMovements) {
+          logs = logs :+ Log("use HP with mouse")
+          findItemInContainerSlot14(json, updatedState, 2874, 10).foreach { runePosition =>
+            val runeX = (runePosition \ "x").as[Int]
+            val runeY = (runePosition \ "y").as[Int]
 
-              // Extracting target position from the mapPanelLoc in the JSON
-              val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
-              val targetX = (mapTarget \ "x").as[Int]
-              val targetY = (mapTarget \ "y").as[Int]
+            // Extracting target position from the mapPanelLoc in the JSON
+            val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
+            val targetX = (mapTarget \ "x").as[Int]
+            val targetY = (mapTarget \ "y").as[Int]
 
-              val actionsSeq = Seq(
-                MouseAction(runeX, runeY, "move"),
-                MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
-                MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
-                MouseAction(targetX, targetY, "move"), // Move to target position
-                MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
-                MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
-              )
-              // Assuming ActionDetail can wrap mouse actions
-              actions = actions :+ FakeAction("useMouse", Some(ItemInfo(2874, Option(10))), Some(MouseActions(actionsSeq)))
-              logs = logs :+ Log(s"Using item 2874, Option(10) at position ($runeX, $runeY) - Actions: $actionsSeq")
-            }
-          } else {
-            logs = logs :+ Log("use HP with function")
-            actions = actions :+ FakeAction("useOnYourselfFunction", Some(ItemInfo(2874, Option(10))), None)
+            val actionsSeq = Seq(
+              MouseAction(runeX, runeY, "move"),
+              MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
+              MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
+              MouseAction(targetX, targetY, "move"), // Move to target position
+              MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
+              MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
+            )
+            // Assuming ActionDetail can wrap mouse actions
+            actions = actions :+ FakeAction("useMouse", Some(ItemInfo(2874, Option(10))), Some(MouseActions(actionsSeq)))
+            logs = logs :+ Log(s"Using item 2874, Option(10) at position ($runeX, $runeY) - Actions: $actionsSeq")
           }
+//          } else {
+//            logs = logs :+ Log("use HP with function")
+//            actions = actions :+ FakeAction("useOnYourselfFunction", Some(ItemInfo(2874, Option(10))), None)
+//          }
         }
 
         // MP Potion 2874, 7
-        else if (settings.healingSettings.mPotionHealManaMin > 0 && mana <= settings.healingSettings.mPotionHealManaMin) {
-          logs = logs :+ Log("I need to use MP!")
-          if (settings.mouseMovements) {
-            logs = logs :+ Log("use MP with mouse")
-            findItemInContainerSlot14(json, updatedState, 2874, 7).foreach { runePosition =>
-              val runeX = (runePosition \ "x").as[Int]
-              val runeY = (runePosition \ "y").as[Int]
+        else if (settings.healingSettings.mPotionHealManaMin > 0 && mana >= settings.healingSettings.mPotionHealManaMin) {
+//          logs = logs :+ Log("I need to use MP!")
+//          if (settings.mouseMovements) {
+          logs = logs :+ Log("use MP with mouse")
+          findItemInContainerSlot14(json, updatedState, 2874, 7).foreach { runePosition =>
+            val runeX = (runePosition \ "x").as[Int]
+            val runeY = (runePosition \ "y").as[Int]
 
-              // Extracting target position from the mapPanelLoc in the JSON
-              val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
-              val targetX = (mapTarget \ "x").as[Int]
-              val targetY = (mapTarget \ "y").as[Int]
+            // Extracting target position from the mapPanelLoc in the JSON
+            val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
+            val targetX = (mapTarget \ "x").as[Int]
+            val targetY = (mapTarget \ "y").as[Int]
 
-              val actionsSeq = Seq(
-                MouseAction(runeX, runeY, "move"),
-                MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
-                MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
-                MouseAction(targetX, targetY, "move"), // Move to target position
-                MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
-                MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
-              )
+            val actionsSeq = Seq(
+              MouseAction(runeX, runeY, "move"),
+              MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
+              MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
+              MouseAction(targetX, targetY, "move"), // Move to target position
+              MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
+              MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
+            )
 
-              actions = actions :+ FakeAction("useMouse", Some(ItemInfo(2874, Option(7))), Some(MouseActions(actionsSeq)))
-              logs = logs :+ Log(s"Using item 2874, Option(7) at position ($runeX, $runeY) - Actions: $actionsSeq")
-            }
-          } else {
-            logs = logs :+ Log("use MP with function")
-            actions = actions :+ FakeAction("useOnYourselfFunction", Some(ItemInfo(2874, Option(7))), None)
+            actions = actions :+ FakeAction("useMouse", Some(ItemInfo(2874, Option(7))), Some(MouseActions(actionsSeq)))
+            logs = logs :+ Log(s"Using item 2874, Option(7) at position ($runeX, $runeY) - Actions: $actionsSeq")
           }
+//          } else {
+//            logs = logs :+ Log("use MP with function")
+//            actions = actions :+ FakeAction("useOnYourselfFunction", Some(ItemInfo(2874, Option(7))), None)
+//          }
         }
         else if (settings.healingSettings.spellsHealSettings.head.strongHealSpell.length > 1 &&
-          settings.healingSettings.spellsHealSettings.head.strongHealHealth > 0 &&
-          health <= settings.healingSettings.spellsHealSettings.head.strongHealHealth &&
+          settings.healingSettings.spellsHealSettings.head.strongHealHealthPercent > 0 &&
+          healthPercent <= settings.healingSettings.spellsHealSettings.head.strongHealHealthPercent &&
           mana >= settings.healingSettings.spellsHealSettings.head.strongHealMana) {
           println(s"Inside strong heal section")
 
-          if (settings.mouseMovements) {
+//          if (settings.mouseMovements) {
 
-            if (settings.healingSettings.spellsHealSettings.head.strongHealHotkeyEnabled) {
-              val hotkeyHeal = settings.healingSettings.spellsHealSettings.head.strongHealHotkey
-              logs = logs :+ Log(s"use hotkey for strong healing spell: ${hotkeyHeal}")
-              actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(hotkeyHeal)))
-            } else {
-              logs = logs :+ Log("use keyboard for strong healing spell")
-              actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(settings.healingSettings.spellsHealSettings.head.strongHealSpell)))
-            }
+          if (settings.healingSettings.spellsHealSettings.head.strongHealHotkeyEnabled) {
+            val hotkeyHeal = settings.healingSettings.spellsHealSettings.head.strongHealHotkey
+            logs = logs :+ Log(s"use hotkey for strong healing spell: ${hotkeyHeal}")
+            actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(hotkeyHeal)))
           } else {
-//            logs = logs :+ Log("use function for strong healing spell")
-//            actions = actions :+ FakeAction("sayText", None, Some(KeyboardText(spellText)))
+            logs = logs :+ Log("use keyboard for strong healing spell")
+            actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(settings.healingSettings.spellsHealSettings.head.strongHealSpell)))
           }
+//          } else {
+////            logs = logs :+ Log("use function for strong healing spell")
+////            actions = actions :+ FakeAction("sayText", None, Some(KeyboardText(spellText)))
+//          }
         }
 
         else if (settings.healingSettings.spellsHealSettings.head.lightHealSpell.length > 1 &&
-          settings.healingSettings.spellsHealSettings.head.lightHealHealth > 0 &&
-          health <= settings.healingSettings.spellsHealSettings.head.lightHealHealth &&
+          settings.healingSettings.spellsHealSettings.head.lightHealHealthPercent > 0 &&
+          healthPercent <= settings.healingSettings.spellsHealSettings.head.lightHealHealthPercent &&
           mana >= settings.healingSettings.spellsHealSettings.head.lightHealMana) {
           println(s"Inside light heal section")
 
-          if (settings.mouseMovements) {
+          if (updatedState.lowHealDelayTime == 0) {
+            val newLowHealDelayTimeRange = generateRandomDelay(updatedState.lowHealDelayTimeRange)
+            updatedState = updatedState.copy(
+              lowHealDelayTime = newLowHealDelayTimeRange,
+              lastHealUseTime = currentTime,
+            )
+//            println(s"Selected following delay: ${updatedState.lowHealDelayTime}")
+          }
 
+          if (currentTime - updatedState.lastHealUseTime > (updatedState.healingUseCooldown + updatedState.runeUseRandomness + updatedState.lowHealDelayTime)) {
             if (settings.healingSettings.spellsHealSettings.head.lightHealHotkeyEnabled) {
               val hotkeyHeal = settings.healingSettings.spellsHealSettings.head.lightHealHotkey
               logs = logs :+ Log(s"use hotkey for light healing spell: ${hotkeyHeal}")
@@ -369,45 +342,58 @@ object AutoHeal {
               logs = logs :+ Log("use keyboard for light healing spell")
               actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(settings.healingSettings.spellsHealSettings.head.lightHealSpell)))
             }
-          } else {
 
-            //            logs = logs :+ Log("use function for strong healing spell")
-            //            actions = actions :+ FakeAction("sayText", None, Some(KeyboardText(spellText)))
+            val newHealUseRandomness = generateRandomDelay(updatedState.lowHealDelayTimeRange)
+            updatedState = updatedState.copy(
+              lastHealUseTime = currentTime,
+              healUseRandomness = newHealUseRandomness,
+              lowHealDelayTime = 0
+            )
+          } else {
+            println("Healing cannot be used yet due to cooldown.")
           }
+
         }
         else if (settings.healingSettings.friendsHealSettings.head.friend1HealSpell.length > 1 &&
           settings.healingSettings.friendsHealSettings.head.friend1Name.length > 1 &&
-          settings.healingSettings.friendsHealSettings.head.friend1HealHealth > 0 &&
-          friend1HealthPercentage <= settings.healingSettings.friendsHealSettings.head.friend1HealHealth &&
+          settings.healingSettings.friendsHealSettings.head.friend1HealHealthPercent > 0 &&
+          friend1HealthPercentage <= settings.healingSettings.friendsHealSettings.head.friend1HealHealthPercent &&
           mana >= settings.healingSettings.friendsHealSettings.head.friend1HealMana) {
           println(s"Inside friend1 heal section")
 
-          if (settings.mouseMovements) {
+
+          if (currentTime - updatedState.lastHealUseTime > (updatedState.healingUseCooldown + updatedState.healUseRandomness)) {
 
             if (settings.healingSettings.friendsHealSettings.head.friend1HealHotkeyEnabled) {
               val hotkeyHeal = settings.healingSettings.friendsHealSettings.head.friend1HealHotkey
               logs = logs :+ Log(s"use hotkey for friend healing spell: ${hotkeyHeal}")
               actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(hotkeyHeal)))
+
             } else {
               val mergedString = settings.healingSettings.friendsHealSettings.head.friend1HealSpell + settings.healingSettings.friendsHealSettings.head.friend1Name
               logs = logs :+ Log("use keyboard for light healing spell")
               actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(mergedString)))
             }
-          } else {
 
-            //            logs = logs :+ Log("use function for strong healing spell")
-            //            actions = actions :+ FakeAction("sayText", None, Some(KeyboardText(spellText)))
+          } else {
+            println("Healing cannot be useed yet due to cooldown.")
           }
+
+          val newHealUseRandomness = generateRandomDelay(updatedState.highHealUseTimeRange)
+          updatedState = updatedState.copy(
+            lastHealUseTime = currentTime,
+            healUseRandomness = newHealUseRandomness,
+          )
         }
 
         else if (settings.healingSettings.friendsHealSettings.head.friend2HealSpell.length > 1 &&
           settings.healingSettings.friendsHealSettings.head.friend2Name.length > 1 &&
-          settings.healingSettings.friendsHealSettings.head.friend2HealHealth > 0 &&
-          friend2HealthPercentage <= settings.healingSettings.friendsHealSettings.head.friend2HealHealth &&
+          settings.healingSettings.friendsHealSettings.head.friend2HealHealthPercent > 0 &&
+          friend2HealthPercentage <= settings.healingSettings.friendsHealSettings.head.friend2HealHealthPercent &&
           mana >= settings.healingSettings.friendsHealSettings.head.friend2HealMana) {
           println(s"Inside friend2 heal section")
 
-          if (settings.mouseMovements) {
+          if (currentTime - updatedState.lastHealUseTime > (updatedState.healingUseCooldown + updatedState.healUseRandomness)) {
 
             if (settings.healingSettings.friendsHealSettings.head.friend2HealHotkeyEnabled) {
               val hotkeyHeal = settings.healingSettings.friendsHealSettings.head.friend2HealHotkey
@@ -418,21 +404,25 @@ object AutoHeal {
               logs = logs :+ Log("use keyboard for light healing spell")
               actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(mergedString)))
             }
-          } else {
 
-            //            logs = logs :+ Log("use function for strong healing spell")
-            //            actions = actions :+ FakeAction("sayText", None, Some(KeyboardText(spellText)))
+          } else {
+            println("Healing cannot be useed yet due to cooldown.")
           }
+          val newHealUseRandomness = generateRandomDelay(updatedState.highHealUseTimeRange)
+          updatedState = updatedState.copy(
+            lastHealUseTime = currentTime,
+            healUseRandomness = newHealUseRandomness,
+          )
         }
 
         else if (settings.healingSettings.friendsHealSettings.head.friend3HealSpell.length > 1 &&
           settings.healingSettings.friendsHealSettings.head.friend3Name.length > 1 &&
-          settings.healingSettings.friendsHealSettings.head.friend3HealHealth > 0 &&
-          friend3HealthPercentage <= settings.healingSettings.friendsHealSettings.head.friend3HealHealth &&
+          settings.healingSettings.friendsHealSettings.head.friend3HealHealthPercent > 0 &&
+          friend3HealthPercentage <= settings.healingSettings.friendsHealSettings.head.friend3HealHealthPercent &&
           mana >= settings.healingSettings.friendsHealSettings.head.friend3HealMana) {
           println(s"Inside friend3 heal section")
 
-          if (settings.mouseMovements) {
+          if (currentTime - updatedState.lastHealUseTime > (updatedState.healingUseCooldown + updatedState.healUseRandomness)) {
 
             if (settings.healingSettings.friendsHealSettings.head.friend3HealHotkeyEnabled) {
               val hotkeyHeal = settings.healingSettings.friendsHealSettings.head.friend3HealHotkey
@@ -443,11 +433,17 @@ object AutoHeal {
               logs = logs :+ Log("use keyboard for light healing spell")
               actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(mergedString)))
             }
-          } else {
 
-            //            logs = logs :+ Log("use function for strong healing spell")
-            //            actions = actions :+ FakeAction("sayText", None, Some(KeyboardText(spellText)))
+          } else {
+            println("Healing cannot be useed yet due to cooldown.")
           }
+
+          val newHealUseRandomness = generateRandomDelay(updatedState.highHealUseTimeRange)
+          updatedState = updatedState.copy(
+            lastHealUseTime = currentTime,
+            healUseRandomness = newHealUseRandomness,
+          )
+
         }
 
 

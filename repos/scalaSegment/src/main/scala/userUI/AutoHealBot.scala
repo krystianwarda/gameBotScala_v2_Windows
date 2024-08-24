@@ -114,7 +114,7 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
     c.gridwidth = 2
     addTextField(lightHealSpellField, 1, 0, 2, spellFieldWidth)
     c.gridwidth = 1
-    addComponent(new Label("Health"), 3, 0)
+    addComponent(new Label("Health%"), 3, 0)
     addTextField(lightHealHealthField, 4, 0, 1, standardFieldWidth)
     addComponent(new Label("Mana"), 5, 0)
     addTextField(lightHealManaField, 6, 0, 1, standardFieldWidth)
@@ -130,7 +130,7 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
     c.gridwidth = 2
     addTextField(strongHealSpellField, 1, 1,2 ,spellFieldWidth)
     c.gridwidth = 1
-    addComponent(new Label("Health"), 3, 1)
+    addComponent(new Label("Health%"), 3, 1)
     addTextField(strongHealHealthField, 4, 1, 1, standardFieldWidth)
     addComponent(new Label("Mana"), 5, 1)
     addTextField(strongHealManaField, 6, 1, 1, standardFieldWidth)
@@ -158,7 +158,7 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
     c.gridy = 2
     c.gridwidth = 1
     c.fill = GridBagConstraints.NONE
-    addComponent(new Label("Health"), 3, 2)
+    addComponent(new Label("Health%"), 3, 2)
 
     c.gridx = 4
     c.gridy = 2
@@ -199,7 +199,7 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
 
     c.gridx = 3
     c.gridy = 3
-    addComponent(new Label("Health"), 3, 3)
+    addComponent(new Label("Health%"), 3, 3)
 
     c.gridx = 4
     c.gridy = 3
@@ -232,7 +232,7 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
 
     c.gridx = 3
     c.gridy = 4
-    addComponent(new Label("Health"), 3, 4)
+    addComponent(new Label("Health%"), 3, 4)
 
     c.gridx = 4
     c.gridy = 4
@@ -284,7 +284,7 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
 
     addTextField(friend1HealSpellField, 1, c.gridy, 1, standardFieldWidth)
     addTextField(friend1NameField, 2, c.gridy, 1, standardFieldWidth)
-    addComponent(new Label("Health"), 3, c.gridy)
+    addComponent(new Label("Health%"), 3, c.gridy)
     addTextField(friend1HealHealthField, 4, c.gridy, 1, standardFieldWidth)
     addComponent(new Label("Mana"), 5, c.gridy)
     addTextField(friend1HealManaField, 6, c.gridy, 1, standardFieldWidth)
@@ -315,7 +315,7 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
 
     addTextField(friend2HealSpellField, 1, c.gridy, 1, standardFieldWidth)
     addTextField(friend2NameField, 2, c.gridy, 1, standardFieldWidth)
-    addComponent(new Label("Health"), 3, c.gridy)
+    addComponent(new Label("Health%"), 3, c.gridy)
     addTextField(friend2HealHealthField, 4, c.gridy, 1, standardFieldWidth)
     addComponent(new Label("Mana"), 5, c.gridy)
     addTextField(friend2HealManaField, 6, c.gridy, 1, standardFieldWidth)
@@ -346,7 +346,7 @@ class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Acto
 
     addTextField(friend3HealSpellField, 1, c.gridy, 1, standardFieldWidth)
     addTextField(friend3NameField, 2, c.gridy, 1, standardFieldWidth)
-    addComponent(new Label("Health"), 3, c.gridy)
+    addComponent(new Label("Health%"), 3, c.gridy)
     addTextField(friend3HealHealthField, 4, c.gridy, 1, standardFieldWidth)
     addComponent(new Label("Mana"), 5, c.gridy)
     addTextField(friend3HealManaField, 6, c.gridy, 1, standardFieldWidth)
