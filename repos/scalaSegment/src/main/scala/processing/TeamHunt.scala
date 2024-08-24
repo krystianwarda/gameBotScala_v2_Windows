@@ -1,11 +1,11 @@
 package processing
 
 import mouse.FakeAction
-import play.api.libs.json._
-import userUI.SettingsUtils.UISettings
+import play.api.libs.json.{JsValue, _}
 import utils.consoleColorPrint.{ANSI_RED, printInColor}
 import processing.CaveBot.{Vec, aStarSearch, adjustGoalWithinBounds, calculateDirection, createBooleanGrid, generateSubwaypoints, printGrid}
 import play.api.libs.json._
+import userUI.SettingsUtils.UISettings
 import utils.StaticGameInfo
 
 import java.lang.System.currentTimeMillis
@@ -92,14 +92,38 @@ object TeamHunt {
                     updatedState = resultFollowTeamMember._2
 
                   }
+                  else {
+                    println("Blocker is visable but the path is blocked. Following teammember.")
+                    findReachableTeamMember(json, settings, currentState, spyInfo, grid, gridBounds).map { teamMemberPos =>
+
+                      if (isPathAvailable(presentCharLocation, teamMemberPos, grid, gridBounds)) {
+                        // following team member
+                        val resultFollowTeamMember = followTeamMember(
+                          teamMemberPos,
+                          presentCharLocation,
+                          json,
+                          actions,
+                          logs,
+                          updatedState
+                        )
+
+                        actions = resultFollowTeamMember._1._1
+                        logs = resultFollowTeamMember._1._2
+                        updatedState = resultFollowTeamMember._2
+                      } else {
+                        logs :+= Log("team member are reachable.")
+                      }
+                    }
+
+                  }
                 }
 
               // No blocker found in the spy info
               case None =>
                 logs :+= Log("Blocker not found in spy info.")
-
+                println("Blocker not found in spy info, looking for a team member")
                 // Blocker not reachable, find a reachable team member
-                findReachableTeamMember(settings, currentState, spyInfo, grid, gridBounds).map { teamMemberPos =>
+                findReachableTeamMember(json, settings, currentState, spyInfo, grid, gridBounds).map { teamMemberPos =>
 
                   if (isPathAvailable(presentCharLocation, teamMemberPos, grid, gridBounds)) {
                     // following team member
@@ -394,7 +418,7 @@ object TeamHunt {
     ((actions, logs), updatedState)
   }
 
-  def determineEffectiveTarget(settings: UISettings, currentState: ProcessorState, spyInfo: JsObject, presentCharLocation: Vec, grid: Array[Array[Boolean]], gridBounds: (Int, Int, Int, Int)): Option[(Vec, Int)] = {
+  def determineEffectiveTarget(json: JsValue, settings: UISettings, currentState: ProcessorState, spyInfo: JsObject, presentCharLocation: Vec, grid: Array[Array[Boolean]], gridBounds: (Int, Int, Int, Int)): Option[(Vec, Int)] = {
     val blockerName = settings.teamHuntSettings.blockerName
     val maybeBlocker = spyInfo.value.collectFirst {
       case (_, jsValue) if (jsValue \ "Name").asOpt[String].contains(blockerName) &&
@@ -407,15 +431,31 @@ object TeamHunt {
 
     maybeBlocker.orElse {
       println("[DEBUG] No path to blocker, checking for reachable team members.")
-      findReachableTeamMember(settings, currentState, spyInfo, grid, gridBounds).map {
+      findReachableTeamMember(json, settings, currentState, spyInfo, grid, gridBounds).map {
         vec => (vec, currentState.presentCharZLocation)
       }
     }
   }
 
 
+  def extractTeamMembers(json: JsValue, settings: UISettings, currentState: ProcessorState, spyInfo: JsObject): Seq[(String, Vec)] = {
+    // Extract the character's name from the provided JSON
+    val characterName = (json \ "characterInfo" \ "Name").as[String]
 
-  def extractTeamMembers(settings: UISettings, currentState: ProcessorState, spyInfo: JsObject): Seq[(String, Vec)] = {
+    // Extract team members and filter out the current character
+    spyInfo.value.flatMap {
+      case (id, jsValue) =>
+        for {
+          name <- (jsValue \ "Name").asOpt[String]
+          if settings.teamHuntSettings.teamMembersList.contains(name) && name != characterName // Ensure the current character is excluded
+          posX <- (jsValue \ "PositionX").asOpt[Int]
+          posY <- (jsValue \ "PositionY").asOpt[Int]
+          posZ <- (jsValue \ "PositionZ").asOpt[Int] if posZ == currentState.presentCharZLocation
+        } yield (id -> Vec(posX, posY))
+    }.toSeq
+  }
+
+  def extractTeamMembersOld(settings: UISettings, currentState: ProcessorState, spyInfo: JsObject): Seq[(String, Vec)] = {
     spyInfo.value.flatMap {
       case (id, jsValue) =>
         for {
@@ -428,20 +468,31 @@ object TeamHunt {
   }
 
 
-
-
-  // Find reachable team member if the blocker isn't found
-  def findReachableTeamMember(settings: UISettings, currentState: ProcessorState, spyInfo: JsObject, grid: Array[Array[Boolean]], gridBounds: (Int, Int, Int, Int)): Option[Vec] = {
-    val teamMembers = extractTeamMembers(settings, currentState, spyInfo)
+  def findReachableTeamMember(json: JsValue, settings: UISettings, currentState: ProcessorState, spyInfo: JsObject, grid: Array[Array[Boolean]], gridBounds: (Int, Int, Int, Int)): Option[Vec] = {
+    val teamMembers = extractTeamMembers(json, settings, currentState, spyInfo)
 
     val reachableMembers = teamMembers.filter {
       case (_, vec) => isPathAvailable(currentState.presentCharLocation, vec, grid, gridBounds)
     }
-
     reachableMembers.minByOption {
       case (_, vec) => Math.hypot(vec.x - currentState.presentCharLocation.x, vec.y - currentState.presentCharLocation.y)
     }.map(_._2)
+
   }
+
+
+  // Find reachable team member if the blocker isn't found
+//  def findReachableTeamMemberOld(json:JsValue, settings: UISettings, currentState: ProcessorState, spyInfo: JsObject, grid: Array[Array[Boolean]], gridBounds: (Int, Int, Int, Int)): Option[Vec] = {
+//    val teamMembers = extractTeamMembers(settings, currentState, spyInfo)
+//
+//    val reachableMembers = teamMembers.filter {
+//      case (_, vec) => isPathAvailable(currentState.presentCharLocation, vec, grid, gridBounds)
+//    }
+//
+//    reachableMembers.minByOption {
+//      case (_, vec) => Math.hypot(vec.x - currentState.presentCharLocation.x, vec.y - currentState.presentCharLocation.y)
+//    }.map(_._2)
+//  }
 
 
   // Check path availability using A* search
