@@ -10,7 +10,7 @@ object StaticGameInfo {
     )
 
     val UpRopesIds: List[Int] = List(
-      386, // Wooden stairs up
+      386,
     )
 
     val UpLadderIds: List[Int] = List(
@@ -26,11 +26,18 @@ object StaticGameInfo {
       434, // Stairs down
       469, // Stairs down
       594, // opened shovel hole
+      413, //stairs
+      411, // ladder
+      437, // stairs
+      438, // stairs
+      1949, // teleport
+      1950,
     )
 
     val DownGrateIds: List[Int] = List(
       435, // Grate down
     )
+
 
     val DownShovelHoleIds: List[Int] = List(
       593, // closed shovel hole

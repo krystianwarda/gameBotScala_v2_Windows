@@ -132,7 +132,7 @@ case class ProcessorState(
                            creatureTarget: Int = 0,
                            lastTargetName: String = "",
                            lastTargetPos: (Int, Int, Int) = (0,0,0),
-                           lastBlockerPos: (Int, Int, Int) = (0,0,0),
+                           lastBlockerPos: Vec = Vec(0, 0),
 
                            positionStagnantCount: Int = 0,
                            lastPosition: Option[Vec] = None,

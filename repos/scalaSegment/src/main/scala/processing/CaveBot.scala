@@ -960,6 +960,11 @@ object CaveBot {
       }
     }
 
+    println(s"Frontier contains: ${frontier.mkString(", ")}")
+
+    println("Final Grid state:")
+    grid.foreach(row => println(row.mkString(" ")))
+
     println("Path not found")
     List()
   }

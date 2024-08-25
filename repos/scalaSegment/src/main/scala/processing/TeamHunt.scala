@@ -46,6 +46,7 @@ object TeamHunt {
             val (grid, _) = createBooleanGrid(tiles, xs.min, ys.min) // Correct usage of createBooleanGrid
 
             val blockerName = settings.teamHuntSettings.blockerName
+            println(s"blockerName: ${blockerName}")
             // Try to find the blocker
             val maybeBlocker = spyInfo.value.collectFirst {
               case (_, jsValue) if (jsValue \ "Name").asOpt[String].contains(blockerName) =>
@@ -53,12 +54,13 @@ object TeamHunt {
                 val blockerZ = (jsValue \ "PositionZ").as[Int]
                 (blockerPos, blockerZ)
             }
-
+            println(s"maybeBlocker: ${maybeBlocker}")
             maybeBlocker match {
               // Blocker found
               case Some((blockerPos, blockerZ)) =>
                 if (blockerZ != currentState.presentCharZLocation) {
                   // Blocker is on a different level, so we change levels
+                  println("Blocker is on a different level, so we change levels")
                   val resultChangeLevel = changeLevel(
                     blockerPos,
                     blockerZ,
@@ -75,6 +77,8 @@ object TeamHunt {
 
                 } else {
                   // Blocker is on the same level, check if path is available
+                  println("Blocker is on the same level, check if path is available")
+                  updatedState = updatedState.copy(lastBlockerPos = blockerPos)
                   if (isPathAvailable(presentCharLocation, blockerPos, grid, gridBounds)) {
 
                     // engaging Target
@@ -467,8 +471,36 @@ object TeamHunt {
     }.toSeq
   }
 
+  def findReachableTeamMember(
+                               json: JsValue,
+                               settings: UISettings,
+                               currentState: ProcessorState,
+                               spyInfo: JsObject,
+                               grid: Array[Array[Boolean]],
+                               gridBounds: (Int, Int, Int, Int),
+                             ): Option[Vec] = {
 
-  def findReachableTeamMember(json: JsValue, settings: UISettings, currentState: ProcessorState, spyInfo: JsObject, grid: Array[Array[Boolean]], gridBounds: (Int, Int, Int, Int)): Option[Vec] = {
+    // Extract team members
+    val teamMembers = extractTeamMembers(json, settings, currentState, spyInfo)
+
+    // Sort team members by their distance to the lastBlockerPos
+    val sortedMembers = teamMembers.sortBy {
+      case (_, vec) => Math.hypot(vec.x - currentState.lastBlockerPos.x, vec.y - currentState.lastBlockerPos.y)
+    }
+
+    // Filter the sorted members by path availability
+    val reachableMembers = sortedMembers.filter {
+      case (_, vec) => isPathAvailable(currentState.presentCharLocation, vec, grid, gridBounds)
+    }
+
+    // Return the closest reachable member to the presentCharLocation
+    reachableMembers.minByOption {
+      case (_, vec) => Math.hypot(vec.x - currentState.presentCharLocation.x, vec.y - currentState.presentCharLocation.y)
+    }.map(_._2)
+
+  }
+
+  def findReachableTeamMemberOld(json: JsValue, settings: UISettings, currentState: ProcessorState, spyInfo: JsObject, grid: Array[Array[Boolean]], gridBounds: (Int, Int, Int, Int)): Option[Vec] = {
     val teamMembers = extractTeamMembers(json, settings, currentState, spyInfo)
 
     val reachableMembers = teamMembers.filter {
@@ -591,6 +623,7 @@ object TeamHunt {
     var logs: Seq[Log] = intialLogs
     var updatedState = currentState
 
+    val lastBlockerPosSeen: Vec = updatedState.lastBlockerPos
     // Declare the level movement enablers lists based on whether the blocker is above or below
     var levelMovementEnablersIdsList: List[Int] = List()
 
@@ -626,9 +659,9 @@ object TeamHunt {
       val tileY = tileId.slice(5, 10).toInt
       val tileZ = tileId.takeRight(2).toInt
 
-      // Only consider tiles on the same Z-level as the blocker
+      // Only consider tiles on the same Z-level as the player is
       if (tileZ == presentCharLocationZ) {
-        val distance = manhattanDistance(blockerPos.x, blockerPos.y, tileX, tileY)
+        val distance = manhattanDistance(lastBlockerPosSeen.x, lastBlockerPosSeen.y, tileX, tileY)
         Some((tileId, index, itemIds, distance)) // Include distance in the tuple
       } else {
         None
