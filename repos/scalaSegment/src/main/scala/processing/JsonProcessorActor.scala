@@ -179,7 +179,7 @@ case class ProcessorState(
                            targetFreezeHealthStatus: Int = 0,
                            targetFreezeHealthPoints: Int = 0,
                            targetFreezeCreatureId: Int = 0,
-
+                           escapedToSafeZone: String = "not_set",
                          )
 case class UpdateSettings(settings: UISettings)
 

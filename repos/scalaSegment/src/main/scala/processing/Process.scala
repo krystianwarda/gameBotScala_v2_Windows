@@ -22,6 +22,7 @@ import javax.imageio.ImageIO
 
 
 object Process {
+
   // Function to find the screen position of an item in container slots 1-4 with both itemId and itemSubType matching
   // Function to check if JSON is empty
   def isJsonEmpty(json: JsValue): Boolean = json match {
@@ -45,25 +46,27 @@ object Process {
   import com.sun.speech.freetts.VoiceManager
   System.setProperty("freetts.voices", "com.sun.speech.freetts.en.us.cmu_us_kal.KevinVoiceDirectory")
 
-  def generateNoise(message: String): Unit = {
-    println("generateNoise activated.")
 
-    val voiceName = "kevin" // Adjust this name based on the output of listAvailableVoices
 
-    val voiceManager = VoiceManager.getInstance()
-    val voice = voiceManager.getVoice(voiceName)
-
-    if (voice != null) {
-      voice.allocate()
-      try {
-        voice.speak(message)
-      } finally {
-        voice.deallocate()
-      }
-    } else {
-      println("Voice not found.")
-    }
-  }
+//  def generateNoise(message: String): Unit = {
+//    println("generateNoise activated.")
+//
+//    val voiceName = "kevin" // Adjust this name based on the output of listAvailableVoices
+//
+//    val voiceManager = VoiceManager.getInstance()
+//    val voice = voiceManager.getVoice(voiceName)
+//
+//    if (voice != null) {
+//      voice.allocate()
+//      try {
+//        voice.speak(message)
+//      } finally {
+//        voice.deallocate()
+//      }
+//    } else {
+//      println("Voice not found.")
+//    }
+//  }
 
   def findItemInContainerSlot14(json: JsValue, updatedState: ProcessorState, itemId: Int, itemSubType: Int): Option[JsObject] = {
     // Access the specific container information using updatedState

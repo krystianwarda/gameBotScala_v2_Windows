@@ -7,14 +7,25 @@ import java.io.File
 
 case class SendDiscordAlert(message: String, screenshot: Option[File], jsonData: Option[JsValue])
 
+// New case for Sound Alert
+case class SendSoundAlert(message: String)
+
 class AlertSenderActor extends Actor with ActorLogging {
   import context.dispatcher // Import the execution context for future operations
 
   def receive = {
+
+
     case SendDiscordAlert(message, screenshot, jsonData) =>
       log.info("Preparing to send alert to Discord...")
       DiscordNotifier.sendAlert(message, screenshot, jsonData) // Assuming DiscordNotifier is accessible
       log.info("Alert sent successfully to Discord.")
+
+    // New sound alert case
+    case SendSoundAlert(message) =>
+      log.info("Generating sound alert...")
+      SoundNotifier.generateNoise(message)
+      log.info("Sound alert triggered successfully.")
   }
 }
 
@@ -65,3 +76,30 @@ object DiscordNotifier {
     val response = request.send(backend)
   }
 }
+
+object SoundNotifier {
+  import com.sun.speech.freetts.{Voice, VoiceManager}
+
+  def generateNoise(message: String): Unit = {
+    println("generateNoise activated.")
+
+    // Specify the voice name (ensure it's a valid one in your TTS library)
+    val voiceName = "kevin" // Adjust this based on available voices
+
+    // Get an instance of the VoiceManager and the specified voice
+    val voiceManager = VoiceManager.getInstance()
+    val voice = voiceManager.getVoice(voiceName)
+
+    if (voice != null) {
+      voice.allocate() // Allocate resources for the voice
+      try {
+        voice.speak(message) // Speak the message
+      } finally {
+        voice.deallocate() // Deallocate resources after speaking
+      }
+    } else {
+      println("Voice not found.")
+    }
+  }
+}
+

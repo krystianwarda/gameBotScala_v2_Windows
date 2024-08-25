@@ -7,8 +7,12 @@ import userUI.SettingsUtils
 
 import scala.collection.immutable.Seq
 import play.api.libs.json._
-import processing.Process.{captureScreen, generateNoise}
-import utils.{Credentials, SendDiscordAlert}
+import processing.CaveBot.Vec
+import processing.Process.captureScreen
+//import processing.Process.{captureScreen, generateNoise}
+import processing.TeamHunt.generateSubwaypointsToBlocker
+import utils.{Credentials, SendDiscordAlert, SendSoundAlert}
+case class IgnoredCreature(name: String, safe: Boolean)
 
 
 object Guardian {
@@ -24,7 +28,11 @@ object Guardian {
       val playerName = (json \ "characterInfo" \ "Name").as[String]
       // Extract the "spyLevelInfo" object from the JSON
       val spyLevelInfoJson = (json \ "spyLevelInfo").as[JsObject]
-      val ignoredCreatures: List[String] = settings.guardianSettings.ignoredCreatures
+      // Extract names from the ignoredCreatures list by splitting the string on the ',' and ':' to get the "Name" part.
+      val ignoredCreatures: List[String] = settings.guardianSettings.ignoredCreatures.map { entry =>
+        entry.split(",")(0).split(":")(1).trim // Extracts the name part after "Name:"
+      }
+
 
       // Iterate over each key in spyLevelInfoJson to find players with "IsPlayer" set to true and name not equal to playerName
       spyLevelInfoJson.fields.foreach {
@@ -34,26 +42,56 @@ object Guardian {
           val playerZLevel = (player \ "PositionZ").as[Int]
           val currentName = (player \ "Name").as[String]
 
-          if (isPlayer && currentName != playerName && settings.guardianSettings.playerOnScreenSettings.head.playerOnScreenSound) {
-            val currentZLevel = (json \ "characterInfo" \ "PositionZ").as[Int]
-            if (playerZLevel == currentZLevel) {
-              println(s"player on the screen: $currentName")
-              if (currentTime - updatedState.playerDetectedAlertTime > 15000) { // More than 5000 milliseconds
-                generateNoise("Player on the screen.")
-//                val screenshot = captureScreen()
-//                println(s"Sending message to AlertActor")
-//                alertSenderActorRef ! SendDiscordAlert("Player on the screen.", Some(screenshot), Some(json))
-//                updatedState = updatedState.copy(playerDetectedAlertTime = currentTime)
+          // Check if the current player's name is in the ignoredCreatures list
+          val isIgnored = ignoredCreatures.contains(currentName)
+
+          if (isPlayer && !isIgnored) {
+            println(s"Player detected: $currentName at Z level $playerZLevel")
+
+            if (isPlayer && currentName != playerName && settings.guardianSettings.playerOnScreenSettings.head.playerOnScreenSound) {
+              val currentZLevel = (json \ "characterInfo" \ "PositionZ").as[Int]
+              if (playerZLevel == currentZLevel) {
+                println(s"player on the screen: $currentName")
+                if (currentTime - updatedState.playerDetectedAlertTime > 120000) { // More than 5000 milliseconds
+
+//                  alertSenderActorRef ! SendSoundAlert("Player on the screen.")
+                  updatedState = updatedState.copy(playerDetectedAlertTime = currentTime)
+                  val screenshot = captureScreen()
+                  println(s"Sending message to AlertActor")
+                  alertSenderActorRef ! SendDiscordAlert("Player on the screen.", Some(screenshot), Some(json))
+                }
+              }
+              else {
+                println(s"player detected: $currentName")
+                if (currentTime - updatedState.playerDetectedAlertTime > 120000) { // More than 5000 milliseconds
+                  // Somewhere in your code, when a player is detected:
+                  alertSenderActorRef ! SendSoundAlert("Player detected.")
+
+                  if (settings.guardianSettings.playerDetectedSettings.head.playerDetectedDiscord) {
+                    val screenshot = captureScreen()
+                    alertSenderActorRef ! SendDiscordAlert("Player on the screen.", Some(screenshot), Some(json))
+
+                  }
+
+                  updatedState = updatedState.copy(playerDetectedAlertTime = currentTime)
+                  if (updatedState.escapedToSafeZone == "not_set") {
+                    val resultEscapeProtectionZone = escapeProtectionZone(json: JsValue, settings, updatedState, actions, logs)
+                    actions = resultEscapeProtectionZone._1._1
+                    logs = resultEscapeProtectionZone._1._2
+                    updatedState = resultEscapeProtectionZone._2
+                    updatedState = updatedState.copy(escapedToSafeZone = "escaped")
+                  }
+
+
+                }
               }
             }
-//            else {
-//              println(s"player detected: $currentName")
-//              if (currentTime - updatedState.playerDetectedAlertTime > 5000) { // More than 5000 milliseconds
-//                generateNoise("Player detected.")
-//                updatedState = updatedState.copy(playerDetectedAlertTime = currentTime)
-//              }
-//            }
+
+          } else {
+            // Optionally, handle ignored creatures here if needed
+            println(s"Creature $currentName is ignored.")
           }
+
       }
 
 
@@ -95,6 +133,77 @@ object Guardian {
     println(f"[INFO] Processing computeGuardianActions took $duration%.6f seconds")
     ((actions, logs), updatedState)
   }
+
+
+
+  def escapeProtectionZone(json: JsValue,
+                           settings: SettingsUtils.UISettings,
+                           currentState: ProcessorState,
+                           initialActions: Seq[FakeAction],
+                           intialLogs: Seq[Log],
+                          ): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
+    var actions: Seq[FakeAction] = initialActions
+    var logs: Seq[Log] = intialLogs
+    var updatedState = currentState
+
+    println("Inside escapeProtectionZone")
+    val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+    val xs = tiles.keys.map(_.substring(0, 5).trim.toInt)
+    val ys = tiles.keys.map(_.substring(5, 10).trim.toInt)
+    val gridBounds = (xs.min, ys.min, xs.max, ys.max) // Properly define gridBounds here
+
+    val itemTargetOpt = findItemOnArea(json, 2985)
+    println(s"itemTargetOpt: ${itemTargetOpt}")
+    // Handle Option[Vec] using pattern matching
+    itemTargetOpt match {
+      case Some(target) =>
+        println("Escaping")
+        logs :+= Log("Escaping.")
+
+        val actionsSeq = Seq(
+          MouseAction(target.x, target.y, "move"),
+          MouseAction(target.x, target.y, "pressLeft"),
+          MouseAction(target.x, target.y, "releaseLeft")
+        )
+        actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+        updatedState = updatedState.copy(chasingBlockerLevelChangeTime = updatedState.currentTime)
+
+      case None =>
+        println("Item not found")
+    }
+    ((actions, logs), updatedState)
+  }
+
+
+  def findItemOnArea(json: JsValue, itemIdToFind: Int): Option[Vec] = {
+    // Extract the tiles from the JSON
+    val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+
+    // Collect the tile ID and index that contains the itemIdToFind
+    val potentialTileIndexOpt = tiles.collectFirst {
+      case (tileId, tileData) if {
+        // Create a list of item IDs from the items on the tile
+        val itemIds = (tileData \ "items").as[Map[String, JsObject]].values.map(itemData => (itemData \ "id").as[Int]).toList
+        // Check if the specific item ID is found in the list
+        itemIds.contains(itemIdToFind)
+      } =>
+        // Return the index of the tile
+        (tileData \ "index").as[String]
+    }
+
+    println(s"potentialTileIndexOpt: ${potentialTileIndexOpt}")
+
+    // If we found the index, proceed to get the corresponding screenX and screenY
+    potentialTileIndexOpt.flatMap { index =>
+      // Try to find the corresponding screen location using the index
+      (json \ "screenInfo" \ "mapPanelLoc" \ index).asOpt[JsObject].map { screenData =>
+        val x = (screenData \ "x").as[Int]
+        val y = (screenData \ "y").as[Int]
+        Vec(x, y)
+      }
+    }
+  }
+
 }
 
 
