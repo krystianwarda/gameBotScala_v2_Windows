@@ -84,6 +84,8 @@ object Guardian {
 
 
                 }
+
+
               }
             }
 
@@ -94,7 +96,9 @@ object Guardian {
 
       }
 
-
+      if (currentTime - updatedState.playerDetectedAlertTime > 10000) {
+        updatedState = updatedState.copy(escapedToSafeZone = "not_set")
+      }
 
 //      if (settings.protectionZoneSettings.escapeToProtectionZone) {
 //        val ignoredCreaturesList = settings.protectionZoneSettings.ignoredCreatures
