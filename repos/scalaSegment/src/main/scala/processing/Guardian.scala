@@ -52,18 +52,29 @@ object Guardian {
               val currentZLevel = (json \ "characterInfo" \ "PositionZ").as[Int]
               if (playerZLevel == currentZLevel) {
                 println(s"player on the screen: $currentName")
-                if (currentTime - updatedState.playerDetectedAlertTime > 120000) { // More than 5000 milliseconds
+                if (currentTime - updatedState.playerDetectedAlertTime > 15000) { // More than 5000 milliseconds
 
-//                  alertSenderActorRef ! SendSoundAlert("Player on the screen.")
+                  alertSenderActorRef ! SendSoundAlert("Player on the screen.")
+
+                  if (settings.guardianSettings.playerDetectedSettings.head.playerDetectedDiscord) {
+                    val screenshot = captureScreen()
+                    alertSenderActorRef ! SendDiscordAlert("Player on the screen.", Some(screenshot), Some(json))
+
+                  }
+
                   updatedState = updatedState.copy(playerDetectedAlertTime = currentTime)
-                  val screenshot = captureScreen()
-                  println(s"Sending message to AlertActor")
-                  alertSenderActorRef ! SendDiscordAlert("Player on the screen.", Some(screenshot), Some(json))
+                  if (updatedState.escapedToSafeZone == "not_set") {
+                    val resultEscapeProtectionZone = escapeProtectionZone(json: JsValue, settings, updatedState, actions, logs)
+                    actions = resultEscapeProtectionZone._1._1
+                    logs = resultEscapeProtectionZone._1._2
+                    updatedState = resultEscapeProtectionZone._2
+                    updatedState = updatedState.copy(escapedToSafeZone = "escaped")
+                  }
                 }
               }
               else {
                 println(s"player detected: $currentName")
-                if (currentTime - updatedState.playerDetectedAlertTime > 120000) { // More than 5000 milliseconds
+                if (currentTime - updatedState.playerDetectedAlertTime > 15000) { // More than 5000 milliseconds
                   // Somewhere in your code, when a player is detected:
                   alertSenderActorRef ! SendSoundAlert("Player detected.")
 
