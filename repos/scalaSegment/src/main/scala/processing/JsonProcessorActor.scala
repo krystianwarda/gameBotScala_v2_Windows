@@ -133,6 +133,7 @@ case class ProcessorState(
                            lastTargetName: String = "",
                            lastTargetPos: (Int, Int, Int) = (0,0,0),
                            lastBlockerPos: Vec = Vec(0, 0),
+                           lastBlockerPosZ: Int = 0,
 
                            positionStagnantCount: Int = 0,
                            lastPosition: Option[Vec] = None,

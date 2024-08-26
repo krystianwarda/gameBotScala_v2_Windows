@@ -20,6 +20,11 @@ import scala.util.matching.Regex
 case class CreatureInfo(id: Int, name: String, healthPercent: Int, isShootable: Boolean, isMonster: Boolean, danger: Int, keepDistance: Boolean, isPlayer: Boolean, posX: Int, posY: Int, posZ: Int)
 
 
+
+// energy ring 3051
+// life ring 3052
+// roh 3098
+
 object AutoTarget {
   def computeAutoTargetActions(json: JsValue, settings: UISettings, currentState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
 //    println("Performing computeAutoTargetActions action.")
@@ -281,10 +286,20 @@ object AutoTarget {
 
 
 
-      if ((settings.caveBotSettings.enabled &&
-        updatedState.caveBotLevelsList.contains(presentCharLocationZ) &&
-        settings.autoTargetSettings.enabled) ||
-        (!settings.caveBotSettings.enabled && settings.autoTargetSettings.enabled)) {
+      if (
+      // CaveBot is enabled, present Z level is in the list, and autotargeting is enabled
+        (settings.caveBotSettings.enabled &&
+          updatedState.caveBotLevelsList.contains(presentCharLocationZ) &&
+          settings.autoTargetSettings.enabled) ||
+
+          // CaveBot is disabled, but autotargeting is enabled
+          (!settings.caveBotSettings.enabled && settings.autoTargetSettings.enabled) ||
+
+          // Team hunting is enabled, followBlocker is true, and Z levels match
+          (settings.teamHuntSettings.enabled &&
+            settings.teamHuntSettings.followBlocker &&
+            updatedState.lastBlockerPosZ == presentCharLocationZ)
+      ) {
         println("Start autotarget")
 
         val sortedMonstersInfo = extractInfoAndSortMonstersFromBattle(json, settings)

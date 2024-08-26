@@ -111,37 +111,7 @@ object Guardian {
         updatedState = updatedState.copy(escapedToSafeZone = "not_set")
       }
 
-//      if (settings.protectionZoneSettings.escapeToProtectionZone) {
-//        val ignoredCreaturesList = settings.protectionZoneSettings.ignoredCreatures
-//        // Print elements of the ignoredCreaturesList
-//        println(s"Ignored Creatures List: ${ignoredCreaturesList.mkString(", ")}")
-//
 
-
-//        // Initialize a list to keep track of all creatures that are not NPCs and not ignored
-//        var detectedCreatures: Seq[String] = Seq()
-//
-//        // Iterate through each creature in the spyLevelInfo
-//        spyLevelInfoJson.fields.foreach { case (_, creatureInfo) =>
-//          val isNpc = (creatureInfo \ "IsNpc").as[Boolean]
-//          val name = (creatureInfo \ "Name").as[String]
-//
-//          // Check if the creature is not an NPC and not in the ignored list
-//          if (!isNpc && !ignoredCreaturesList.contains(name) && !ignoredCreaturesList.contains(playerName)) {
-//            detectedCreatures :+= name // Add the creature's name to the list
-//          }
-//        }
-//
-//        // Log all detected creatures that are not NPCs and not ignored
-//        if (detectedCreatures.nonEmpty) {
-////          println(s"Detected Creatures: ${detectedCreatures.mkString(", ")}")
-//          logs = logs :+ Log("I have to hide!")
-//
-//
-//        } else {
-//          logs = logs :+ Log("I am safe")
-//        }
-//      }
     }
     val endTime = System.nanoTime()
     val duration = (endTime - startTime) / 1e9d

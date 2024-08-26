@@ -78,7 +78,7 @@ object TeamHunt {
                 } else {
                   // Blocker is on the same level, check if path is available
                   println("Blocker is on the same level, check if path is available")
-                  updatedState = updatedState.copy(lastBlockerPos = blockerPos)
+                  updatedState = updatedState.copy(lastBlockerPos = blockerPos, lastBlockerPosZ = blockerZ)
                   if (isPathAvailable(presentCharLocation, blockerPos, grid, gridBounds)) {
 
                     // engaging Target
@@ -115,7 +115,7 @@ object TeamHunt {
                         logs = resultFollowTeamMember._1._2
                         updatedState = resultFollowTeamMember._2
                       } else {
-                        logs :+= Log("team member are reachable.")
+                        logs :+= Log("team member are not reachable.")
                       }
                     }
 
@@ -144,7 +144,23 @@ object TeamHunt {
                     logs = resultFollowTeamMember._1._2
                     updatedState = resultFollowTeamMember._2
                   } else {
-                    logs :+= Log("Blocker and no team member are reachable.")
+                    logs :+= Log("Blocker and no team member are reachable. Go to last blocker position.")
+
+                    val blockerPos = updatedState.lastBlockerPos
+                    // engaging Target
+                    val resultFollowLastBlocerPosition = followTeamMember(
+                      blockerPos,
+                      presentCharLocation,
+                      json,
+                      actions,
+                      logs,
+                      updatedState
+                    )
+
+                    actions = resultFollowLastBlocerPosition._1._1
+                    logs = resultFollowLastBlocerPosition._1._2
+                    updatedState = resultFollowLastBlocerPosition._2
+
                   }
                 }
 
@@ -839,10 +855,120 @@ object TeamHunt {
           }
         } else {
           logs :+= Log("[DEBUG] Too close to target, stopping pursuit.")
+
+          // eat food when close to blocker and when no monster on screen
+          val battleInfoResult = (json \ "battleInfo").validate[Map[String, JsValue]]
+          battleInfoResult match {
+            case JsSuccess(battleInfo, _) =>
+              updatedState = updatedState.copy(lastDirection = Option(""))
+              val hasMonsters = battleInfo.exists { case (_, creature) =>
+                (creature \ "IsMonster").asOpt[Boolean].getOrElse(false)
+              }
+              if (!hasMonsters) {
+                val regenerationTime = (json \ "characterInfo" \ "RegTime").as[Int]
+
+                if (regenerationTime < 400) {
+                  val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+
+                  // Get character position
+                  val characterX = (json \ "characterInfo" \ "PositionX").as[Int]
+                  val characterY = (json \ "characterInfo" \ "PositionY").as[Int]
+                  val characterZ = (json \ "characterInfo" \ "PositionZ").as[Int]
+
+//                  println(s"Character position: ($characterX, $characterY, $characterZ)")
+
+                  // Define movement range (1-tile distance in any direction, including diagonals)
+                  def isAdjacentTile(tileX: Int, tileY: Int, tileZ: Int, characterX: Int, characterY: Int, characterZ: Int): Boolean = {
+                    val adjacent = tileZ == characterZ &&
+                      math.abs(tileX - characterX) <= 1 &&
+                      math.abs(tileY - characterY) <= 1
+//                    println(s"Checking adjacency for Tile ($tileX, $tileY, $tileZ) and Character ($characterX, $characterY, $characterZ): Result = $adjacent")
+                    adjacent
+                  }
+
+                  // Find all adjacent tiles near the character with food on top
+                  val result: List[Option[(String, Int, Int, Int)]] = tiles.toList.flatMap {
+                    case (tileId, tileData) =>
+                      // Extract tileX, tileY, tileZ from the tileId string
+                      val tileX = tileId.take(5).toInt
+                      val tileY = tileId.slice(5, 10).toInt
+                      val tileZ = tileId.takeRight(2).toInt
+
+                      // Print the extracted tile position
+//                      println(s"Checking Tile ID: $tileId => Tile Position: ($tileX, $tileY, $tileZ)")
+
+                      // Check if the tile is adjacent to the character
+                      if (isAdjacentTile(tileX, tileY, tileZ, characterX, characterY, characterZ)) {
+                        // Extract topThingId as the ID of the top item
+                        val topThingId = (tileData \ "topThingId").asOpt[Int]
+
+                        // Check if topThingId is a food item
+                        topThingId match {
+                          case Some(id) if StaticGameInfo.Items.FoodsIds.contains(id) =>
+//                            println(s"Food found: $id on tile $tileId")
+                            Some((tileId.toString, tileX, tileY, id)) :: Nil // Return List with Some
+                          case _ =>
+//                            println(s"No food found on tile $tileId")
+                            None :: Nil // Return List with None
+                        }
+                      } else {
+//                        println(s"Tile $tileId is not adjacent.")
+                        Nil // Return empty list if not adjacent
+                      }
+                  }
+
+                  // Filter out the None values from the result
+                  val foodTiles = result.flatten
+
+//                  println(s"Result: $foodTiles")
+
+                  // Handle the result of finding any adjacent tile with food on top
+                  foodTiles.headOption match {
+                    case Some((tileId, tileX, tileY, foodId)) =>
+//                      println(s"Food found on tile $tileId at ($tileX, $tileY): Item ID $foodId")
+                      val screenInfo = (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
+
+                      // Find the tile in the screenInfo section that matches the tileId
+                      val screenTileOpt = screenInfo.collectFirst {
+                        case (screenPos, screenData) if (screenData \ "id").as[String] == tileId =>
+                          val screenX = (screenData \ "x").as[Int]
+                          val screenY = (screenData \ "y").as[Int]
+                          (screenX, screenY)
+                      }
+
+                      screenTileOpt match {
+                        case Some((screenX, screenY)) =>
+//                          println(s"Screen position for tile $tileId: screenX = $screenX, screenY = $screenY")
+
+                          logs :+= Log("Clicking on food.")
+                          val actionsSeq = Seq(
+                            MouseAction(screenX, screenY, "move"),
+                            MouseAction(screenX, screenY, "pressRight"),
+                            MouseAction(screenX, screenY, "releaseRight")
+                          )
+                          actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+
+                        case None =>
+//                          println(s"No screen information found for tile $tileId.")
+                      }
+
+                    case None =>
+//                      println("No food found on adjacent tiles.")
+                    // Add your logic here for "food not found"
+                  }
+                }
+              }
+
+
+
+            case JsError(_) =>
+              // placeholder
+          }
+
         }
 
       case JsError(errors) =>
-        logs :+= Log(s"Error parsing battleInfo: $errors")
+//        logs :+= Log(s"Error parsing battleInfo: $errors")
 
     }
     ((actions, logs), updatedState)
@@ -853,6 +979,17 @@ object TeamHunt {
   def manhattanDistance(x1: Int, y1: Int, x2: Int, y2: Int): Int = {
     abs(x1 - x2) + abs(y1 - y2)
   }
+
+  // Define movement range (1-tile distance in any direction, including diagonals)
+  // Define movement range (1-tile distance in any direction, including diagonals)
+  def isAdjacentTile(tileX: Int, tileY: Int, tileZ: Int, characterX: Int, characterY: Int, characterZ: Int): Boolean = {
+    val adjacent = tileZ == characterZ &&
+      math.abs(tileX - characterX) <= 1 &&
+      math.abs(tileY - characterY) <= 1
+    println(s"Checking adjacency for Tile ($tileX, $tileY, $tileZ) and Character ($characterX, $characterY, $characterZ): Result = $adjacent")
+    adjacent
+  }
+
 
 }
 
