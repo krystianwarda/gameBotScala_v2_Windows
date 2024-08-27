@@ -77,6 +77,9 @@ object Guardian {
                 if (currentTime - updatedState.playerDetectedAlertTime > 15000) { // More than 5000 milliseconds
                   // Somewhere in your code, when a player is detected:
                   alertSenderActorRef ! SendSoundAlert("Player detected.")
+                  val mergedString = currentName
+                  logs = logs :+ Log("Sending message")
+                  actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(mergedString)))
 
                   if (settings.guardianSettings.playerDetectedSettings.head.playerDetectedDiscord) {
                     val screenshot = captureScreen()
