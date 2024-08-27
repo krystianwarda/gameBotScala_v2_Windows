@@ -97,7 +97,8 @@ case class ProcessorState(
                            lastRuneMakingTime: Long = 0,
                            lastRuneUseTime: Long = 0,
                            runeUseCooldown: Long = 2000,
-
+                           suppliesContainerToHandle: String = "",
+                           suppliesContainerMap: Map[Int, String] = Map.empty[Int, String],
                            healingUseCooldown: Long = 1000,
                            lastHealUseTime: Long = 0,
                            healUseRandomness: Long = 0,
@@ -138,8 +139,8 @@ case class ProcessorState(
                            positionStagnantCount: Int = 0,
                            lastPosition: Option[Vec] = None,
 
-                           attackRuneContainerName: String = "not_set",
-                           statusOfAttackRune: String = "not_ready",
+//                           attackRuneContainerName: String = "not_set",
+                           statusOfAttackRune: String = "not_set",
                            uhRuneContainerName: String = "not_set",
                            statusOfRuneAutoheal: String = "not_ready",
                            stateHunting: String = "free",

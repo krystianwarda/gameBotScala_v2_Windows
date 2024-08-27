@@ -144,110 +144,12 @@ object AutoTarget {
       }
       // resuply ammo end
 
-
-
-
-      if (updatedState.statusOfAttackRune == "verifying") {
-        // Step 2: Verify if the newly opened backpack contains UH runes
-        logs = logs :+ Log(s"Verifying if container ${updatedState.attackRuneContainerName} contains attack runes...")
-
-        // Check for UH runes in the new backpack
-        (json \ "containersInfo" \ updatedState.attackRuneContainerName).asOpt[JsObject].foreach { containerInfo =>
-          val items = (containerInfo \ "items").asOpt[JsObject].getOrElse(Json.obj())
-
-          // Extract rune IDs from the creature list (you should ensure that runeIds is accessible in this scope)
-          val runeIds = settings.autoTargetSettings.creatureList.flatMap(extractRuneIdFromSetting).toSet
-
-          val containsUHRunes = items.fields.exists {
-            case (_, itemInfo) =>
-              val itemId = (itemInfo \ "itemId").asOpt[Int].getOrElse(-1)
-              val itemSubType = (itemInfo \ "itemSubType").asOpt[Int].getOrElse(-1)
-              // Check if itemId is in the runeIds set and if itemSubType matches 1
-              runeIds.contains(itemId) && itemSubType == 1
-          }
-
-          // If UH runes are found, set the status to 'ready'
-          if (containsUHRunes) {
-            logs = logs :+ Log(s"Runes found in ${updatedState.attackRuneContainerName}.")
-            updatedState = updatedState.copy(statusOfAttackRune = "ready")
-          } else {
-            logs = logs :+ Log(s"No Runes found in ${updatedState.attackRuneContainerName}.")
-          }
-        }
-      }
-
-
-      if (updatedState.statusOfAttackRune == "open_new_backpack") {
-        // Step 1: Open the new backpack
-        val result = openNewBackpack(updatedState.attackRuneContainerName, json, actions, logs, updatedState)
-        actions = result._1._1
-        logs = result._1._2
-        updatedState = result._2
-
-        // Change status to 'verifying' to delay UH runes check to the next loop
-        updatedState = updatedState.copy(statusOfAttackRune = "verifying")
-      }
-
-
-      if (updatedState.statusOfAttackRune == "remove_backpack") {
-        val result = removeEmptyBackpack(updatedState.attackRuneContainerName, json, actions, logs, updatedState)
-        actions ++= result._1._1
-        logs ++= result._1._2
-        updatedState = result._2
-        updatedState = updatedState.copy(statusOfAttackRune = "open_new_backpack")
-      }
-
-      // Assuming the correct structure of the JSON object and that the JSON parsing is appropriate:
-      if (updatedState.attackRuneContainerName == "not_set") {
-        //        logs = logs :+ Log("Checking for attack Rune container...")
-
-        // Extract rune IDs from the creature list
-        val creatureList = settings.autoTargetSettings.creatureList
-        //        println(s"Creature List: $creatureList")
-        val runeIds = creatureList.flatMap(extractRuneIdFromSetting).toSet
-        //        println(s"Extracted Rune IDs: $runeIds")
-
-        // Accessing and checking containersInfo
-        (json \ "containersInfo").asOpt[JsObject].foreach { containersInfo =>
-          val attackRuneContainerName = containersInfo.fields.collectFirst {
-            case (containerName, containerDetails) if
-              (containerDetails \ "items").asOpt[JsObject].exists { items =>
-                items.fields.exists {
-                  case (_, itemDetails) =>
-                    runeIds.contains((itemDetails \ "itemId").asOpt[Int].getOrElse(-1))
-                }
-              } => containerName
-          }
-
-          attackRuneContainerName match {
-            case Some(containerName) =>
-              logs = logs :+ Log(s"Found attack Rune in $containerName.")
-              updatedState = updatedState.copy(attackRuneContainerName = containerName, statusOfAttackRune="ready")
-            case None =>
-            //              logs = logs :+ Log("Attack Rune not found in any container.")
-          }
-        }
-      }
-
-      if (updatedState.attackRuneContainerName != "not_set" && updatedState.statusOfAttackRune == "ready") {
-        logs = logs :+ Log(s"Attack Rune container set to ${updatedState.attackRuneContainerName}. Checking for free space and parent...")
-        (json \ "containersInfo" \ updatedState.attackRuneContainerName).asOpt[JsObject].foreach { containerInfo =>
-          val freeSpace = (containerInfo \ "freeSpace").asOpt[Int]
-          val hasParent = (containerInfo \ "hasParent").asOpt[Boolean]
-
-
-          if (freeSpace.contains(20) && hasParent.contains(true)) {
-            val result = noRunesInBpGoUp(updatedState.attackRuneContainerName, json, actions, logs, updatedState)
-            actions = result._1._1
-            logs = result._1._2
-            updatedState = result._2
-            updatedState = updatedState.copy(statusOfAttackRune = "remove_backpack")
-          }
-
-        }
-      }
-
-      // setting attackRuneContainerEnd
+      // check supplies in containers
+      val resultProcessSuppliesState = processSuppliesState(json, settings, actions, logs, currentState)
+      actions ++= resultProcessSuppliesState._1._1
+      logs ++= resultProcessSuppliesState._1._2
+      updatedState = resultProcessSuppliesState._2
+      // end check supplies in containers
 
 
       val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
@@ -1737,6 +1639,8 @@ object AutoTarget {
   }
 
   // Helper function to process rune shooting logic based on creature settings
+
+
   def processRuneShooting(
                            creature: CreatureInfo,
                            creatureSettingsJson: JsValue,
@@ -1765,126 +1669,22 @@ object AutoTarget {
           extractRuneID(targetSettings) match {
             case Some(runeID) =>
               println(s"Extracted Rune ID: $runeID")
+              println(s"suppliesContainerMap: ${updatedState.suppliesContainerMap}")
               val currentTime = System.currentTimeMillis()
               if (currentTime - updatedState.lastRuneUseTime > (updatedState.runeUseCooldown + updatedState.runeUseRandomness.toLong)) {
-                val runeAvailability = (0 to 3).flatMap { slot =>
-                  (json \ "containersInfo" \ updatedState.attackRuneContainerName \ "items" \ s"slot$slot" \ "itemId").asOpt[Int].map(itemId => (itemId, slot))
-                }.find(_._1 == runeID)
 
-                println(s"Attack rune container: ${updatedState.attackRuneContainerName}")
-                runeAvailability match {
-                  case Some((_, slot)) =>
-                    val inventoryPanelLoc = (json \ "screenInfo" \ "inventoryPanelLoc").as[JsObject]
-                    val containerKey = inventoryPanelLoc.keys.find(_.contains(updatedState.attackRuneContainerName)).getOrElse("")
-                    val contentsPath = inventoryPanelLoc \ containerKey \ "contentsPanel"
-                    val runeScreenPos = (contentsPath \ s"item$slot").asOpt[JsObject].map { item =>
-                      (item \ "x").asOpt[Int].getOrElse(-1) -> (item \ "y").asOpt[Int].getOrElse(-1)
-                    }.getOrElse((-1, -1))
-
-                    val monsterPos = (json \ "screenInfo" \ "battlePanelLoc" \ s"${creature.id}").asOpt[JsObject].map { monster =>
-                      ((monster \ "PosX").as[Int], (monster \ "PosY").as[Int])
-                    }.getOrElse((-1, -1))
-
-                    println(s"Rune position on screen: X=${runeScreenPos._1}, Y=${runeScreenPos._2}")
-                    println(s"Monster position on battle screen: X=${monsterPos._1}, Y=${monsterPos._2}")
-
-                    // Check if the monster's position is valid (not -1 or less than 2)
-                    if (monsterPos._1 >= 2 && monsterPos._2 >= 2) {
-                      // Define actions sequence here and ensure they are triggered correctly
-                      val actionsSeq = Seq(
-                        MouseAction(runeScreenPos._1, runeScreenPos._2, "move"),
-                        MouseAction(runeScreenPos._1, runeScreenPos._2, "pressRight"),
-                        MouseAction(runeScreenPos._1, runeScreenPos._2, "releaseRight"),
-                        MouseAction(monsterPos._1, monsterPos._2, "move"),
-                        MouseAction(monsterPos._1, monsterPos._2, "pressLeft"),
-                        MouseAction(monsterPos._1, monsterPos._2, "releaseLeft")
-                      )
-                      actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-
-                      // Generate a new random delay using updatedState.runeUseTimeRange
-                      val newRandomDelay = generateRandomDelay(updatedState.runeUseTimeRange)
-
-                      updatedState = updatedState.copy(
-                        lastRuneUseTime = currentTime,
-                        runeUseRandomness = newRandomDelay
-                      )
-
-                      println("Actions executed: Monster was in a valid position.")
-                    } else {
-                      println("Battle is closed or creature not on battle")
-                    }
-                  case None =>
-                    println("Rune is not available in the first four slots of the specified backpack.")
-                }
-              } else {
-                println("Rune cannot be use d yet due to cooldown.")
-              }
-            case None =>
-              println("Invalid or missing rune ID in settings.")
-          }
-        case None =>
-          println(s"No settings found for creature: ${creature.name}")
-      }
-
-    }
-
-    if (shootOnScreen) {
-      // Placeholder for shooting rune on screen
-      println(s"Shooting rune on ${creature.name} on screen.")
-    }
-
-    ((actions, logs), updatedState)
-  }
-
-
-  def shootRuneOnTargetOld(
-                         creature: CreatureInfo,
-                         targetCreatureSettings: List[JsValue],
-                         json: JsValue,
-                         currentState: ProcessorState,
-                         settings: UISettings,
-                         initialActions: Seq[FakeAction],
-                         initialLogs: Seq[Log]
-                       ): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
-
-    var actions: Seq[FakeAction] = initialActions
-    var logs: Seq[Log] = initialLogs
-    var updatedState = currentState
-
-    println(s"Shooting rune on target: ${creature.name}")
-
-    // Step 1: Select the creature settings from targetCreatureSettings based on creature.name
-    val creatureSettingsOpt = targetCreatureSettings.find { setting =>
-      (setting \ "name").as[String] == creature.name
-    }
-
-    creatureSettingsOpt match {
-      case Some(creatureSettingsJson) =>
-        // Step 2: Parse settings for shoot on battle or shoot on screen
-        val shootOnBattle = (creatureSettingsJson \ "useRuneOnBattle").as[Boolean]
-        val shootOnScreen = (creatureSettingsJson \ "useRuneOnScreen").as[Boolean]
-
-        if (shootOnBattle) {
-          // Placeholder for shooting rune in battle
-          println(s"Shooting rune on ${creature.name} in battle.")
-          val targetSettingsOpt = settings.autoTargetSettings.creatureList.find(_.contains(creature.name))
-
-          targetSettingsOpt match {
-            case Some(targetSettings) =>
-              extractRuneID(targetSettings) match {
-                case Some(runeID) =>
-                  println(s"Extracted Rune ID: $runeID")
-                  val currentTime = System.currentTimeMillis()
-                  if (currentTime - updatedState.lastRuneUseTime > (updatedState.runeUseCooldown + updatedState.runeUseRandomness)) {
+                // Find the container that has the runeID using suppliesContainerMap
+                updatedState.suppliesContainerMap.get(runeID) match {
+                  case Some(containerName) =>
+                    // Check rune availability in the container
                     val runeAvailability = (0 to 3).flatMap { slot =>
-                      (json \ "containersInfo" \ updatedState.attackRuneContainerName \ "items" \ s"slot$slot" \ "itemId").asOpt[Int].map(itemId => (itemId, slot))
+                      (json \ "containersInfo" \ containerName \ "items" \ s"slot$slot" \ "itemId").asOpt[Int].map(itemId => (itemId, slot))
                     }.find(_._1 == runeID)
 
-                    println(s"Attack rune container: ${updatedState.attackRuneContainerName}")
                     runeAvailability match {
                       case Some((_, slot)) =>
                         val inventoryPanelLoc = (json \ "screenInfo" \ "inventoryPanelLoc").as[JsObject]
-                        val containerKey = inventoryPanelLoc.keys.find(_.contains(updatedState.attackRuneContainerName)).getOrElse("")
+                        val containerKey = inventoryPanelLoc.keys.find(_.contains(containerName)).getOrElse("")
                         val contentsPath = inventoryPanelLoc \ containerKey \ "contentsPanel"
                         val runeScreenPos = (contentsPath \ s"item$slot").asOpt[JsObject].map { item =>
                           (item \ "x").asOpt[Int].getOrElse(-1) -> (item \ "y").asOpt[Int].getOrElse(-1)
@@ -1909,11 +1709,15 @@ object AutoTarget {
                             MouseAction(monsterPos._1, monsterPos._2, "releaseLeft")
                           )
                           actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+
+                          // Generate a new random delay using updatedState.runeUseTimeRange
                           val newRandomDelay = generateRandomDelay(updatedState.runeUseTimeRange)
+
                           updatedState = updatedState.copy(
                             lastRuneUseTime = currentTime,
                             runeUseRandomness = newRandomDelay
                           )
+
                           println("Actions executed: Monster was in a valid position.")
                         } else {
                           println("Battle is closed or creature not on battle")
@@ -1921,30 +1725,326 @@ object AutoTarget {
                       case None =>
                         println("Rune is not available in the first four slots of the specified backpack.")
                     }
-                  } else {
-                    println("Rune cannot be used yet due to cooldown.")
-                  }
-                case None =>
-                  println("Invalid or missing rune ID in settings.")
+                  case None =>
+                    println(s"No container found for rune ID $runeID in suppliesContainerMap.")
+                }
+              } else {
+                println("Rune cannot be used yet due to cooldown.")
               }
             case None =>
-              println(s"No settings found for creature: ${creature.name}")
+              println("Invalid or missing rune ID in settings.")
           }
+        case None =>
+          println(s"No settings found for creature: ${creature.name}")
+      }
 
-        }
+    }
 
-        if (shootOnScreen) {
-          // Placeholder for shooting rune on screen
-          println(s"Shooting rune on ${creature.name} on screen.")
-
-
-        }
-
-      case None =>
-        println(s"No settings found for creature: ${creature.name}")
+    if (shootOnScreen) {
+      // Placeholder for shooting rune on screen
+      println(s"Shooting rune on ${creature.name} on screen.")
     }
 
     ((actions, logs), updatedState)
+  }
+
+//
+//
+//  def shootRuneOnTargetOld(
+//                         creature: CreatureInfo,
+//                         targetCreatureSettings: List[JsValue],
+//                         json: JsValue,
+//                         currentState: ProcessorState,
+//                         settings: UISettings,
+//                         initialActions: Seq[FakeAction],
+//                         initialLogs: Seq[Log]
+//                       ): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
+//
+//    var actions: Seq[FakeAction] = initialActions
+//    var logs: Seq[Log] = initialLogs
+//    var updatedState = currentState
+//
+//    println(s"Shooting rune on target: ${creature.name}")
+//
+//    // Step 1: Select the creature settings from targetCreatureSettings based on creature.name
+//    val creatureSettingsOpt = targetCreatureSettings.find { setting =>
+//      (setting \ "name").as[String] == creature.name
+//    }
+//
+//    creatureSettingsOpt match {
+//      case Some(creatureSettingsJson) =>
+//        // Step 2: Parse settings for shoot on battle or shoot on screen
+//        val shootOnBattle = (creatureSettingsJson \ "useRuneOnBattle").as[Boolean]
+//        val shootOnScreen = (creatureSettingsJson \ "useRuneOnScreen").as[Boolean]
+//
+//        if (shootOnBattle) {
+//          // Placeholder for shooting rune in battle
+//          println(s"Shooting rune on ${creature.name} in battle.")
+//          val targetSettingsOpt = settings.autoTargetSettings.creatureList.find(_.contains(creature.name))
+//
+//          targetSettingsOpt match {
+//            case Some(targetSettings) =>
+//              extractRuneID(targetSettings) match {
+//                case Some(runeID) =>
+//                  println(s"Extracted Rune ID: $runeID")
+//                  val currentTime = System.currentTimeMillis()
+//                  if (currentTime - updatedState.lastRuneUseTime > (updatedState.runeUseCooldown + updatedState.runeUseRandomness)) {
+//                    val runeAvailability = (0 to 3).flatMap { slot =>
+//                      (json \ "containersInfo" \ updatedState.attackRuneContainerName \ "items" \ s"slot$slot" \ "itemId").asOpt[Int].map(itemId => (itemId, slot))
+//                    }.find(_._1 == runeID)
+//
+//                    println(s"Attack rune container: ${updatedState.attackRuneContainerName}")
+//                    runeAvailability match {
+//                      case Some((_, slot)) =>
+//                        val inventoryPanelLoc = (json \ "screenInfo" \ "inventoryPanelLoc").as[JsObject]
+//                        val containerKey = inventoryPanelLoc.keys.find(_.contains(updatedState.attackRuneContainerName)).getOrElse("")
+//                        val contentsPath = inventoryPanelLoc \ containerKey \ "contentsPanel"
+//                        val runeScreenPos = (contentsPath \ s"item$slot").asOpt[JsObject].map { item =>
+//                          (item \ "x").asOpt[Int].getOrElse(-1) -> (item \ "y").asOpt[Int].getOrElse(-1)
+//                        }.getOrElse((-1, -1))
+//
+//                        val monsterPos = (json \ "screenInfo" \ "battlePanelLoc" \ s"${creature.id}").asOpt[JsObject].map { monster =>
+//                          ((monster \ "PosX").as[Int], (monster \ "PosY").as[Int])
+//                        }.getOrElse((-1, -1))
+//
+//                        println(s"Rune position on screen: X=${runeScreenPos._1}, Y=${runeScreenPos._2}")
+//                        println(s"Monster position on battle screen: X=${monsterPos._1}, Y=${monsterPos._2}")
+//
+//                        // Check if the monster's position is valid (not -1 or less than 2)
+//                        if (monsterPos._1 >= 2 && monsterPos._2 >= 2) {
+//                          // Define actions sequence here and ensure they are triggered correctly
+//                          val actionsSeq = Seq(
+//                            MouseAction(runeScreenPos._1, runeScreenPos._2, "move"),
+//                            MouseAction(runeScreenPos._1, runeScreenPos._2, "pressRight"),
+//                            MouseAction(runeScreenPos._1, runeScreenPos._2, "releaseRight"),
+//                            MouseAction(monsterPos._1, monsterPos._2, "move"),
+//                            MouseAction(monsterPos._1, monsterPos._2, "pressLeft"),
+//                            MouseAction(monsterPos._1, monsterPos._2, "releaseLeft")
+//                          )
+//                          actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+//                          val newRandomDelay = generateRandomDelay(updatedState.runeUseTimeRange)
+//                          updatedState = updatedState.copy(
+//                            lastRuneUseTime = currentTime,
+//                            runeUseRandomness = newRandomDelay
+//                          )
+//                          println("Actions executed: Monster was in a valid position.")
+//                        } else {
+//                          println("Battle is closed or creature not on battle")
+//                        }
+//                      case None =>
+//                        println("Rune is not available in the first four slots of the specified backpack.")
+//                    }
+//                  } else {
+//                    println("Rune cannot be used yet due to cooldown.")
+//                  }
+//                case None =>
+//                  println("Invalid or missing rune ID in settings.")
+//              }
+//            case None =>
+//              println(s"No settings found for creature: ${creature.name}")
+//          }
+//
+//        }
+//
+//        if (shootOnScreen) {
+//          // Placeholder for shooting rune on screen
+//          println(s"Shooting rune on ${creature.name} on screen.")
+//
+//
+//        }
+//
+//      case None =>
+//        println(s"No settings found for creature: ${creature.name}")
+//    }
+//
+//    ((actions, logs), updatedState)
+//  }
+//
+
+
+
+  // Helper function to check if a container has attack runes
+  def checkForRunesInContainer(containerName: String, json: JsObject, runeIds: Set[Int]): Boolean = {
+    (json \ "containersInfo" \ containerName).asOpt[JsObject].exists { containerInfo =>
+      val items = (containerInfo \ "items").asOpt[JsObject].getOrElse(Json.obj())
+      items.fields.exists {
+        case (_, itemInfo) =>
+          val itemId = (itemInfo \ "itemId").asOpt[Int].getOrElse(-1)
+          val itemSubType = (itemInfo \ "itemSubType").asOpt[Int].getOrElse(-1)
+          runeIds.contains(itemId) && itemSubType == 1
+      }
+    }
+  }
+
+  // Helper function to handle opening a new backpack
+  def handleOpenBackpack(containerName: String, json: JsObject, actions: Seq[FakeAction], logs: Seq[Log], updatedState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
+    val result = openNewBackpack(containerName, json, actions, logs, updatedState)
+    val newActions = result._1._1
+    val newLogs = result._1._2
+    val newState = result._2.copy(statusOfAttackRune = "verifying")
+    ((newActions, newLogs), newState)
+  }
+
+  // Helper function to handle removing a backpack
+  def handleRemoveBackpack(containerName: String, json: JsObject, actions: Seq[FakeAction], logs: Seq[Log], updatedState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
+    val result = removeEmptyBackpack(containerName, json, actions, logs, updatedState)
+    val newActions = result._1._1
+    val newLogs = result._1._2
+    val newState = result._2.copy(statusOfAttackRune = "open_new_backpack")
+    ((newActions, newLogs), newState)
+  }
+
+  def processSuppliesState(
+                              jsonValue: JsValue,
+                              settings: UISettings,
+                              initialActions: Seq[FakeAction],
+                              initialLogs: Seq[Log],
+                              currentState: ProcessorState
+                            ): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
+
+    var actions: Seq[FakeAction] = initialActions
+    var logs: Seq[Log] = initialLogs
+    var updatedState = currentState
+    val json = jsonValue.as[JsObject]
+    // Extract rune IDs from the creature list in settings
+    val runeIds = settings.autoTargetSettings.creatureList.flatMap(extractRuneIdFromSetting).toSet
+
+    updatedState.statusOfAttackRune match {
+      case "verifying" =>
+        // Verify all containers in the suppliesContainerMap
+        updatedState.suppliesContainerMap.foreach { case (_, containerName) =>
+          logs = logs :+ Log(s"Checking if container $containerName has runes and enough free space...")
+          val containsRunes = checkForRunesInContainer(containerName, json, runeIds)
+          val freeSpace = (json \ "containersInfo" \ containerName \ "freeSpace").asOpt[Int].getOrElse(0)
+
+          if (containsRunes || freeSpace < 20) {
+            // Set the container that needs attention in suppliesContainerToHandle
+            logs = logs :+ Log(s"Container $containerName handled succefully.")
+            updatedState = updatedState.copy(
+              statusOfAttackRune = "ready",
+            )
+            return ((actions, logs), updatedState)  // Break out of the loop to handle only one container at a time
+          }
+        }
+
+        // If no containers need attention, set status to "ready"
+        logs = logs :+ Log("All containers verified, ready for the next action.")
+        updatedState = updatedState.copy(statusOfAttackRune = "ready")
+        ((actions, logs), updatedState)
+
+      case "open_new_backpack" =>
+        // Handle the opening of a new backpack for the container that needs attention
+        if (updatedState.suppliesContainerToHandle.nonEmpty) {
+          val containerName = updatedState.suppliesContainerToHandle
+          logs = logs :+ Log(s"Opening new backpack for container $containerName...")
+          val result = handleOpenBackpack(containerName, json, actions, logs, updatedState)
+          actions = result._1._1
+          logs = result._1._2
+          updatedState = result._2.copy(statusOfAttackRune = "verifying")
+          ((actions, logs), updatedState)
+
+        } else {
+          logs = logs :+ Log("No container set to handle, returning to verifying state.")
+          updatedState = updatedState.copy(statusOfAttackRune = "verifying")
+          ((actions, logs), updatedState)
+        }
+
+      case "remove_backpack" =>
+        // Remove the current backpack and prepare to open a new one if needed
+        if (updatedState.suppliesContainerToHandle.nonEmpty) {
+          val containerName = updatedState.suppliesContainerToHandle
+          logs = logs :+ Log(s"Removing backpack for container $containerName...")
+          val result = handleRemoveBackpack(containerName, json, actions, logs, updatedState)
+          actions = result._1._1
+          logs = result._1._2
+          updatedState = result._2.copy(statusOfAttackRune = "open_new_backpack")
+          ((actions, logs), updatedState)
+
+        } else {
+          logs = logs :+ Log("No container set to handle, returning to verifying state.")
+          updatedState = updatedState.copy(statusOfAttackRune = "verifying")
+          ((actions, logs), updatedState)
+        }
+
+      case "not_set" =>
+        // Initialize suppliesContainerMap if it's not set
+        val suppliesContainerMap = getRuneContainerMapping(json, settings)
+        println(s"suppliesContainerMap: ${suppliesContainerMap}")
+        if (suppliesContainerMap.nonEmpty) {
+          logs = logs :+ Log("Found supplies containers with attack runes. Starting verification.")
+          updatedState = updatedState.copy(
+            suppliesContainerMap = suppliesContainerMap,
+            statusOfAttackRune = "verifying"
+          )
+        } else {
+          logs = logs :+ Log("No attack rune containers found.")
+        }
+        ((actions, logs), updatedState)
+
+
+      case "move_back_to_parent_container" =>
+      // Return to parent container
+        val resultNoRunesInBpGoUp = noRunesInBpGoUp(updatedState.suppliesContainerToHandle, json, actions, logs, updatedState)
+        actions = resultNoRunesInBpGoUp._1._1
+        logs = resultNoRunesInBpGoUp._1._2
+        updatedState = resultNoRunesInBpGoUp._2
+
+        updatedState = updatedState.copy(
+          statusOfAttackRune = "remove_backpack"
+        )
+        ((actions, logs), updatedState)
+
+      case "ready" =>
+        // Check each container for free space, and if any need attention, handle them
+        updatedState.suppliesContainerMap.foreach { case (_, containerName) =>
+          val freeSpace = (json \ "containersInfo" \ containerName \ "freeSpace").asOpt[Int].getOrElse(0)
+
+          if (freeSpace >= 20) {
+            // Assign the container that needs attention
+            logs = logs :+ Log(s"Container $containerName does not have enough space. Need to handle it.")
+            updatedState = updatedState.copy(
+              statusOfAttackRune = "move_back_to_parent_container",
+              suppliesContainerToHandle = containerName
+            )
+            return ((actions, logs), updatedState)  // Break out and handle only one container per loop
+          }
+        }
+
+        // If all containers have enough space, remain in the ready state
+        logs = logs :+ Log("All containers have enough space. Remaining in ready state.")
+        ((actions, logs), updatedState)
+    }
+  }
+
+
+  // Function to map each rune ID to its corresponding container name
+  def getRuneContainerMapping(json: JsObject, settings: UISettings): Map[Int, String] = {
+    // Extract rune IDs from the settings
+    val runeIds = settings.autoTargetSettings.creatureList.flatMap(extractRuneIdFromSetting).toSet
+
+    // Create an empty map to store rune ID and corresponding container name
+    var runeContainerMap = Map[Int, String]()
+
+    // Iterate over all containers
+    (json \ "containersInfo").asOpt[JsObject].foreach { containersInfo =>
+      containersInfo.fields.foreach { case (containerName, containerDetails) =>
+        val items = (containerDetails \ "items").asOpt[JsObject].getOrElse(Json.obj())
+
+        // Find the rune items in the container and map them to the container name
+        items.fields.foreach {
+          case (_, itemInfo) =>
+            val itemId = (itemInfo \ "itemId").asOpt[Int].getOrElse(-1)
+            val itemSubType = (itemInfo \ "itemSubType").asOpt[Int].getOrElse(-1)
+
+            // Check if the item is a rune (match with runeIds and itemSubType)
+            if (runeIds.contains(itemId) && itemSubType == 1) {
+              runeContainerMap += (itemId -> containerName)  // Map rune ID to container name
+            }
+        }
+      }
+    }
+
+    runeContainerMap
   }
 
 

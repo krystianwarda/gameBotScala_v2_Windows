@@ -21,6 +21,7 @@ object StaticGameInfo {
   object LevelMovementEnablers {
     val UpStairsIds: List[Int] = List(
       1947, // Stairs up
+      1977, // stairs up
       1952, // Stairs up
       1958  // Stairs up
     )
@@ -37,12 +38,13 @@ object StaticGameInfo {
       369, // ladder down
       385, // Hole down
       413, // Stairs down
-      414, // Ladder down
+      469, // stairs down
+      414, // Stairs down
       428, // Stairs down
       434, // Stairs down
       469, // Stairs down
       594, // opened shovel hole
-      413, //stairs
+      413, // stairs
       411, // ladder
       437, // stairs
       438, // stairs
