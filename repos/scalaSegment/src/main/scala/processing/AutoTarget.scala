@@ -41,17 +41,20 @@ object AutoTarget {
 
     if (settings.autoTargetSettings.enabled && updatedState.stateHunting == "free" && !updatedState.gmDetected) {
 
+      println(s"updatedState.isUsingAmmo: ${updatedState.isUsingAmmo}")
       // resuply ammo
       updatedState.isUsingAmmo match {
         case "not_set" =>
           val ammoIdsList = List(3446, 3447)
           val slot10Info = (json \ "EqInfo" \ "10").as[JsObject]
           val ammoIdOpt = (slot10Info \ "itemId").asOpt[Int]
-
+          println(s"ammoIdOpt: ${ammoIdOpt}")
           ammoIdOpt match {
             case Some(ammoId) if ammoIdsList.contains(ammoId) =>
+
               if (ammoIdsList.contains(ammoId)) {
                 val randomCountResuply = Random.nextInt(41) + 40 // Random number between 40 and 80
+                println(s"randomCountResuply: ${randomCountResuply}")
                 updatedState = updatedState.copy(
                   isUsingAmmo = "true",
                   ammoId = ammoId,
@@ -60,6 +63,7 @@ object AutoTarget {
               } else {
                 updatedState = updatedState.copy(isUsingAmmo = "false")
               }
+
             case _ =>
               println("Nothing in arrow slot...")
               updatedState = updatedState.copy(isUsingAmmo = "false")
@@ -145,17 +149,16 @@ object AutoTarget {
       // resuply ammo end
 
       // check supplies in containers
-      val resultProcessSuppliesState = processSuppliesState(json, settings, actions, logs, currentState)
-      actions ++= resultProcessSuppliesState._1._1
-      logs ++= resultProcessSuppliesState._1._2
+      val resultProcessSuppliesState = processSuppliesState(json, settings, actions, logs, updatedState)
+      actions = resultProcessSuppliesState._1._1
+      logs = resultProcessSuppliesState._1._2
       updatedState = resultProcessSuppliesState._2
       // end check supplies in containers
 
 
       val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
 
-      // new logic
-
+      // new logi1
       // Start autotarget
 
       // extract monsters list from battle - sort by danger, hp
@@ -202,7 +205,7 @@ object AutoTarget {
             settings.teamHuntSettings.followBlocker &&
             updatedState.lastBlockerPosZ == presentCharLocationZ)
       ) {
-        println("Start autotarget")
+//        println("Start autotarget")
 
         val sortedMonstersInfo = extractInfoAndSortMonstersFromBattle(json, settings)
         println(s"chosenTargetId: ${updatedState.chosenTargetId}")
@@ -231,12 +234,12 @@ object AutoTarget {
 
         // Reset chosenTargetId if last attacked creature is dead or the current target is not in the sorted list
         if ((isLastAttackedCreatureDead && lastAttackedId == updatedState.chosenTargetId) || !isTargetInSortedMonsters) {
-          println(s"Either the last attacked creature is dead or the current target is not in sortedMonstersInfo. Resetting chosenTargetId to 0.")
+//          println(s"Either the last attacked creature is dead or the current target is not in sortedMonstersInfo. Resetting chosenTargetId to 0.")
           updatedState = updatedState.copy(chosenTargetId = 0, chosenTargetName = "")
         }
 
         if (sortedMonstersInfo.isEmpty) {
-          println(s"No Monsters on battle, ${updatedState.chosenTargetId}")
+//          println(s"No Monsters on battle, ${updatedState.chosenTargetId}")
         } else {
           println(s"Monsters detected, chosenTargetId: ${updatedState.chosenTargetId}")
           if (updatedState.chosenTargetId == 0) {
@@ -1009,7 +1012,7 @@ object AutoTarget {
 
   // Function to extract battleInfo and sort by danger, healthPercent, and keepDistance
   def extractInfoAndSortMonstersFromBattle(json: JsValue, settings: UISettings): List[CreatureInfo] = {
-    println(s"extractInfoAndSortMonstersFromBattle start")
+//    println(s"extractInfoAndSortMonstersFromBattle start")
 
     // Extract battleInfo from JSON
     val battleInfo = (json \ "battleInfo").as[Map[String, JsValue]]
@@ -1668,8 +1671,8 @@ object AutoTarget {
         case Some(targetSettings) =>
           extractRuneID(targetSettings) match {
             case Some(runeID) =>
-              println(s"Extracted Rune ID: $runeID")
-              println(s"suppliesContainerMap: ${updatedState.suppliesContainerMap}")
+//              println(s"Extracted Rune ID: $runeID")
+//              println(s"suppliesContainerMap: ${updatedState.suppliesContainerMap}")
               val currentTime = System.currentTimeMillis()
               if (currentTime - updatedState.lastRuneUseTime > (updatedState.runeUseCooldown + updatedState.runeUseRandomness.toLong)) {
 
