@@ -109,7 +109,7 @@ case class ProcessorState(
                            lowHealDelayTime: Long = 0,
 
                            runeUseRandomness: Long = 0,
-                           runeUseTimeRange:  (Int, Int) = (500,1500),
+                           runeUseTimeRange:  (Int, Int) = (500,1000),
                            lastMoveTime: Long = 0,
                            lastTrainingCommandSend: Long = 0,
                            lastProtectionZoneCommandSend: Long = 0,
@@ -174,7 +174,7 @@ case class ProcessorState(
                            retryAttempts: Int = 4,
                            retryAttemptsShort: Int = 15,
                            retryAttemptsMid: Int = 23,
-                           retryMidDelay: Long = 3000,
+                           retryMidDelay: Long = 2000,
                            retryAttemptsLong: Int = 30,
                            retryAttemptsVerLong: Int = 60,
                            targetFreezeStatus: Int = 0,
