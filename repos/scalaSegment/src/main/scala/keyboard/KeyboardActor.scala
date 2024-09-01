@@ -64,7 +64,8 @@ class KeyboardActor extends Actor {
       }
       println(s"[DEBUG] Preparing to press key: $keyCode for direction: $direction with immediate release: $immediateRelease")
 
-      if (keyCode != -1) {
+
+      if (isValidKeyCode(keyCode)) {
         if (direction.startsWith("Move") && !numLockOn) {
           pressKeyUsingJNA(keyCode)
         } else {
@@ -75,9 +76,25 @@ class KeyboardActor extends Actor {
         }
         println(s"Key pressed and processed for $direction")
       } else {
-        println(s"Failed to find key mapping for $direction")
+        println(s"[ERROR] Invalid key code: $keyCode for direction: $direction")
       }
+
       sender() ! KeyboardActionCompleted(KeyboardActionTypes.PressKey)
+
+//      if (keyCode != -1) {
+//        if (direction.startsWith("Move") && !numLockOn) {
+//          pressKeyUsingJNA(keyCode)
+//        } else {
+//          pressKeyUsingRobot(keyCode, immediateRelease)
+//        }
+//        if (!immediateRelease) {
+//          scheduleKeyRelease(keyCode)
+//        }
+//        println(s"Key pressed and processed for $direction")
+//      } else {
+//        println(s"Failed to find key mapping for $direction")
+//      }
+//      sender() ! KeyboardActionCompleted(KeyboardActionTypes.PressKey)
   }
 
 
@@ -110,8 +127,15 @@ class KeyboardActor extends Actor {
     println("KeyboardActor: Pressed Enter after typing") // Debug print
   }
 
+  private def isValidKeyCode(keyCode: Int): Boolean = {
+    keyCode >= KeyEvent.VK_0 && keyCode <= KeyEvent.VK_Z || // For alphanumeric keys
+      keyCode >= KeyEvent.VK_NUMPAD0 && keyCode <= KeyEvent.VK_NUMPAD9 || // For numpad keys
+      keyCode >= KeyEvent.VK_F1 && keyCode <= KeyEvent.VK_F12 || // For function keys
+      keyCode >= KeyEvent.VK_LEFT && keyCode <= KeyEvent.VK_DOWN || // For arrow keys
+      keyCode == KeyEvent.VK_CONTROL || keyCode == KeyEvent.VK_ALT || keyCode == KeyEvent.VK_SHIFT // Modifier keys
+  }
 
-  private def scheduleKeyRelease(keyCode: Int, delay: FiniteDuration = 500.milliseconds): Unit = {
+  private def scheduleKeyRelease(keyCode: Int, delay: FiniteDuration = 400.milliseconds): Unit = {
     keyReleaseTasks.get(keyCode).foreach(task => {
       task.cancel()
       println(s"[DEBUG] Previously scheduled key release for $keyCode cancelled.")
@@ -202,6 +226,8 @@ class KeyboardActor extends Actor {
       case "F10" => KeyEvent.VK_F10
       case "F11" => KeyEvent.VK_F11
       case "F12" => KeyEvent.VK_F12
+      case "Ctrl" => KeyEvent.VK_CONTROL
+      case "L" => KeyEvent.VK_L
       case _ => -1
     }
   }

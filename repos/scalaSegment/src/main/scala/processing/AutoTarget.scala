@@ -6,7 +6,7 @@ import play.api.libs.json.OFormat.oFormatFromReadsAndOWrites
 import play.api.libs.json._
 import processing.AutoHeal.{noRunesInBpGoUp, openNewBackpack, removeEmptyBackpack}
 import processing.CaveBot.{Vec, aStarSearch, calculateDirection, createBooleanGrid, executeWhenNoMonstersOnScreen, printGrid}
-import processing.Process.{generateRandomDelay, performMouseActionSequance, timeToRetry}
+import processing.Process.{extractOkButtonPosition, generateRandomDelay, performMouseActionSequance, timeToRetry}
 import processing.TeamHunt.followTeamMember
 import userUI.SettingsUtils.UISettings
 import utils.consoleColorPrint.{ANSI_GREEN, ANSI_RED, printInColor}
@@ -26,6 +26,7 @@ case class CreatureInfo(id: Int, name: String, healthPercent: Int, isShootable: 
 // roh 3098
 
 object AutoTarget {
+
   def computeAutoTargetActions(json: JsValue, settings: UISettings, currentState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
 //    println("Performing computeAutoTargetActions action.")
 
@@ -37,12 +38,39 @@ object AutoTarget {
     val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
     val currentTime = System.currentTimeMillis()
     printInColor(ANSI_RED, f"[DEBUG] computeAutoTargetActions process started with status:${updatedState.stateHunting}")
-
+    println(s"Begin suppliesLeftMap: ${updatedState.suppliesLeftMap}")
 
     if (settings.autoTargetSettings.enabled && updatedState.stateHunting == "free" && !updatedState.gmDetected) {
 
+
+      // Assuming the JSON is already parsed and you have the structure similar to:
+
+
+      // Extracting and using the position of the "Ok" button
+      extractOkButtonPosition(json) match {
+        case Some((posX, posY)) =>
+          // Now use this stored current time for all time checks
+          val timeExtraWindowLoot = updatedState.currentTime - updatedState.lastExtraWindowLoot
+          if (timeExtraWindowLoot >= updatedState.longTimeLimit) {
+            val actionsSeq = Seq(
+              MouseAction(posX, posY, "move"),
+              MouseAction(posX, posY, "pressLeft"),
+              MouseAction(posX, posY, "releaseLeft")
+            )
+            printInColor(ANSI_RED, "[DEBUG] Clicking OK button to close the window.")
+            actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+
+            // Update the extraWindowLootStatus with the current time to mark this execution
+            updatedState = updatedState.copy(lastExtraWindowLoot = updatedState.currentTime)
+          } else {
+            printInColor(ANSI_RED, f"[DEBUG] Not enough time has passed since the last execution: ${updatedState.lastExtraWindowLoot}ms ago.")
+          }
+
+        case None => // Do nothing if the "Ok" button is not found
+      }
+
       println(s"updatedState.isUsingAmmo: ${updatedState.isUsingAmmo}")
-      // resuply ammo
+      // resupply ammo
       updatedState.isUsingAmmo match {
         case "not_set" =>
           val ammoIdsList = List(3446, 3447)
@@ -51,102 +79,72 @@ object AutoTarget {
           println(s"ammoIdOpt: ${ammoIdOpt}")
           ammoIdOpt match {
             case Some(ammoId) if ammoIdsList.contains(ammoId) =>
-
-              if (ammoIdsList.contains(ammoId)) {
-                val randomCountResuply = Random.nextInt(41) + 40 // Random number between 40 and 80
-                println(s"randomCountResuply: ${randomCountResuply}")
-                updatedState = updatedState.copy(
-                  isUsingAmmo = "true",
-                  ammoId = ammoId,
-                  ammoCountForNextResupply = randomCountResuply
-                )
-              } else {
-                updatedState = updatedState.copy(isUsingAmmo = "false")
-              }
-
+              val randomCountResuply = Random.nextInt(41) + 40 // Random number between 40 and 80
+              println(s"randomCountResuply: ${randomCountResuply}")
+              updatedState = updatedState.copy(
+                isUsingAmmo = "true",
+                ammoId = ammoId,
+                ammoCountForNextResupply = randomCountResuply
+              )
             case _ =>
               println("Nothing in arrow slot...")
               updatedState = updatedState.copy(isUsingAmmo = "false")
           }
 
-
         case "false" =>
         // Do nothing and execute further code
 
         case "true" =>
-          val slot10Info = (json \ "EqInfo" \ "10").as[JsObject]
-          val ammoCount = (slot10Info \ "itemCount").as[Int]
-          println(s"ammoCountForNextResupply: ${updatedState.ammoCountForNextResupply}")
-          if (ammoCount < updatedState.ammoCountForNextResupply) {
-            // Finding ammoId in bps slots
-            val containerInfo = (json \ "containersInfo").as[JsObject]
+          // Finding ammoId in bps slots
+          val containerInfo = (json \ "containersInfo").as[JsObject]
 
-            val foundSlot = containerInfo.fields.view.flatMap {
-              case (containerName, containerData) =>
-                val items = (containerData \ "items").as[JsObject]
-                // Sorting keys to ensure we start checking from slot1 onwards
-                val sortedSlots = items.fields.sortBy(_._1.stripPrefix("slot").toInt)
-                sortedSlots.collectFirst {
-                  case (slotId, slotData) if (slotData \ "itemId").as[Int] == updatedState.ammoId =>
-                    // Mapping slotId to match itemN format in screenInfo
-                    val screenSlotId = "item" + slotId.drop(4) // Assuming slotId format is "slotN"
-                    (containerName, screenSlotId)
-                }
-            }.headOption
+          // Count total stacks of the current ammoId in the containers, with added checks
+          val stacksCount = containerInfo.fields.view.flatMap {
+            case (_, containerData) =>
+              (containerData \ "items").asOpt[JsObject] match {
+                case Some(items) =>
+                  items.fields.collect {
+                    case (_, slotData) if (slotData \ "itemId").asOpt[Int].contains(updatedState.ammoId) => 1
+                  }
+                case None => Seq.empty
+              }
+          }.sum
 
-            foundSlot match {
-              case Some((containerName, screenSlotId)) =>
-                println(s"Found ammoId in $containerName at $screenSlotId")
-                // Extracting screen x and y position based on container name and slot id from inventoryPanelLoc
-                val screenInfo = (json \ "screenInfo" \ "inventoryPanelLoc").as[JsObject]
-                screenInfo.fields.collectFirst {
-                  case (key, value) if key.contains(containerName) =>
-                    val (ammoX, ammoY) = ((value \ "contentsPanel" \ screenSlotId \ "x").as[Int], (value \ "contentsPanel" \ screenSlotId \ "y").as[Int])
-                    println(s"Screen position of $screenSlotId in $key: x = $ammoX, y = $ammoY")
+          println(s"Total stacks found for ammoId ${updatedState.ammoId}: $stacksCount")
+          updatedState = updatedState.copy(
+            suppliesLeftMap = updatedState.suppliesLeftMap.updated(updatedState.ammoId, stacksCount)
+          )
 
+          // Handle the case where no ammo is found
+          if (stacksCount == 0) {
+            println("No ammo available in containers or slot10. Cannot proceed with resupply.")
+//            updatedState = updatedState.copy(isUsingAmmo = "false")
+            // Optionally, you could add logic here to handle the system state when no ammo is available.
+          } else {
+            // Now handle the slot10Info logic
+            val slot10Info = (json \ "EqInfo" \ "10").as[JsObject]
+            val ammoCountOpt = (slot10Info \ "itemCount").asOpt[Int]
 
-                    // Retrieve position of slot10 from a different location in screenInfo
-                    val slot10ScreenInfo = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "slot10").as[JsObject]
-                    val (slot10X, slot10Y) = ((slot10ScreenInfo \ "x").as[Int], (slot10ScreenInfo \ "y").as[Int])
-                    println(s"Screen position of slot 10: x = $slot10X, y = $slot10Y")
+            // Determine the ammo count, treating it as 0 if missing and ammo is available in containers
+            val ammoCount = ammoCountOpt.getOrElse(0)
 
-                    val actionsSeq = Seq(
-                      MouseAction(ammoX, ammoY, "move"),
-                      MouseAction(ammoX, ammoY, "pressCtrl"),
-                      MouseAction(ammoX, ammoY, "pressLeft"),
-                      MouseAction(slot10X, slot10Y, "move"),
-                      MouseAction(slot10X, slot10Y, "releaseLeft"),
-                      MouseAction(slot10X, slot10Y, "releaseCtrl")
-                    )
+            println(s"ammoCountForNextResupply: ${updatedState.ammoCountForNextResupply}")
 
-                    // Check and update retry status based on time elapsed
-                    if (updatedState.ammoResuplyDelay == 0 || timeToRetry(updatedState.ammoResuplyDelay, updatedState.retryMidDelay)) {
-                      actions = actions ++ performMouseActionSequance(actionsSeq)
-                      logs = logs :+ Log("Resuppling ammo")
-                      updatedState = updatedState.copy(ammoResuplyDelay = currentTime) // Set to current time after action
-                    } else {
-                      println(s"Waiting to retry resupling ammo. Time left: ${(updatedState.retryMidDelay - (currentTime - updatedState.ammoResuplyDelay)) / 1000} seconds")
-                    }
+            if (ammoCount < updatedState.ammoCountForNextResupply) {
+              val resultResupplyAmmo = resupplyAmmo(json, updatedState, containerInfo, actions, logs)
 
-
-                    // Updating state with new ammo count
-                    updatedState = updatedState.copy(
-                      ammoCountForNextResupply = scala.util.Random.nextInt(41) + 40 // Recalculate after ammoCount falls below randomCountResupply
-                    )
-                }
-
-
-              case None =>
-                println("No slot with specified ammoId found.")
+              actions = resultResupplyAmmo._1._1
+              logs = resultResupplyAmmo._1._2
+              updatedState = resultResupplyAmmo._2
             }
-
-
           }
-
 
         case _ => // handle unexpected cases or errors
       }
-      // resuply ammo end
+      // resupply ammo end
+
+
+
 
       // check supplies in containers
       val resultProcessSuppliesState = processSuppliesState(json, settings, actions, logs, updatedState)
@@ -1909,13 +1907,14 @@ object AutoTarget {
     var logs: Seq[Log] = initialLogs
     var updatedState = currentState
     val json = jsonValue.as[JsObject]
+    val currentTime = System.currentTimeMillis()
     // Extract rune IDs from the creature list in settings
     val runeIds = settings.autoTargetSettings.creatureList.flatMap(extractRuneIdFromSetting).toSet
 
     updatedState.statusOfAttackRune match {
       case "verifying" =>
-        // Verify all containers in the suppliesContainerMap
-        updatedState.suppliesContainerMap.foreach { case (_, containerName) =>
+        if (currentTime - updatedState.lastChangeOfstatusOfAttackRune >= updatedState.retryShortDelay) {
+          val containerName = updatedState.suppliesContainerToHandle
           logs = logs :+ Log(s"Checking if container $containerName has runes and enough free space...")
           val containsRunes = checkForRunesInContainer(containerName, json, runeIds)
           val freeSpace = (json \ "containersInfo" \ containerName \ "freeSpace").asOpt[Int].getOrElse(0)
@@ -1925,49 +1924,76 @@ object AutoTarget {
             logs = logs :+ Log(s"Container $containerName handled succefully.")
             updatedState = updatedState.copy(
               statusOfAttackRune = "ready",
+              lastChangeOfstatusOfAttackRune = currentTime,
+              suppliesContainerToHandle = "",
             )
-            return ((actions, logs), updatedState)  // Break out of the loop to handle only one container at a time
           }
         }
-
-        // If no containers need attention, set status to "ready"
-        logs = logs :+ Log("All containers verified, ready for the next action.")
-        updatedState = updatedState.copy(statusOfAttackRune = "ready")
         ((actions, logs), updatedState)
 
       case "open_new_backpack" =>
         // Handle the opening of a new backpack for the container that needs attention
-        if (updatedState.suppliesContainerToHandle.nonEmpty) {
-          val containerName = updatedState.suppliesContainerToHandle
-          logs = logs :+ Log(s"Opening new backpack for container $containerName...")
-          val result = handleOpenBackpack(containerName, json, actions, logs, updatedState)
-          actions = result._1._1
-          logs = result._1._2
-          updatedState = result._2.copy(statusOfAttackRune = "verifying")
-          ((actions, logs), updatedState)
 
-        } else {
-          logs = logs :+ Log("No container set to handle, returning to verifying state.")
-          updatedState = updatedState.copy(statusOfAttackRune = "verifying")
-          ((actions, logs), updatedState)
+        if (currentTime - updatedState.lastChangeOfstatusOfAttackRune >= updatedState.retryShortDelay) {
+
+          val containerName = updatedState.suppliesContainerToHandle
+          val containsRunes = checkForRunesInContainer(containerName, json, runeIds)
+          val freeSpace = (json \ "containersInfo" \ containerName \ "freeSpace").asOpt[Int].getOrElse(0)
+          val capacity = (json \ "containersInfo" \ containerName \ "capacity").asOpt[Int].getOrElse(0)
+          if (freeSpace == capacity) {
+            logs = logs :+ Log(s"Runes have finished.")
+            val runeId = updatedState.suppliesContainerMap.find {
+              case (id, name) => name == containerName
+            }.map(_._1) // Get the runeId directly
+
+            updatedState = updatedState.copy(
+              suppliesLeftMap = updatedState.suppliesLeftMap.updated(runeId.get, 0),
+              statusOfAttackRune = "ready",
+            )
+
+          } else {
+            // Directly use suppliesContainerToHandle to locate the runeId
+            val runeId = updatedState.suppliesContainerMap.find {
+              case (id, name) => name == containerName
+            }.map(_._1) // Get the runeId directly
+
+            // Calculate how many BPs are left
+            val bpsLeft = capacity - freeSpace
+
+            // Update the suppliesLeftMap with the runeId and the calculated BPs left
+            updatedState = updatedState.copy(
+              suppliesLeftMap = updatedState.suppliesLeftMap.updated(runeId.get, bpsLeft)
+            )
+
+            println(s"suppliesLeftMap: ${updatedState.suppliesLeftMap}")
+
+            logs = logs :+ Log(s"Opening new backpack for container $containerName...")
+            val result = handleOpenBackpack(containerName, json, actions, logs, updatedState)
+            actions = result._1._1
+            logs = result._1._2
+            updatedState = result._2.copy(
+              statusOfAttackRune = "verifying",
+              lastChangeOfstatusOfAttackRune = currentTime,
+            )
+          }
         }
+        ((actions, logs), updatedState)
 
       case "remove_backpack" =>
         // Remove the current backpack and prepare to open a new one if needed
-        if (updatedState.suppliesContainerToHandle.nonEmpty) {
+        if (currentTime - updatedState.lastChangeOfstatusOfAttackRune >= updatedState.retryShortDelay) {
           val containerName = updatedState.suppliesContainerToHandle
           logs = logs :+ Log(s"Removing backpack for container $containerName...")
           val result = handleRemoveBackpack(containerName, json, actions, logs, updatedState)
           actions = result._1._1
           logs = result._1._2
-          updatedState = result._2.copy(statusOfAttackRune = "open_new_backpack")
-          ((actions, logs), updatedState)
-
-        } else {
-          logs = logs :+ Log("No container set to handle, returning to verifying state.")
-          updatedState = updatedState.copy(statusOfAttackRune = "verifying")
-          ((actions, logs), updatedState)
+          updatedState = result._2.copy(
+            statusOfAttackRune = "open_new_backpack",
+            lastChangeOfstatusOfAttackRune = currentTime,
+          )
         }
+        ((actions, logs), updatedState)
+
 
       case "not_set" =>
         // Initialize suppliesContainerMap if it's not set
@@ -1986,30 +2012,56 @@ object AutoTarget {
 
 
       case "move_back_to_parent_container" =>
-      // Return to parent container
-        val resultNoRunesInBpGoUp = noRunesInBpGoUp(updatedState.suppliesContainerToHandle, json, actions, logs, updatedState)
-        actions = resultNoRunesInBpGoUp._1._1
-        logs = resultNoRunesInBpGoUp._1._2
-        updatedState = resultNoRunesInBpGoUp._2
+        if (currentTime - updatedState.lastChangeOfstatusOfAttackRune >= updatedState.retryShortDelay) {
+          val resultNoRunesInBpGoUp = noRunesInBpGoUp(updatedState.suppliesContainerToHandle, json, actions, logs, updatedState)
+          actions = resultNoRunesInBpGoUp._1._1
+          logs = resultNoRunesInBpGoUp._1._2
+          updatedState = resultNoRunesInBpGoUp._2
 
-        updatedState = updatedState.copy(
-          statusOfAttackRune = "remove_backpack"
-        )
+          updatedState = updatedState.copy(
+            statusOfAttackRune = "remove_backpack",
+            lastChangeOfstatusOfAttackRune = currentTime,
+          )
+        }
         ((actions, logs), updatedState)
+
+
 
       case "ready" =>
         // Check each container for free space, and if any need attention, handle them
-        updatedState.suppliesContainerMap.foreach { case (_, containerName) =>
-          val freeSpace = (json \ "containersInfo" \ containerName \ "freeSpace").asOpt[Int].getOrElse(0)
+        updatedState.suppliesContainerMap.foreach { case (runeId, containerName) =>
 
-          if (freeSpace >= 20) {
-            // Assign the container that needs attention
-            logs = logs :+ Log(s"Container $containerName does not have enough space. Need to handle it.")
+          val freeSpace = (json \ "containersInfo" \ containerName \ "freeSpace").asOpt[Int].getOrElse(0)
+          val capacity = (json \ "containersInfo" \ containerName \ "capacity").asOpt[Int].getOrElse(0)
+          println(s"(ready) suppliesLeftMap: ${updatedState.suppliesLeftMap}")
+
+          // Check if runeId has an entry in suppliesLeftMap
+          if (!updatedState.suppliesLeftMap.contains(runeId)) {
+            // If not, create a position in suppliesLeftMap for this rune with the number 999
             updatedState = updatedState.copy(
-              statusOfAttackRune = "move_back_to_parent_container",
-              suppliesContainerToHandle = containerName
+              suppliesLeftMap = updatedState.suppliesLeftMap.updated(runeId, 999)
             )
-            return ((actions, logs), updatedState)  // Break out and handle only one container per loop
+          }
+
+          // Now proceed with checking the free space
+          if (freeSpace >= capacity) {
+            logs = logs :+ Log(s"Container $containerName does not have enough space.")
+
+            // Check if suppliesLeftMap for this runeId has 0 value
+            val bpsLeft = updatedState.suppliesLeftMap(runeId)
+            println(s"BpLeft: ${bpsLeft}")
+            println(s"state: ${updatedState.statusOfAttackRune}")
+            if (bpsLeft == 0) {
+              println(s"No runes left for runeId: $runeId")
+            } else {
+              // If suppliesLeftMap has a value > 0, proceed with handling
+              println(s"No runes left for runeId, but there is bp available: $runeId")
+              updatedState = updatedState.copy(
+                statusOfAttackRune = "move_back_to_parent_container",
+                suppliesContainerToHandle = containerName
+              )
+              return ((actions, logs), updatedState) // Break out and handle only one container per loop
+            }
           }
         }
 
@@ -2048,6 +2100,68 @@ object AutoTarget {
     }
 
     runeContainerMap
+  }
+
+  def resupplyAmmo(
+                    json: JsValue,
+                    updatedState: ProcessorState,
+                    containerInfo: JsObject,
+                    initialActions: Seq[FakeAction],
+                    initialLogs: Seq[Log],
+                  ): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
+
+    var actions: Seq[FakeAction] = initialActions
+    var logs: Seq[Log] = initialLogs
+    val currentTime = System.currentTimeMillis()
+    val foundSlot = containerInfo.fields.view.flatMap {
+      case (containerName, containerData) =>
+        (containerData \ "items").asOpt[JsObject].flatMap { items =>
+          val sortedSlots = items.fields.sortBy(_._1.stripPrefix("slot").toInt)
+          sortedSlots.collectFirst {
+            case (slotId, slotData) if (slotData \ "itemId").as[Int] == updatedState.ammoId =>
+              val screenSlotId = "item" + slotId.drop(4) // Assuming slotId format is "slotN"
+              (containerName, screenSlotId)
+          }
+        }
+    }.headOption
+
+    foundSlot match {
+      case Some((containerName, screenSlotId)) =>
+        println(s"Found ammoId in $containerName at $screenSlotId")
+        val screenInfo = (json \ "screenInfo" \ "inventoryPanelLoc").as[JsObject]
+        screenInfo.fields.collectFirst {
+          case (key, value) if key.contains(containerName) =>
+            val (ammoX, ammoY) = ((value \ "contentsPanel" \ screenSlotId \ "x").as[Int], (value \ "contentsPanel" \ screenSlotId \ "y").as[Int])
+            println(s"Screen position of $screenSlotId in $key: x = $ammoX, y = $ammoY")
+
+            val slot10ScreenInfo = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "slot10").as[JsObject]
+            val (slot10X, slot10Y) = ((slot10ScreenInfo \ "x").as[Int], (slot10ScreenInfo \ "y").as[Int])
+            println(s"Screen position of slot 10: x = $slot10X, y = $slot10Y")
+
+            val actionsSeq = Seq(
+              MouseAction(ammoX, ammoY, "move"),
+              MouseAction(ammoX, ammoY, "pressCtrl"),
+              MouseAction(ammoX, ammoY, "pressLeft"),
+              MouseAction(slot10X, slot10Y, "move"),
+              MouseAction(slot10X, slot10Y, "releaseLeft"),
+              MouseAction(slot10X, slot10Y, "releaseCtrl")
+            )
+
+            if (updatedState.ammoResuplyDelay == 0 || timeToRetry(updatedState.ammoResuplyDelay, updatedState.retryMidDelay)) {
+              actions = actions ++ performMouseActionSequance(actionsSeq)
+              logs = logs :+ Log("Resupplying ammo")
+              updatedState.copy(ammoResuplyDelay = currentTime, ammoCountForNextResupply = scala.util.Random.nextInt(41) + 40)
+            } else {
+              println(s"Waiting to retry resupplying ammo. Time left: ${(updatedState.retryMidDelay - (currentTime - updatedState.ammoResuplyDelay)) / 1000} seconds")
+              updatedState
+            }
+        }.getOrElse(updatedState)
+
+      case None =>
+        println("No slot with specified ammoId found.")
+
+    }
+    ((actions, logs), updatedState)
   }
 
 

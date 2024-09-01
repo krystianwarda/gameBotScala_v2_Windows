@@ -23,6 +23,8 @@ libraryDependencies ++= Seq(
   "com.softwaremill.sttp.client3" %% "async-http-client-backend-future" % "3.9.7",
   "org.asynchttpclient" % "async-http-client" % "2.12.3",
   "net.sf.sociaal" % "freetts" % "1.2.2",
+//  "de.dfki.mary" % "marytts" % "5.2",
+
 )
 
 

@@ -2,10 +2,11 @@ package utils
 
 import akka.actor.{Actor, ActorLogging, ActorSystem}
 import play.api.libs.json.JsValue
+import processing.Process.captureScreen
 
 import java.io.File
 
-case class SendDiscordAlert(message: String, screenshot: Option[File], jsonData: Option[JsValue])
+case class SendDiscordAlert(message: String, jsonData: Option[JsValue])
 
 // New case for Sound Alert
 case class SendSoundAlert(message: String)
@@ -16,9 +17,10 @@ class AlertSenderActor extends Actor with ActorLogging {
   def receive = {
 
 
-    case SendDiscordAlert(message, screenshot, jsonData) =>
+    case SendDiscordAlert(message, jsonData) =>
       log.info("Preparing to send alert to Discord...")
-      DiscordNotifier.sendAlert(message, screenshot, jsonData) // Assuming DiscordNotifier is accessible
+      val screenshot = captureScreen()
+      DiscordNotifier.sendAlert(message, Option(screenshot), jsonData) // Assuming DiscordNotifier is accessible
       log.info("Alert sent successfully to Discord.")
 
     // New sound alert case
@@ -77,9 +79,10 @@ object DiscordNotifier {
   }
 }
 
+
 object SoundNotifier {
   import com.sun.speech.freetts.{Voice, VoiceManager}
-
+  System.setProperty("freetts.voices", "com.sun.speech.freetts.en.us.cmu_us_kal.KevinVoiceDirectory")
   def generateNoise(message: String): Unit = {
     println("generateNoise activated.")
 
@@ -103,3 +106,34 @@ object SoundNotifier {
   }
 }
 
+//object SoundNotifier {
+//  import marytts.LocalMaryInterface
+//  import marytts.util.data.audio.AudioPlayer
+//
+//  def generateNoise(message: String): Unit = {
+//    println("generateNoise activated.")
+//
+//    // Create a MaryTTS instance
+//    val maryTTS = new LocalMaryInterface()
+//
+//    // Optionally, set the voice (you can list available voices and choose one)
+//    val voiceName = "cmu-slt-hsmm" // Example voice name, ensure this is valid
+//    maryTTS.setVoice(voiceName)
+//
+//    // Generate speech and play it
+//    try {
+//      val audio = maryTTS.generateAudio(message)
+//      val player = new AudioPlayer(audio)
+//      player.start()
+//      player.join() // Wait for the audio to finish playing
+//    } catch {
+//      case e: Exception =>
+//        println(s"Error generating or playing audio: ${e.getMessage}")
+//        e.printStackTrace()
+//    }
+//  }
+//
+//  def main(args: Array[String]): Unit = {
+//    generateNoise("Hello, this is a test message.")
+//  }
+//}
