@@ -20,6 +20,7 @@ import userUI.SettingsUtils.UISettings
 import processing.CaveBot.{Vec, computeCaveBotActions}
 import processing.AutoTarget.computeAutoTargetActions
 import processing.AutoLoot.computeAutoLootActions
+import processing.ChatReader.computeChatReaderActions
 import processing.GMDetector.computeGMDetectorActions
 import processing.TeamHunt.computeTeamHuntActions
 
@@ -75,6 +76,11 @@ case class ProcessorState(
 
                            //alerts
                            playerDetectedAlertTime: Long = 0,
+
+                           // chat reader
+                           chatReaderStatus: String = "not_ready",
+                           chatDesiredTab: String = "",
+                           chatAction: String = "",
 
                            lastEmailAlertTime: Long = 0,
                            stateHealingWithRune: String = "free",
@@ -350,8 +356,9 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     val afterAutoTargetState = performAutoTarget(json, afterAutoLootState)
     val afterCaveBotState = performCaveBot(json, afterAutoTargetState)
     val afterTeamHuntState = performTeamHunt(json, afterCaveBotState)
+    val afterChatReader = performChatReader(json, afterTeamHuntState)
     // The final state after all updates
-    afterTeamHuntState
+    afterChatReader
   }
 
 
@@ -452,6 +459,20 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     }.getOrElse(currentState) // If the settings flatMap results in None, return the original currentState
   }
 
+  def performChatReader(json: JsValue, currentState: ProcessorState): ProcessorState = {
+    val currentTime = System.currentTimeMillis()
+    currentState.settings.flatMap { settings =>
+      // Call computeCaveBotActions with currentState
+      val ((actions, logs), updatedState) = computeChatReaderActions(json, settings, currentState)
+
+      // Execute actions and logs if necessary
+      executeActionsAndLogsNew(actions, logs, Some(settings), Some("chatReader"))
+      // Return the updated state from computeCaveBotActions, wrapped in an Option
+      Some(updatedState)
+
+    }.getOrElse(currentState) // If the settings flatMap results in None, return the original currentState
+  }
+
   def performTeamHunt(json: JsValue, currentState: ProcessorState): ProcessorState = {
     val currentTime = System.currentTimeMillis()
     currentState.settings.flatMap { settings =>
@@ -529,6 +550,10 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
       actions.foreach {
         case FakeAction("pressKey", _, Some(actionDetail: PushTheButton)) =>
           println(s"Fake action - use keyboard - press and release key: ${actionDetail.key}")
+          actionKeyboardManager ! actionDetail
+
+        case FakeAction("pressKeys", _, Some(actionDetail: PushTheButtons)) =>
+          println(s"Fake action - use keyboard - press and release multiple keys: ${actionDetail.key}")
           actionKeyboardManager ! actionDetail
 
         case FakeAction("typeText", _, Some(actionDetail: KeyboardText)) =>

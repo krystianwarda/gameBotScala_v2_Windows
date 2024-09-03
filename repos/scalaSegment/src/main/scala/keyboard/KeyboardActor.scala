@@ -24,6 +24,7 @@ class KeyboardActor extends Actor {
 
   override def receive: Receive = {
 
+
     case PressControlAndArrows(ctrlKey, arrowKeys) =>
       println("[DEBUG] Initiating CTRL and arrow keys press.")
       try {
@@ -46,6 +47,24 @@ class KeyboardActor extends Actor {
 
     case TypeText(text) =>
       typeText(text)
+
+    case PressButtons(key) =>
+      println(s"[DEBUG] Initiating key press for: $key")
+      val keyCode = getKeyCodeForKey(key)
+      try {
+        val immediateRelease = true // For simplicity, we'll always immediately release the key
+        if (isValidKeyCode(keyCode)) {
+          pressKey(keyCode)
+          println(s"[DEBUG] Key $key pressed.")
+        } else {
+          println(s"[ERROR] Invalid key code: $key for key: $key")
+        }
+      } catch {
+        case e: Exception =>
+          println(s"[ERROR] Exception occurred while pressing key $key: ${e.getMessage}")
+          throw e
+      }
+      sender() ! KeyboardActionCompleted(KeyboardActionTypes.PressKey)
 
 
     case PressArrowKey(direction) =>
@@ -81,20 +100,7 @@ class KeyboardActor extends Actor {
 
       sender() ! KeyboardActionCompleted(KeyboardActionTypes.PressKey)
 
-//      if (keyCode != -1) {
-//        if (direction.startsWith("Move") && !numLockOn) {
-//          pressKeyUsingJNA(keyCode)
-//        } else {
-//          pressKeyUsingRobot(keyCode, immediateRelease)
-//        }
-//        if (!immediateRelease) {
-//          scheduleKeyRelease(keyCode)
-//        }
-//        println(s"Key pressed and processed for $direction")
-//      } else {
-//        println(s"Failed to find key mapping for $direction")
-//      }
-//      sender() ! KeyboardActionCompleted(KeyboardActionTypes.PressKey)
+
   }
 
 
@@ -132,8 +138,10 @@ class KeyboardActor extends Actor {
       keyCode >= KeyEvent.VK_NUMPAD0 && keyCode <= KeyEvent.VK_NUMPAD9 || // For numpad keys
       keyCode >= KeyEvent.VK_F1 && keyCode <= KeyEvent.VK_F12 || // For function keys
       keyCode >= KeyEvent.VK_LEFT && keyCode <= KeyEvent.VK_DOWN || // For arrow keys
-      keyCode == KeyEvent.VK_CONTROL || keyCode == KeyEvent.VK_ALT || keyCode == KeyEvent.VK_SHIFT // Modifier keys
+      keyCode == KeyEvent.VK_CONTROL || keyCode == KeyEvent.VK_ALT || keyCode == KeyEvent.VK_SHIFT || // Modifier keys
+      keyCode == KeyEvent.VK_TAB || keyCode == KeyEvent.VK_ENTER || keyCode == KeyEvent.VK_SPACE || keyCode == KeyEvent.VK_ESCAPE // Other special keys
   }
+
 
   private def scheduleKeyRelease(keyCode: Int, delay: FiniteDuration = 400.milliseconds): Unit = {
     keyReleaseTasks.get(keyCode).foreach(task => {
@@ -232,6 +240,16 @@ class KeyboardActor extends Actor {
     }
   }
 
+
+  private def getKeyCodeForKey(key: String): Int = {
+    key.toUpperCase match {
+      case "TAB" => KeyEvent.VK_TAB
+
+      // Add more key mappings as necessary
+      case _ => KeyEvent.VK_UNDEFINED
+    }
+  }
+
   def immediateReleaseFromDirection(direction: String): Boolean = {
     // Determine if key should be immediately released based on direction
     direction.contains("Single")
@@ -241,6 +259,9 @@ class KeyboardActor extends Actor {
 object KeyboardActor {
   def props: Props = Props[KeyboardActor]
   case class PressArrowKey(direction: String)
+
+  case class PressButtons(key: String)
+
   case object KeyboardActionCompleted
   object KeyboardActionTypes {
     val PressKey = "PressKey"

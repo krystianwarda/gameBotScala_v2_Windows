@@ -1,7 +1,7 @@
 package keyboard
 import akka.actor.{Actor, ActorRef, Props}
 import play.api.libs.json.{Json, Writes}
-import processing.{ActionDetail, PushTheButton}
+import processing.{ActionDetail, PushTheButton, PushTheButtons}
 
 import javax.swing.Action
 import scala.collection.mutable
@@ -27,6 +27,7 @@ object KeyboardSequence {
 case class KeyboardActionCompleted(actionType: KeyboardActionTypes.Value)
 
 // Definition for PressArrowKey (if not already defined)
+case class PressButtons(key: String)
 case class PressArrowKey(key: String)
 
 case class ComboKeyAction(controlKey: String, arrowKeys: Seq[String])
@@ -49,6 +50,11 @@ class ActionKeyboardManager(keyboardActorRef: ActorRef) extends Actor {
       // Assuming PushTheButton implies a PressKey action
       processKeyAction(KeyboardActionTypes.PressKey, key)
 
+    case PushTheButtons(key) =>
+      println("PushTheButtons activated")
+      // Assuming PushTheButton implies a PressKey action
+      processButtonAction(KeyboardActionTypes.PressKey, key)
+
     case TypeText(text) =>
       if (keyboardActorRef != null) {
         println("Processing TypeText command")
@@ -70,6 +76,19 @@ class ActionKeyboardManager(keyboardActorRef: ActorRef) extends Actor {
 
     case _ => println("ActionKeyboardManager: Unhandled keyboard action")
   }
+
+
+  def processButtonAction(actionType: KeyboardActionTypes.Value, key: String): Unit = {
+    // Always treat PressKey actions as "free"
+    if (actionType == KeyboardActionTypes.PressKey || (actionStates(actionType)._1 == "free" && isPriorityMet(actionType))) {
+      println(s"ActionKeyboardManager: Processing button action for $key, treating as always free.")
+      keyboardActorRef ! PressButtons(key)
+      // Note: We do not update the state to "in progress" for PressKey actions to keep them always ready
+    } else {
+      println("Skipping non-PressKey action due to state or priority")
+    }
+  }
+
 
   def processKeyAction(actionType: KeyboardActionTypes.Value, key: String): Unit = {
     // Always treat PressKey actions as "free"
