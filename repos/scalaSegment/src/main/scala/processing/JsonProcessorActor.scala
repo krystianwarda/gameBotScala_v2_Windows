@@ -553,7 +553,7 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
           actionKeyboardManager ! actionDetail
 
         case FakeAction("pressKeys", _, Some(actionDetail: PushTheButtons)) =>
-          println(s"Fake action - use keyboard - press and release multiple keys: ${actionDetail.key}")
+//          println(s"Fake action - use keyboard - press and release multiple keys: ${actionDetail.key}")
           actionKeyboardManager ! actionDetail
 
         case FakeAction("typeText", _, Some(actionDetail: KeyboardText)) =>

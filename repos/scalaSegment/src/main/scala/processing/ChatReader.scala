@@ -57,8 +57,8 @@ object ChatReader {
           if (missingTabs.nonEmpty) {
             // Focus on the first tab to open and set up to open it
             val tabToOpen = missingTabs.head
-            openTab() // Placeholder function to open the tab
-            updatedState = updatedState.copy(chatReaderStatus = "not_ready") // Stay in "not_ready" until all tabs are handled
+            actions = actions ++ openTab() // Placeholder function to open the tab
+            updatedState = updatedState.copy(chatReaderStatus = "open_window") // Stay in "not_ready" until all tabs are handled
             return ((actions, logs), updatedState)
           }
 
@@ -73,7 +73,10 @@ object ChatReader {
           return ((actions, logs), updatedState)
         }
 
+      case "open_window" =>
 
+        // If no unread message found, return the current state as is
+        return ((actions, logs), updatedState)
 
       case "ready" =>
         textTabsInfoJson.foreach { tabsInfo =>
@@ -92,6 +95,8 @@ object ChatReader {
         }
         // If no unread message found, return the current state as is
         return ((actions, logs), updatedState)
+
+
 
 
       case "refocusing" =>
@@ -120,7 +125,7 @@ object ChatReader {
       case "action" =>
         // If chatAction is "close", call closeTab, reset to "not_ready" state, and return immediately
         if (updatedState.chatAction == "close") {
-          closeTab()
+          actions = actions ++ closeTab()
           updatedState = updatedState.copy(chatReaderStatus = "not_ready", chatAction = "")
           return ((actions, logs), updatedState)
         } else if (updatedState.chatAction == "probe") {
@@ -150,27 +155,30 @@ object ChatReader {
   }
 
   def moveToNextTab(): Seq[FakeAction] = {
-    // Placeholder logic for moving to the next tab
     var actions: Seq[FakeAction] = Seq()
-    actions = actions :+ FakeAction("pressKeys", None, Some(PushTheButtons("TAB")))
+    actions = actions :+ FakeAction("pressKeys", None, Some(PushTheButtons(Seq("TAB"))))
     println("Moving to next tab")
     actions
   }
 
-
-  def closeTab(): Unit = {
-    // Placeholder logic for closing a tab
+  def closeTab(): Seq[FakeAction] = {
+    var actions: Seq[FakeAction] = Seq()
+    actions = actions :+ FakeAction("pressKeys", None, Some(PushTheButtons(Seq("Ctrl", "E"))))
     println("Closing tab")
+    actions
   }
+
 
   def actionOnTab(): Unit = {
     // Placeholder logic for closing a tab
     println("Action on tab")
   }
 
-  def openTab(): Unit = {
-    // Placeholder logic for closing a tab
+  def openTab(): Seq[FakeAction] = {
+    var actions: Seq[FakeAction] = Seq()
+    actions = actions :+ FakeAction("pressKeys", None, Some(PushTheButtons(Seq("Ctrl", "O"))))
     println("Opening tab")
+    actions
   }
 
 

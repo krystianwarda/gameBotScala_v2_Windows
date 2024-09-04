@@ -9,6 +9,8 @@ import scala.concurrent.duration._
 import com.sun.jna.platform.win32.{User32, WinUser}
 import com.sun.jna.platform.win32.WinUser._
 import com.sun.jna.platform.win32.WinDef._
+import processing.PushTheButtons
+
 
 
 class KeyboardActor extends Actor {
@@ -47,23 +49,69 @@ class KeyboardActor extends Actor {
 
     case TypeText(text) =>
       typeText(text)
+    case PressButtons(keys: Seq[String]) =>
+      println(s"[DEBUG] Initiating key press for: $keys")
 
-    case PressButtons(key) =>
-      println(s"[DEBUG] Initiating key press for: $key")
-      val keyCode = getKeyCodeForKey(key)
+      // Convert each key in the sequence to its corresponding key code
+      val keyCodes: Seq[Int] = keys.map(getKeyCodeForKey)
+
       try {
-        val immediateRelease = true // For simplicity, we'll always immediately release the key
-        if (isValidKeyCode(keyCode)) {
-          pressKey(keyCode)
-          println(s"[DEBUG] Key $key pressed.")
+        if (keyCodes.forall(isValidKeyCode)) { // Ensure all key codes are valid
+          // Press each key in sequence
+          keyCodes.foreach { keyCode =>
+            robot.keyPress(keyCode)
+            println(s"[DEBUG] Key code $keyCode pressed.")
+          }
+
+          // Release each key in reverse order
+          keyCodes.reverse.foreach { keyCode =>
+            robot.keyRelease(keyCode)
+            println(s"[DEBUG] Key code $keyCode released.")
+          }
+
         } else {
-          println(s"[ERROR] Invalid key code: $key for key: $key")
+          println(s"[ERROR] Invalid key code for one or more keys: $keys")
         }
       } catch {
         case e: Exception =>
-          println(s"[ERROR] Exception occurred while pressing key $key: ${e.getMessage}")
+          println(s"[ERROR] Exception occurred while pressing keys $keys: ${e.getMessage}")
           throw e
       }
+
+      sender() ! KeyboardActionCompleted(KeyboardActionTypes.PressKey)
+
+
+    case PushTheButtons(keys: Seq[String]) =>
+      println(s"[DEBUG] Initiating key press for: $keys")
+
+      // Convert each key in the sequence to its corresponding key code
+      val keyCodes: Seq[Int] = keys.map(getKeyCodeForKey)
+
+      try {
+        // Check if all key codes are valid
+        if (keyCodes.forall(isValidKeyCode)) {
+
+          // Press each key in sequence
+          keyCodes.foreach { keyCode =>
+            robot.keyPress(keyCode)
+            println(s"[DEBUG] Key code $keyCode pressed.")
+          }
+
+          // Release each key in reverse order
+          keyCodes.reverse.foreach { keyCode =>
+            robot.keyRelease(keyCode)
+            println(s"[DEBUG] Key code $keyCode released.")
+          }
+
+        } else {
+          println(s"[ERROR] Invalid key code for one or more keys: $keys")
+        }
+      } catch {
+        case e: Exception =>
+          println(s"[ERROR] Exception occurred while pressing keys $keys: ${e.getMessage}")
+          throw e
+      }
+
       sender() ! KeyboardActionCompleted(KeyboardActionTypes.PressKey)
 
 
@@ -139,8 +187,17 @@ class KeyboardActor extends Actor {
       keyCode >= KeyEvent.VK_F1 && keyCode <= KeyEvent.VK_F12 || // For function keys
       keyCode >= KeyEvent.VK_LEFT && keyCode <= KeyEvent.VK_DOWN || // For arrow keys
       keyCode == KeyEvent.VK_CONTROL || keyCode == KeyEvent.VK_ALT || keyCode == KeyEvent.VK_SHIFT || // Modifier keys
-      keyCode == KeyEvent.VK_TAB || keyCode == KeyEvent.VK_ENTER || keyCode == KeyEvent.VK_SPACE || keyCode == KeyEvent.VK_ESCAPE // Other special keys
+      keyCode == KeyEvent.VK_TAB || keyCode == KeyEvent.VK_ENTER || keyCode == KeyEvent.VK_SPACE || keyCode == KeyEvent.VK_ESCAPE // Special keys
   }
+
+//  private def isValidKeyCode(keyCode: Int): Boolean = {
+//    keyCode >= KeyEvent.VK_0 && keyCode <= KeyEvent.VK_Z || // For alphanumeric keys
+//      keyCode >= KeyEvent.VK_NUMPAD0 && keyCode <= KeyEvent.VK_NUMPAD9 || // For numpad keys
+//      keyCode >= KeyEvent.VK_F1 && keyCode <= KeyEvent.VK_F12 || // For function keys
+//      keyCode >= KeyEvent.VK_LEFT && keyCode <= KeyEvent.VK_DOWN || // For arrow keys
+//      keyCode == KeyEvent.VK_CONTROL || keyCode == KeyEvent.VK_ALT || keyCode == KeyEvent.VK_SHIFT || // Modifier keys
+//      keyCode == KeyEvent.VK_TAB || keyCode == KeyEvent.VK_ENTER || keyCode == KeyEvent.VK_SPACE || keyCode == KeyEvent.VK_ESCAPE // Other special keys
+//  }
 
 
   private def scheduleKeyRelease(keyCode: Int, delay: FiniteDuration = 400.milliseconds): Unit = {
@@ -215,6 +272,7 @@ class KeyboardActor extends Actor {
     //    println(s"KeyboardActor: Released key with keyCode: $keyCode") // Debug print
   }
 
+
   def keyCodeFromDirection(direction: String): Int = {
     // Example: translate direction to keyCode
     direction match {
@@ -244,11 +302,17 @@ class KeyboardActor extends Actor {
   private def getKeyCodeForKey(key: String): Int = {
     key.toUpperCase match {
       case "TAB" => KeyEvent.VK_TAB
-
+      case "CTRL" => KeyEvent.VK_CONTROL
+      case "E" => KeyEvent.VK_E
+      case "SHIFT" => KeyEvent.VK_SHIFT
+      case "ALT" => KeyEvent.VK_ALT
+      case "ENTER" => KeyEvent.VK_ENTER
       // Add more key mappings as necessary
       case _ => KeyEvent.VK_UNDEFINED
     }
   }
+
+
 
   def immediateReleaseFromDirection(direction: String): Boolean = {
     // Determine if key should be immediately released based on direction

@@ -4,7 +4,8 @@ import play.api.libs.json.{JsValue, Json, Writes}
 
 case class MouseAction(x: Int, y: Int, action: String)
 case class PushTheButton(key: String) extends ActionDetail
-case class PushTheButtons(key: String) extends ActionDetail
+case class PushTheButtons(keys: Seq[String]) extends ActionDetail
+
 
 sealed trait ActionDetail
 
@@ -33,9 +34,10 @@ object ActionDetail {
   implicit val pushButtonsWrites: Writes[PushTheButtons] = new Writes[PushTheButtons] {
     def writes(push: PushTheButtons): JsValue = Json.obj(
       "action" -> "PushTheButtons",
-      "key" -> push.key
+      "keys" -> Json.toJson(push.keys) // Use "keys" for multiple key strings
     )
   }
+
 
   implicit val comboKeyActionsWrites: Writes[ComboKeyActions] = new Writes[ComboKeyActions] {
     def writes(combo: ComboKeyActions): JsValue = Json.obj(
