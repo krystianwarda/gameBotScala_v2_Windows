@@ -304,6 +304,7 @@ class KeyboardActor extends Actor {
       case "TAB" => KeyEvent.VK_TAB
       case "CTRL" => KeyEvent.VK_CONTROL
       case "E" => KeyEvent.VK_E
+      case "O" => KeyEvent.VK_O
       case "SHIFT" => KeyEvent.VK_SHIFT
       case "ALT" => KeyEvent.VK_ALT
       case "ENTER" => KeyEvent.VK_ENTER

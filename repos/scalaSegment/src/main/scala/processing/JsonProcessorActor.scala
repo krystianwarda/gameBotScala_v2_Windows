@@ -81,6 +81,9 @@ case class ProcessorState(
                            chatReaderStatus: String = "not_ready",
                            chatDesiredTab: String = "",
                            chatAction: String = "",
+                           chatDesiredTabsList: List[String] = List(),
+                           inParty: Boolean = false,
+                           lastChatReaderAction: Long = 0,
 
                            lastEmailAlertTime: Long = 0,
                            stateHealingWithRune: String = "free",
