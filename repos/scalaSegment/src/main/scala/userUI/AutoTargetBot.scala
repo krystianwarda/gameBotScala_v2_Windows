@@ -30,6 +30,7 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
 
   val loadButton = new JButton("Load")
   val saveButton = new JButton("Save")
+
   val autoTargetSettingsName = new TextField("not saved", 30)
 
   // UI Components for creature priority
@@ -37,6 +38,8 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
 
   val addCreatureButton = new Button("Add")
   val removeCreatureButton = new Button("Remove")
+  val resetCreatureButton = new Button("Reset")
+
 
   val creatureListModel = new DefaultListModel[String]()
   val creatureList = new JList[String](creatureListModel)
@@ -101,6 +104,8 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
     add(addCreatureButton.peer, c)
     c.gridx += 1
     add(removeCreatureButton.peer, c)
+    c.gridx += 1
+    add(resetCreatureButton.peer, c)
 
     c.gridwidth = 4
     c.gridx = 0
@@ -207,7 +212,8 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
     add(runesOnScreenCheckbox.peer, c)
 
 
-    // Event listeners for the buttons
+
+    // Event listener for the addCreatureButton
     addCreatureButton.peer.addActionListener(_ => {
       val creatureName = creatureNameTextField.text.trim
       val count = creaturesCountDropdown.getSelectedItem.toString
@@ -228,20 +234,22 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
       val creatureInfo = s"$creatureName, Count: $count, HP: $hpRangeFrom-$hpRangeTo, Danger: $dangerLevel, Target in Battle: $targetOnBattle, Loot: $lootMonster, Chase: $chaseMonster, Keep Distance: $keepDistance, Avoid waves: $avoidWaves, Use Rune: $useRune, Rune Type: $runeType, Runes on Screen: ${useRuneOnScreen}, Runes on Battle: ${useRuneOnBattle}"
 
       if (creatureName.nonEmpty && !creatureListModel.contains(creatureInfo)) {
-        creatureListModel.addElement(creatureInfo)
+        creatureListModel.addElement(creatureInfo) // Add to the newly initialized model
+        creaturePriorityList += creatureInfo // Add to the internal list
+
         // Resetting the input fields after adding a creature might be a good UX practice
         creatureNameTextField.text = ""
         healthRangeFrom.text = "0"
         healthRangeTo.text = "100"
         creaturesCountDropdown.setSelectedIndex(0) // Reset to default value if needed
         creatureDangerDropdown.setSelectedIndex(0) // Reset to default value if needed
-        targetMonstersOnBattleCheckbox.selected = false // Reset to default if needed
+        targetMonstersOnBattleCheckbox.selected = false
         lootMonsterCheckbox.selected = false
         keepDistanceCheckbox.selected = false
         avoidWavesCheckbox.selected = false
         chaseMonstersCheckbox.selected = false
-        useRuneCheckbox.selected = false // Reset the rune checkbox
-        runeTypeDropdown.setSelectedIndex(0) // Reset the rune dropdown
+        useRuneCheckbox.selected = false
+        runeTypeDropdown.setSelectedIndex(0)
         runesOnScreenCheckbox.selected = false
         runesOnBattleCheckbox.selected = false
       }
@@ -292,19 +300,70 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
       }
     })
 
+    resetCreatureButton.peer.addActionListener(_ => {
+      // Print the size before the reset for debugging
+      println("Before reset: " + creatureListModel.getSize)
+
+      // Reset text fields and checkboxes
+      creatureNameTextField.text = ""
+      healthRangeFrom.text = "0"
+      healthRangeTo.text = "100"
+      creaturesCountDropdown.setSelectedIndex(0)
+      creatureDangerDropdown.setSelectedIndex(0)
+
+      targetMonstersOnBattleCheckbox.selected = false
+      lootMonsterCheckbox.selected = false
+      chaseMonstersCheckbox.selected = false
+      keepDistanceCheckbox.selected = false
+      avoidWavesCheckbox.selected = false
+      useRuneCheckbox.selected = false
+      runesOnBattleCheckbox.selected = false
+      runesOnScreenCheckbox.selected = false
+
+      // Reset the rune dropdown
+      runeTypeDropdown.setSelectedIndex(0)
+
+      // Clear both the model (UI list) and the internal list
+      creatureListModel.clear()
+      creaturePriorityList.clear()
+
+      // Reinitialize the model after clearing (to make adding work again)
+      val newCreatureListModel = new DefaultListModel[String]()
+      creatureList.setModel(newCreatureListModel)  // Set a fresh model to the creatureList
+      
+      // Reset settings name field
+      autoTargetSettingsName.text = "not saved"
+
+      // Ensure the UI is updated after reset
+      creatureList.updateUI()
+
+      // Print the size after the reset for debugging
+      println("After reset: " + creatureListModel.getSize)
+    })
+
 
     removeCreatureButton.peer.addActionListener(_ => {
       val selectedIndices = creatureList.getSelectedIndices
       if (selectedIndices.nonEmpty) {
-        // We need to reverse the indices to avoid shifting issues when removing items
+        // Remove items from both lists in reverse order to prevent index shifting
         selectedIndices.sorted(Ordering[Int].reverse).foreach { index =>
-          if (index >= 0 && index < creaturePriorityList.size) {
-            creaturePriorityList.remove(index)
-          }
           if (index >= 0 && index < creatureListModel.getSize) {
+            // Remove from the UI model
             creatureListModel.remove(index)
+
+            // Remove from the internal list (ensure both are in sync)
+            if (index < creaturePriorityList.size) {
+              creaturePriorityList.remove(index)
+            }
           }
         }
+
+        // Ensure the UI reflects the changes after removal
+        creatureList.setModel(creatureListModel)  // Sync the UI component with the updated model
+        creatureList.updateUI()
+
+        // Debugging output
+        println("After removal, model size: " + creatureListModel.getSize)
       }
     })
 
@@ -330,11 +389,21 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
   }
 
   def loadAutoTargetsFromFile(filePath: String): Unit = {
-    creatureListModel.clear() // Clear existing entries
+    // Clear the current model and internal list
+    creatureListModel.clear()
+    creaturePriorityList.clear()
 
+    // Load the settings from file and add them to both the UI model and the internal list
     val creatureSettings = scala.io.Source.fromFile(filePath).getLines()
-    creatureSettings.foreach(creatureListModel.addElement) // Add each line to the model
+    creatureSettings.foreach { setting =>
+      creatureListModel.addElement(setting)  // Add to the UI model
+      creaturePriorityList += setting        // Add to the internal list
+    }
+
+    // Ensure the UI is updated to reflect the changes
+    creatureList.updateUI()
   }
+
 
 
 
