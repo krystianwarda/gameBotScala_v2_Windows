@@ -6,6 +6,9 @@ import processing.CaveBot.Vec
 import processing.Process.performMouseActionSequance
 import userUI.SettingsUtils
 
+import scala.collection.immutable.Seq
+import scala.collection.mutable
+
 object ChatReader {
   def computeChatReaderActions(json: JsValue, settings: SettingsUtils.UISettings, currentState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
     println(s"computeChatReaderActions activated.")
@@ -151,9 +154,31 @@ object ChatReader {
                 val tabName = (tabInfo \ "tabName").asOpt[String].getOrElse("Unknown")
                 println(s"Unread message found in tab: $tabName")
 
-                // If an unread message is found, save this tab as chatDesiredTab and refocus
-                updatedState = updatedState.copy(chatDesiredTab = tabName, chatReaderStatus = "refocusing")
+                val spyLevelInfo = (json \ "spyLevelInfo").asOpt[JsObject].getOrElse(Json.obj())
 
+                // Get characterInfo's posZ for comparison
+                val characterPosZ = (json \ "characterInfo" \ "PositionZ").asOpt[Int].getOrElse(-1)
+
+
+                println(s"characterPosZ: ${characterPosZ}")
+                println(s"spyLevelInfo: ${spyLevelInfo}")
+
+                val isPlayerOnTheScreen: Boolean = spyLevelInfo.values.exists { playerJson =>
+                  val playerPosZ = (playerJson \ "PositionZ").asOpt[Int].getOrElse(-1)
+                  val isPlayer = (playerJson \ "IsPlayer").asOpt[Boolean].getOrElse(false)
+                  val isPartyMember = (playerJson \ "IsPartyMember").asOpt[Boolean].getOrElse(false)
+
+                  playerPosZ == characterPosZ && isPlayer && !isPartyMember
+                }
+                println(s"isPlayerOnTheScreen: ${isPlayerOnTheScreen}")
+
+
+                // here check if there is a
+                if (tabName != "Default") {
+                  updatedState = updatedState.copy(chatDesiredTab = tabName, chatReaderStatus = "refocusing")
+                } else if (settings.autoResponderSettings.enabled && tabName == "Default" && isPlayerOnTheScreen) {
+                  updatedState = updatedState.copy(chatDesiredTab = tabName, chatReaderStatus = "refocusing")
+                }
 
                 // Return immediately after finding the first unread message
                 return ((actions, logs), updatedState)
@@ -182,14 +207,15 @@ object ChatReader {
           if (focusedTabName == updatedState.chatDesiredTab) {
             // Focused on the correct tab, log the event
             logs = logs :+ Log(s"Focused on tab: ${updatedState.chatDesiredTab}")
+            updatedState = updatedState.copy(chatReaderStatus = "action")
 
-            // Check if there is a pending action
+//            // Check if there is a pending action
             if (updatedState.chatAction != "") {
               // If there is a pending action, change status to "action"
               updatedState = updatedState.copy(chatReaderStatus = "action")
             } else {
               // If no pending action, change status to "not_ready"
-              updatedState = updatedState.copy(chatReaderStatus = "not_ready")
+              updatedState = updatedState.copy(chatReaderStatus = "action", chatAction="probe")
             }
 
             return ((actions, logs), updatedState)
@@ -207,7 +233,12 @@ object ChatReader {
             updatedState = updatedState.copy(chatReaderStatus = "not_ready", chatAction = "")
             return ((actions, logs), updatedState)
           } else if (updatedState.chatAction == "probe") {
-            actionOnTab()
+
+            val resultActionOnTab = actionOnTab(focusedTabName, json, updatedState, actions, logs)
+            actions = resultActionOnTab._1._1
+            logs = resultActionOnTab._1._2
+            updatedState = resultActionOnTab._2
+
           } else if (updatedState.chatAction == "set") {
             // Check the focused tab
             if (focusedTabName == "Server Log") {
@@ -250,9 +281,28 @@ object ChatReader {
   }
 
 
-  def actionOnTab(): Unit = {
-    // Placeholder logic for closing a tab
+  def actionOnTab(
+                   focusedTabName: String,
+                   json: JsValue,
+                   initialState: ProcessorState,
+                   initialActions: Seq[FakeAction],
+                   initialLogs: Seq[Log],
+                 ): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
+    var actions: Seq[FakeAction] = initialActions
+    var logs: Seq[Log] = initialLogs
+    var updatedState = initialState
+
+//    // Placeholder logic for closing a tab
+//    if (focusedTabName == "Party Channel") {
+//
+//      // find messages which are not in dialogueHistoryPartyTab and extract new message
+//
+//    } else {
+//
+//    }
+    updatedState = updatedState.copy(chatReaderStatus = "not_ready", chatAction = "")
     println("Action on tab")
+    ((actions, logs), updatedState)
   }
 
   def openTab(): Seq[FakeAction] = {

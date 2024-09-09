@@ -84,6 +84,7 @@ case class ProcessorState(
                            chatDesiredTabsList: List[String] = List(),
                            inParty: Boolean = false,
                            lastChatReaderAction: Long = 0,
+                           dialogueHistoryPartyTab: mutable.Buffer[(JsValue, String, String)] = mutable.Buffer.empty,
 
                            lastEmailAlertTime: Long = 0,
                            stateHealingWithRune: String = "free",
