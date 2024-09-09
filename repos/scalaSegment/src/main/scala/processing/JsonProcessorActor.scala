@@ -76,6 +76,7 @@ case class ProcessorState(
 
                            //alerts
                            playerDetectedAlertTime: Long = 0,
+                           lastGuardianAction: Long = 0,
 
                            // chat reader
                            chatReaderStatus: String = "not_ready",

@@ -330,7 +330,7 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
       // Reinitialize the model after clearing (to make adding work again)
       val newCreatureListModel = new DefaultListModel[String]()
       creatureList.setModel(newCreatureListModel)  // Set a fresh model to the creatureList
-      
+
       // Reset settings name field
       autoTargetSettingsName.text = "not saved"
 

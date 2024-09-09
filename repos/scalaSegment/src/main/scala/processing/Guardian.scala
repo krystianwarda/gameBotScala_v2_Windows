@@ -31,45 +31,50 @@ object Guardian {
     val startTime = System.nanoTime()
     val currentTime = System.currentTimeMillis()
 
-    val initialActions = Seq[FakeAction]()
-    val initialLogs = Seq[Log]()
+    var actions = Seq[FakeAction]()
+    var logs = Seq[Log]()
+    var updatedState = currentState
 
-    val (actions, updatedState) = if (settings.guardianSettings.enabled) {
+    if (settings.guardianSettings.enabled) {
+
       val playerName = (json \ "characterInfo" \ "Name").as[String]
       val spyLevelInfoJson = (json \ "spyLevelInfo").as[JsObject]
       val ignoredCreatures = parseIgnoredCreatures(settings)
       val currentZLevel = (json \ "characterInfo" \ "PositionZ").as[Int]
 
-      val conditions = createConditionsList(
-        settings,
-        playerName,
-        currentZLevel,
-        currentTime,
-        ignoredCreatures,
-        json
-      )
+      if (currentTime - updatedState.lastGuardianAction > updatedState.retryMidDelay) {
+        updatedState = updatedState.copy(lastGuardianAction = currentTime)
 
-      spyLevelInfoJson.fields.foldLeft((initialActions, currentState)) {
-        case ((actionsAcc, stateAcc), (_, playerInfo)) =>
-          val player = playerInfo.as[JsObject]
-          conditions.foldLeft((actionsAcc, stateAcc)) {
-            case ((actions, state), condition) =>
-              if (condition.condition(player, state)) {
-                condition.actions(player, state)
-              } else {
-                (actions, state)
-              }
-          }
+        val conditions = createConditionsList(
+          settings,
+          playerName,
+          currentZLevel,
+          currentTime,
+          ignoredCreatures,
+          json
+        )
+
+        spyLevelInfoJson.fields.foldLeft((actions, currentState)) {
+          case ((actionsAcc, stateAcc), (_, playerInfo)) =>
+            val player = playerInfo.as[JsObject]
+            conditions.foldLeft((actionsAcc, stateAcc)) {
+              case ((actions, state), condition) =>
+                if (condition.condition(player, state)) {
+                  condition.actions(player, state)
+                } else {
+                  (actions, state)
+                }
+            }
+        }
       }
-    } else {
-      (initialActions, currentState)
+
     }
 
     val endTime = System.nanoTime()
     val duration = (endTime - startTime) / 1e9d
     println(f"[INFO] Processing computeGuardianActions took $duration%.6f seconds")
 
-    ((actions, initialLogs), updatedState)
+    ((actions, logs), updatedState)
   }
 
   private def parseIgnoredCreatures(settings: SettingsUtils.UISettings): List[String] = {
@@ -101,7 +106,6 @@ object Guardian {
       ),
 
 
-      // more conditions here
     )
   }
 
