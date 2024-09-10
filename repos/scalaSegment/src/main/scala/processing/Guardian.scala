@@ -9,17 +9,14 @@ import scala.collection.immutable.Seq
 import play.api.libs.json._
 import processing.CaveBot.Vec
 import processing.Process.captureScreen
+
+import java.lang.System.currentTimeMillis
 //import processing.Process.{captureScreen, generateNoise}
 import processing.TeamHunt.generateSubwaypointsToBlocker
 import utils.{Credentials, SendDiscordAlert, SendSoundAlert}
 case class IgnoredCreature(name: String, safe: Boolean)
 
 object Guardian {
-
-  case class Condition(
-                        condition: (JsObject, ProcessorState) => Boolean,
-                        actions: (JsObject, ProcessorState) => (Seq[FakeAction], ProcessorState)
-                      )
 
   def computeGuardianActions(
                               json: JsValue,
@@ -31,50 +28,55 @@ object Guardian {
     val startTime = System.nanoTime()
     val currentTime = System.currentTimeMillis()
 
-    var actions = Seq[FakeAction]()
-    var logs = Seq[Log]()
+    // Initialize actions, logs, and updatedState as vars to allow updates
+    var actions: Seq[FakeAction] = Seq.empty      Folclore
+              
+    var logs: Seq[Log] = Seq.empty
     var updatedState = currentState
 
     if (settings.guardianSettings.enabled) {
 
+      println(s"time0: ${currentTime - updatedState.playerDetectedAlertTime}")
       val playerName = (json \ "characterInfo" \ "Name").as[String]
       val spyLevelInfoJson = (json \ "spyLevelInfo").as[JsObject]
       val ignoredCreatures = parseIgnoredCreatures(settings)
       val currentZLevel = (json \ "characterInfo" \ "PositionZ").as[Int]
 
-      if (currentTime - updatedState.lastGuardianAction > updatedState.retryMidDelay) {
-        updatedState = updatedState.copy(lastGuardianAction = currentTime)
+      // Iterate over the players in the spyLevelInfoJson
+      spyLevelInfoJson.fields.foreach {
+        case (_, playerInfo) =>
+          val player = playerInfo.as[JsObject]
 
-        val conditions = createConditionsList(
-          settings,
-          playerName,
-          currentZLevel,
-          currentTime,
-          ignoredCreatures,
-          json
-        )
+          // First condition: player on screen and not ignored
+          if (isPlayer(player) && isPlayerOnScreen(player, currentZLevel) && !isIgnoredPlayer(player, ignoredCreatures, playerName)) {
+            val (newActions, newState) = triggerPlayerOnScreenActions(player, settings, currentTime, json, updatedState)
+            actions = actions ++ newActions  // Accumulate actions
+            updatedState = newState  // Update state
+          }
 
-        spyLevelInfoJson.fields.foldLeft((actions, currentState)) {
-          case ((actionsAcc, stateAcc), (_, playerInfo)) =>
-            val player = playerInfo.as[JsObject]
-            conditions.foldLeft((actionsAcc, stateAcc)) {
-              case ((actions, state), condition) =>
-                if (condition.condition(player, state)) {
-                  condition.actions(player, state)
-                } else {
-                  (actions, state)
-                }
-            }
-        }
+          // Second condition: player detected (on a different level) and not ignored
+          if (isPlayer(player) && isPlayerDetected(player, currentZLevel) && !isIgnoredPlayer(player, ignoredCreatures, playerName)) {
+            val (addAction, newState) = triggerPlayerDetectedActions(player, settings, currentTime, json, updatedState)
+            actions = actions ++ addAction  // Accumulate actions
+            updatedState = newState  // Update state
+          }
+      }
+
+      // Third condition: low supplies
+      if (updatedState.suppliesLeftMap.values.exists(_ <= 1)) {
+        val (addAction, newState) = triggerLowSuppliesActions(settings, json, updatedState)
+        actions = actions ++ addAction  // Accumulate actions
+        updatedState = newState  // Update state
       }
 
     }
 
+    println(s"time10: ${currentTime - updatedState.playerDetectedAlertTime}")
     val endTime = System.nanoTime()
     val duration = (endTime - startTime) / 1e9d
     println(f"[INFO] Processing computeGuardianActions took $duration%.6f seconds")
 
-    ((actions, logs), updatedState)
+    ((actions, logs), updatedState)  // Return final actions and updated state
   }
 
   private def parseIgnoredCreatures(settings: SettingsUtils.UISettings): List[String] = {
@@ -83,30 +85,50 @@ object Guardian {
     }
   }
 
-  private def createConditionsList(
-                                    settings: SettingsUtils.UISettings,
-                                    playerName: String,
-                                    currentZLevel: Int,
-                                    currentTime: Long,
-                                    ignoredCreatures: List[String],
-                                    json: JsValue
-                                  ): Seq[Condition] = {
-    Seq(
-      Condition(
-        condition = (player, state) => isPlayerOnScreen(player, currentZLevel) && !isIgnoredPlayer(player, ignoredCreatures, playerName),
-        actions = (player, state) => triggerPlayerOnScreenActions(player, settings, currentTime, json, state)
-      ),
-      Condition(
-        condition = (player, state) => isPlayerDetected(player, currentZLevel) && !isIgnoredPlayer(player, ignoredCreatures, playerName),
-        actions = (player, state) => triggerPlayerDetectedActions(player, settings, currentTime, json, state)
-      ),
-      Condition(
-        condition = (_, state) => state.suppliesLeftMap.values.exists(_ <= 1),
-        actions = (_, state) => triggerLowSuppliesActions(settings, json, state)
-      ),
 
 
-    )
+
+  private def triggerPlayerOnScreenActions(
+                                            player: JsObject,
+                                            settings: SettingsUtils.UISettings,
+                                            currentTime: Long,
+                                            json: JsValue,
+                                            initialState: ProcessorState
+                                          ): (Seq[FakeAction], ProcessorState) = {
+    var updatedState = initialState
+    println(s"time2: ${currentTime - updatedState.playerDetectedAlertTime}")
+    if (currentTime - updatedState.playerDetectedAlertTime > 15000) {
+      updatedState = updatedState.copy(playerDetectedAlertTime = currentTime)
+      println(s"time3: ${currentTime - updatedState.playerDetectedAlertTime}")
+      val currentName = (player \ "Name").as[String]
+      var actions = Seq[FakeAction]()
+
+      if (settings.guardianSettings.playerOnScreenSettings.head.playerOnScreenSound) {
+        triggerSoundAlert("Player on the screen.")
+      }
+      if (settings.guardianSettings.playerOnScreenSettings.head.playerOnScreenMessage) {
+        actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(currentName)))
+      }
+      if (settings.guardianSettings.playerOnScreenSettings.head.playerOnScreenDiscord) {
+        triggerDiscordAlert("Player on the screen.", json)
+      }
+      if (settings.guardianSettings.playerOnScreenSettings.head.playerOnScreenLogout) {
+        actions = triggerLogoutAlert(settings, json, actions)
+      }
+      if (settings.guardianSettings.playerOnScreenSettings.head.playerOnScreenPz) {
+        val resultTriggerPzAlert = triggerPzAlert(json, settings, updatedState, actions)
+        actions = resultTriggerPzAlert._1
+        (actions, updatedState)
+      } else {
+        (actions, updatedState)
+      }
+    } else {
+      (Seq.empty, updatedState)
+    }
+  }
+
+  private def isPlayer(player: JsObject): Boolean = {
+    (player \ "IsPlayer").asOpt[Boolean].getOrElse(false)
   }
 
   private def isPlayerOnScreen(player: JsObject, currentZLevel: Int): Boolean = {
@@ -124,53 +146,20 @@ object Guardian {
     ignoredCreatures.contains(currentName) || currentName == playerName
   }
 
-  private def triggerPlayerOnScreenActions(
-                                            player: JsObject,
-                                            settings: SettingsUtils.UISettings,
-                                            currentTime: Long,
-                                            json: JsValue,
-                                            state: ProcessorState
-                                          ): (Seq[FakeAction], ProcessorState) = {
-    if (currentTime - state.playerDetectedAlertTime > 15000) {
-      val currentName = (player \ "Name").as[String]
-      var actions = Seq[FakeAction]()
 
-      if (settings.guardianSettings.playerOnScreenSettings.head.playerOnScreenSound) {
-        triggerSoundAlert("Player on the screen.")
-      }
-      if (settings.guardianSettings.playerOnScreenSettings.head.playerOnScreenMessage) {
-        actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(currentName)))
-      }
-      if (settings.guardianSettings.playerOnScreenSettings.head.playerOnScreenDiscord) {
-        triggerDiscordAlert("Player on the screen.", json)
-      }
-      if (settings.guardianSettings.playerOnScreenSettings.head.playerOnScreenLogout) {
-        actions = triggerLogoutAlert(settings, json, actions)
-      }
-      if (settings.guardianSettings.playerOnScreenSettings.head.playerOnScreenPz) {
-        val resultTriggerPzAlert = triggerPzAlert(json, settings, state, actions)
-        actions = resultTriggerPzAlert._1
-        state.copy(playerDetectedAlertTime = currentTime)
-        (actions,state)
-      } else {
-        state.copy(playerDetectedAlertTime = currentTime)
-        (actions,state)
-      }
-    } else {
-      (Seq.empty, state)
-    }
-  }
 
   private def triggerPlayerDetectedActions(
                                             player: JsObject,
                                             settings: SettingsUtils.UISettings,
                                             currentTime: Long,
                                             json: JsValue,
-                                            state: ProcessorState
+                                            initialState: ProcessorState
                                           ): (Seq[FakeAction], ProcessorState) = {
-    if (currentTime - state.playerDetectedAlertTime > 15000) {
+    var updatedState = initialState
+    if (currentTime - updatedState.playerDetectedAlertTime > 15000) {
       val currentName = (player \ "Name").as[String]
-      var actions = Seq[FakeAction]()
+      var actions: Seq[FakeAction] = Seq.empty
+      updatedState = updatedState.copy(playerDetectedAlertTime = currentTime)
 
       if (settings.guardianSettings.playerDetectedSettings.head.playerDetectedSound) {
         triggerSoundAlert("Player detected.")
@@ -185,16 +174,12 @@ object Guardian {
         actions = triggerLogoutAlert(settings, json, actions)
       }
       if (settings.guardianSettings.playerDetectedSettings.head.playerDetectedPz) {
-        val resultTriggerPzAlert = triggerPzAlert(json, settings, state, actions)
+        val resultTriggerPzAlert = triggerPzAlert(json, settings, updatedState, actions)
         actions = resultTriggerPzAlert._1
-        state.copy(playerDetectedAlertTime = currentTime)
-        (actions, state)
-      } else {
-        state.copy(playerDetectedAlertTime = currentTime)
-        (actions, state)
       }
+      (actions, updatedState)
     } else {
-      (Seq.empty, state)
+      (Seq.empty, updatedState)
     }
   }
 
@@ -219,8 +204,7 @@ object Guardian {
     }
     if (settings.guardianSettings.lowCapSettings.head.lowCapPz) {
       val resultTriggerPzAlert = triggerPzAlert(json, settings, state, actions)
-      actions = resultTriggerPzAlert._1
-      (actions, resultTriggerPzAlert._2)
+      (resultTriggerPzAlert._1, resultTriggerPzAlert._2)
     } else {
       (actions, state)
     }
