@@ -29,8 +29,8 @@ object Guardian {
     val currentTime = System.currentTimeMillis()
 
     // Initialize actions, logs, and updatedState as vars to allow updates
-    var actions: Seq[FakeAction] = Seq.empty      Folclore
-              
+    var actions: Seq[FakeAction] = Seq.empty
+
     var logs: Seq[Log] = Seq.empty
     var updatedState = currentState
 

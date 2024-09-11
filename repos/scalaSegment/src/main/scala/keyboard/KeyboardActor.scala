@@ -116,6 +116,7 @@ class KeyboardActor extends Actor {
 
 
     case PressArrowKey(direction) =>
+      println(s"PressArrowKey dirrection: ${direction}")
       val numLockOn = Toolkit.getDefaultToolkit.getLockingKeyState(KeyEvent.VK_NUM_LOCK)
       val (keyCode, immediateRelease) = direction match {
         // Use JNA for diagonal movements when NumLock is off
@@ -124,18 +125,18 @@ class KeyboardActor extends Actor {
         case "MoveDownLeft" => if (!numLockOn) (0x23, false) else (KeyEvent.VK_END, false) // VK_END
         case "MoveDownRight" => if (!numLockOn) (0x22, false) else (KeyEvent.VK_PAGE_DOWN, false) // VK_PAGE_DOWN
 
-
-
         // Use Robot for all other keys
         case _ => (keyCodeFromDirection(direction), immediateReleaseFromDirection(direction))
       }
       println(s"[DEBUG] Preparing to press key: $keyCode for direction: $direction with immediate release: $immediateRelease")
 
-
+      println(s"isValidKeyCode(keyCode): ${isValidKeyCode(keyCode)}")
       if (isValidKeyCode(keyCode)) {
         if (direction.startsWith("Move") && !numLockOn) {
+          println("Using pressKeyUsingJNA")
           pressKeyUsingJNA(keyCode)
         } else {
+          println("Using pressKeyUsingRobot")
           pressKeyUsingRobot(keyCode, immediateRelease)
         }
         if (!immediateRelease) {
@@ -186,9 +187,21 @@ class KeyboardActor extends Actor {
       keyCode >= KeyEvent.VK_NUMPAD0 && keyCode <= KeyEvent.VK_NUMPAD9 || // For numpad keys
       keyCode >= KeyEvent.VK_F1 && keyCode <= KeyEvent.VK_F12 || // For function keys
       keyCode >= KeyEvent.VK_LEFT && keyCode <= KeyEvent.VK_DOWN || // For arrow keys
+      keyCode == KeyEvent.VK_PAGE_UP || keyCode == KeyEvent.VK_PAGE_DOWN || // Page Up and Page Down keys
+      keyCode == KeyEvent.VK_HOME || keyCode == KeyEvent.VK_END || // Home and End keys
       keyCode == KeyEvent.VK_CONTROL || keyCode == KeyEvent.VK_ALT || keyCode == KeyEvent.VK_SHIFT || // Modifier keys
       keyCode == KeyEvent.VK_TAB || keyCode == KeyEvent.VK_ENTER || keyCode == KeyEvent.VK_SPACE || keyCode == KeyEvent.VK_ESCAPE // Special keys
   }
+
+
+//  private def isValidKeyCode(keyCode: Int): Boolean = {
+//    keyCode >= KeyEvent.VK_0 && keyCode <= KeyEvent.VK_Z || // For alphanumeric keys
+//      keyCode >= KeyEvent.VK_NUMPAD0 && keyCode <= KeyEvent.VK_NUMPAD9 || // For numpad keys
+//      keyCode >= KeyEvent.VK_F1 && keyCode <= KeyEvent.VK_F12 || // For function keys
+//      keyCode >= KeyEvent.VK_LEFT && keyCode <= KeyEvent.VK_DOWN || // For arrow keys
+//      keyCode == KeyEvent.VK_CONTROL || keyCode == KeyEvent.VK_ALT || keyCode == KeyEvent.VK_SHIFT || // Modifier keys
+//      keyCode == KeyEvent.VK_TAB || keyCode == KeyEvent.VK_ENTER || keyCode == KeyEvent.VK_SPACE || keyCode == KeyEvent.VK_ESCAPE // Special keys
+//  }
 
 //  private def isValidKeyCode(keyCode: Int): Boolean = {
 //    keyCode >= KeyEvent.VK_0 && keyCode <= KeyEvent.VK_Z || // For alphanumeric keys

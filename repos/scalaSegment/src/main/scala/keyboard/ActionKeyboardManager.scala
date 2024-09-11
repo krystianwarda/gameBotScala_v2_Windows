@@ -53,7 +53,7 @@ class ActionKeyboardManager(keyboardActorRef: ActorRef) extends Actor {
       processKeyAction(KeyboardActionTypes.PressKey, key)
 
     case PushTheButtons(keys: Seq[String]) =>
-      println("PushTheButtons activated")
+      println("PushTheButtons activated with multiple keys. ")
 
       if (keys.nonEmpty) {
         // Assuming PushTheButtons implies a PressKey action for multiple keys
