@@ -22,6 +22,7 @@ import processing.AutoTarget.computeAutoTargetActions
 import processing.AutoLoot.computeAutoLootActions
 import processing.ChatReader.computeChatReaderActions
 import processing.GMDetector.computeGMDetectorActions
+import processing.InitialSetup.computeInitialSetupActions
 import processing.TeamHunt.computeTeamHuntActions
 
 import java.awt.event.{InputEvent, KeyEvent}
@@ -62,9 +63,14 @@ case class WaypointInfo(
                        )
 
 case class ProcessorState(
+                           initialSettingsSet: Boolean = false,
+                           dangerLevelHealing: String = "low",
+                           dangerCreaturesList: Seq[Creature] = Seq.empty,
+
                            gmDetected: Boolean = false,
                            gmDetectedTime: Long = 0,
                            GMlastDialogueTime: Long = 0,
+
                            gmWaitTime: Long = 45000,
                            messageRespondRequested: Boolean = false,
                            messageListenerTime: Long = 0,
@@ -89,6 +95,7 @@ case class ProcessorState(
 
                            lastEmailAlertTime: Long = 0,
                            stateHealingWithRune: String = "free",
+                           healingCrosshairActive: Boolean = false,
                            healingRestryStatus: Int = 0,
                            healingRetryAttempts: Int = 1,
                            currentTime: Long = 0,
@@ -350,7 +357,9 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
   private def handleOkStatus(json: JsValue, initialState: ProcessorState): ProcessorState = {
     // Sequentially apply action handlers, each updating the state based on its own logic
     val updatedState = initialState.copy(currentTime = Instant.now().toEpochMilli())
-    val afterGMDetectorState = performGMDetector(json, updatedState)
+
+    val afterInitialSetupState = performInitialSetup(json, updatedState)
+    val afterGMDetectorState = performGMDetector(json, afterInitialSetupState)
     val afterGuardianState = performGuardian(json, afterGMDetectorState)
     val afterFishingState = performFishing(json, afterGuardianState)
     val afterHealingState = performAutoHealing(json, afterFishingState)
@@ -367,7 +376,14 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
   }
 
 
+  def performInitialSetup(json: JsValue, currentState: ProcessorState): ProcessorState = {
 
+    currentState.settings.flatMap { settings =>
+      val ((actions, logs), updatedState) = computeInitialSetupActions(json, settings, currentState)
+      executeActionsAndLogsNew(actions, logs, Some(settings), Some("InitialSetup"))
+      Some(updatedState)
+    }.getOrElse(currentState)
+  }
 
   def performGuardian(json: JsValue, currentState: ProcessorState): ProcessorState = {
     val currentTime = System.currentTimeMillis()

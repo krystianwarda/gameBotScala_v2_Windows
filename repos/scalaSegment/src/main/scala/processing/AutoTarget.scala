@@ -17,9 +17,22 @@ import scala.collection.immutable.Seq
 import scala.util.{Random, Try}
 import scala.util.matching.Regex
 
-case class CreatureInfo(id: Int, name: String, healthPercent: Int, isShootable: Boolean, isMonster: Boolean, danger: Int, keepDistance: Boolean, isPlayer: Boolean, posX: Int, posY: Int, posZ: Int)
-
-
+case class CreatureInfo(
+                         id: Int,
+                         name: String,
+                         healthPercent: Int,
+                         isShootable: Boolean,
+                         isMonster: Boolean,
+                         danger: Int,
+                         keepDistance: Boolean,
+                         isPlayer: Boolean,
+                         posX: Int,
+                         posY: Int,
+                         posZ: Int,
+                         lootMonsterImmediately: Boolean,   // new field
+                         lootMonsterAfterFight: Boolean,    // new field
+                         lureCreatureToTeam: Boolean        // new field
+                       )
 
 // energy ring 3051
 // life ring 3052
@@ -39,6 +52,7 @@ object AutoTarget {
     val currentTime = System.currentTimeMillis()
     printInColor(ANSI_RED, f"[DEBUG] computeAutoTargetActions process started with status:${updatedState.stateHunting}")
     println(s"Begin suppliesLeftMap: ${updatedState.suppliesLeftMap}")
+    println(s"teamMembersList: ${settings.teamHuntSettings.teamMembersList}")
 
     if (settings.autoTargetSettings.enabled && updatedState.stateHunting == "free" && !updatedState.gmDetected) {
 
@@ -342,7 +356,7 @@ object AutoTarget {
             // shootrune section
             // Step 1: Transform creatureList into a list of JSON objects (name -> danger, keepDistance, etc.)
             val targetMonstersJsons = transformToJSON(settings.autoTargetSettings.creatureList)
-            println(targetMonstersJsons)
+            println(s"targetMonstersJsons: ${targetMonstersJsons}")
 
             // Step 2: Check if at least one creature has useRune set to true
             val hasRuneTarget = targetMonstersJsons.exists { monsterJson =>
@@ -419,327 +433,6 @@ object AutoTarget {
         }
       }
     }
-
-
-//
-//
-//      if ((settings.caveBotSettings.enabled &&
-//        updatedState.caveBotLevelsList.contains(presentCharLocationZ) &&
-//        settings.autoTargetSettings.enabled) ||
-//        (!settings.caveBotSettings.enabled && settings.autoTargetSettings.enabled)) {
-//        println("Start autotarget")
-//
-//
-//        val battleTargets: Seq[(Long, String, Boolean, Boolean)] = (json \ "battleInfo").as[JsObject].values.flatMap { creature =>
-//          val id = (creature \ "Id").as[Long]
-//          val name = (creature \ "Name").as[String]
-//          val isMonster = (creature \ "IsMonster").as[Boolean]
-//          val isPlayer = (creature \ "IsPlayer").as[Boolean]
-//
-//          // Check if attacking players is allowed or if the creature is not a player
-//          if (updatedState.attackPlayers || isPlayer == "false") {
-//            Some((id, name, isMonster, isPlayer))
-//          } else {
-//            None // Exclude player creatures if updatedState.attackPlayers is false
-//          }
-//        }.toSeq
-//
-//        if (!(updatedState.chosenTargetId == 0)) {
-//          // target not chosen - select target
-//
-//          // Use the existing creatureList from settings
-//          val targetMonstersJsons = transformToJSON(settings.autoTargetSettings.creatureList)
-//
-//          // Checking if 'All' creatures are targeted
-//          val targetAllCreatures = targetMonstersJsons.exists { json =>
-//            (json \ "name").as[String].equalsIgnoreCase("All")
-//          }
-//
-//          // Now use Reads from the Creature object
-//          val creatureDangerMap = targetMonstersJsons.map { json =>
-//            val creature = Json.parse(json.toString()).as[Creature](Creature.reads)
-//            (creature.name, creature.danger)
-//          }.toMap
-//
-//          // Filter and sort based on the danger level, sorting by descending danger
-//          var sortedMonsters = if (targetAllCreatures) {
-//            battleTargets // If targeting all, skip the danger level filtering
-//          } else {
-//            battleTargets
-//              .filter { case (_, name, _, _) => creatureDangerMap.contains(name) }
-//              .sortBy { case (_, name, _ ,_) => -creatureDangerMap(name) } // Descending order of danger
-//          }
-//
-//          // target on battle or on the screen
-//
-//
-//
-//          // Further filtering based on IDs or other conditions should be adjusted based on whether "All" is targeted
-//          sortedMonsters = if (targetAllCreatures) {
-//            sortedMonsters.filter { case (id, _, _ , _) => id >= 5 }
-//          } else {
-//            sortedMonsters
-//              .filter { case (id, _, _ , _) => id >= 5 }
-//              .sortBy { case (id, _, _ , _) =>
-//                val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ id.toString).asOpt[JsObject]
-//                battleCreaturePosition.flatMap(pos => (pos \ "PosY").asOpt[Int]).getOrElse(Int.MaxValue)
-//              }
-//          }
-//
-//          var topFourMonsters = sortedMonsters.take(4)
-//            .sortBy { case (_, name, _ , _) => -creatureDangerMap.getOrElse(name, 0) }
-//
-//
-//
-//
-//        } else {
-//
-//        }
-//
-//
-//      }
-//
-//
-//      if ((settings.caveBotSettings.enabled && updatedState.caveBotLevelsList.contains(presentCharLocationZ)) || (!(settings.caveBotSettings.enabled) && settings.autoTargetSettings.enabled)) {
-//        println(s"AutoTarget is ON, status ${updatedState.stateHunting}")
-//        (json \ "battleInfo").validate[Map[String, JsValue]] match {
-//          case JsSuccess(battleInfo, _) => 1
-//            println("gate3")
-//            val hasMonsters = battleInfo.exists { case (_, creature) =>
-//              (creature \ "IsMonster").asOpt[Boolean].getOrElse(false)
-//            }
-//            println("gate4")
-//            if (hasMonsters) {
-//              val result = executeWhenMonstersOnScreen(json, settings, updatedState, actions, logs)
-//              actions = result._1._1
-//              logs = result._1._2
-//              updatedState = result._2
-//            } else {
-//              //            println("Skipping actions due to absence of monsters.")
-//            }
-//          case JsError(_) =>
-//          //          println("battleInfo is null or invalid
-//
-//        }
-//      }
-//    } else if (settings.autoTargetSettings.enabled && updatedState.stateHunting == "attacking") {
-//      // Safely attempt to extract the attacked creature's target ID
-//      println(s"AutoTarget is ON, (ELSE IF) status ${updatedState.stateHunting}")
-//
-//
-//      (json \ "attackInfo" \ "Id").asOpt[Int] match {
-//        case Some(attackedCreatureTarget) =>
-//          println(s"Targeting creature id: $attackedCreatureTarget")
-//          val tempTargetFreezeHealthPoints = (json \ "attackInfo" \ "HealthPercent").as[Int]
-//
-//
-//          // chase target if requested in UI settings
-//          val currentChaseMode = (json \ "characterInfo" \ "ChaseMode").as[Int]
-//          val attackInfoPart = (json \ "attackInfo")
-//          val tempTargetName = (json \ "attackInfo" \ "Name").as[String]
-//
-//
-//          // Print out the entire settings list for verification
-//          println("Auto Target Settings List:")
-//          settings.autoTargetSettings.creatureList.foreach(println)
-//
-//          // Attempt to find specific settings for the creature or fallback to 'All'
-//          val targetCreatureSettings = settings.autoTargetSettings.creatureList.find(_.toLowerCase.contains(tempTargetName.toLowerCase))
-//            .orElse(settings.autoTargetSettings.creatureList.find(_.contains("All")))
-//
-//          println(s"Settings for target $tempTargetName: $targetCreatureSettings")
-//
-//          // Determine if chasing is enabled for this creature
-//          val chaseEnabled = targetCreatureSettings match {
-//            case Some(settingsString) =>
-//              // Split the string by comma and refine checking for the chase status
-//              val chaseSetting = settingsString.split(",").map(_.trim).find(_.startsWith("Chase:"))
-//              chaseSetting match {
-//                case Some(setting) => setting.split(":")(1).trim.equalsIgnoreCase("yes")
-//                case None =>
-//                  println("Chase setting not found, defaulting to false.")
-//                  false
-//              }
-//            case None =>
-//              println("No settings found for target, defaulting to settings for 'All'.")
-//              false
-//          }
-//
-//          // Log current chase mode and whether chasing is enabled
-//          println(s"currentChaseMode: $currentChaseMode")
-//          println(s"chaseEnabled: $chaseEnabled")
-//
-//
-//          // change chase if necessary
-//          if (!(currentChaseMode == 1) && chaseEnabled) {
-//            println("inside chase change")
-//            if (updatedState.chaseSwitchStatus >= updatedState.retryAttemptsMid) {
-//
-//              updatedState = updatedState.copy(chaseSwitchStatus = 0)
-//
-//              if (currentChaseMode == 0) {
-//                printInColor(ANSI_RED, "[DEBUG] Changing the chase mode.")
-//                val chaseModeBoxPosition = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "chaseModeBox").as[JsObject]
-//                val chaseModeBoxX = (chaseModeBoxPosition \ "x").as[Int]
-//                val chaseModeBoxY = (chaseModeBoxPosition \ "y").as[Int]
-//
-//                val actionsSeq = Seq(
-//                  MouseAction(chaseModeBoxX, chaseModeBoxY, "move"),
-//                  MouseAction(chaseModeBoxX, chaseModeBoxY, "pressLeft"),
-//                  MouseAction(chaseModeBoxX, chaseModeBoxY, "releaseLeft")
-//                )
-//
-//                logs :+= Log("Move mouse to switch to follow chase mode.")
-//                actions :+= FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-//              }
-//            } else {
-//              printInColor(ANSI_RED, "[DEBUG] Looping until changing chase mode!")
-//              updatedState = updatedState.copy(chaseSwitchStatus = updatedState.chaseSwitchStatus + 1)
-//            }
-//          }
-//          //end chaange chase
-//
-//
-//
-//
-//          // start anti-freeze
-//          if (tempTargetFreezeHealthPoints < updatedState.targetFreezeHealthPoints) {
-//            updatedState = updatedState.copy(targetFreezeHealthStatus = 0)
-//
-//          } else if (updatedState.targetFreezeHealthStatus >= updatedState.retryAttemptsLong && updatedState.targetFreezeHealthPoints == tempTargetFreezeHealthPoints) {
-//            printInColor(ANSI_BLUE, f"[DEBUG] Changing target due to health freeze")
-//
-//            val battleCreaturePosition = (json \ "screenInfo" \ "battlePanelLoc" \ attackedCreatureTarget.toString).asOpt[JsObject]
-//            battleCreaturePosition match {
-//              case Some(pos) =>
-//                val battleCreaturePositionX = (pos \ "PosX").asOpt[Int].getOrElse(0)
-//                val battleCreaturePositionY = (pos \ "PosY").asOpt[Int].getOrElse(0)
-//
-//                if (updatedState.retryStatus >= updatedState.retryAttempts) {
-//                  printInColor(ANSI_RED, f"[DEBUG] Unselecting creature id: $attackedCreatureTarget ")
-//
-//                  // Perform the mouse actions
-//                  val actionsSeq = Seq(
-//                    MouseAction(battleCreaturePositionX, battleCreaturePositionY, "move"),
-//                    MouseAction(battleCreaturePositionX, battleCreaturePositionY, "pressLeft"),
-//                    MouseAction(battleCreaturePositionX, battleCreaturePositionY, "releaseLeft")
-//                  )
-//                  actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-//
-//                  // Reset the state and retryStatus
-//                  updatedState = updatedState.copy(stateHunting = "free", retryStatus = 0, targetFreezeCreatureId=attackedCreatureTarget)
-//                } else {
-//                  printInColor(ANSI_RED, f"[DEBUG] Retrying... (Attempt ${updatedState.retryStatus + 1})")
-//                  updatedState = updatedState.copy(retryStatus = updatedState.retryStatus + 1)
-//                }
-//
-//              case None =>
-//                println(s"No position information available for monster ID $attackedCreatureTarget")
-//            }
-//
-//
-//          } else if (updatedState.targetFreezeHealthPoints == tempTargetFreezeHealthPoints) {
-//            printInColor(ANSI_BLUE, f"[DEBUG] Target is freezed. (Attempt ${updatedState.targetFreezeHealthStatus + 1})")
-//            updatedState = updatedState.copy(targetFreezeHealthStatus = updatedState.targetFreezeHealthStatus + 1)
-//          }
-//          // end anti-freeze
-//
-//
-//          val targetName = (json \ "attackInfo" \ "Name").asOpt[String].getOrElse("Unknown")
-//          printInColor(ANSI_RED, f"[DEBUG] computeAutoTargetActions process started. Status:${updatedState.stateHunting}, attacking: $targetName")
-//          val xPos = (json \ "attackInfo" \ "Position" \ "x").asOpt[Int].getOrElse(0)
-//          val yPos = (json \ "attackInfo" \ "Position" \ "y").asOpt[Int].getOrElse(0)
-//          val zPos = (json \ "attackInfo" \ "Position" \ "z").asOpt[Int].getOrElse(0)
-//
-//          updatedState = updatedState.copy(lastTargetName = targetName)
-//          updatedState = updatedState.copy(targetFreezeHealthPoints = tempTargetFreezeHealthPoints)
-//          updatedState = updatedState.copy(lastTargetPos = (xPos, yPos, zPos))
-//          updatedState = updatedState.copy(creatureTarget = attackedCreatureTarget)
-//
-//
-//          println(settings.autoTargetSettings.creatureList)
-//          // Fire runes at target
-//          val targetSettings = settings.autoTargetSettings.creatureList.find(_.contains(targetName))
-//
-//          // Check if specific settings for the target exist, otherwise use "All" settings if available
-//          val effectiveSettings = targetSettings.orElse {
-//            val allSettings = settings.autoTargetSettings.creatureList.find(_.contains("All"))
-//            if (allSettings.isEmpty) println(s"No specific or 'All' settings found for $targetName.")
-//            allSettings
-//          }
-//
-//          println(effectiveSettings)
-//          effectiveSettings match {
-//            case Some(creatureSettings) =>
-//              val useRune = creatureSettings.contains("Use Rune: Yes")
-//              extractRuneID(creatureSettings) match {
-//                case Some(runeID) =>
-//                  println(s"Extracted Rune ID: $runeID")
-//                  val currentTime = System.currentTimeMillis()
-//                  if (useRune && currentTime - updatedState.lastRuneUseTime > (updatedState.runeUseCooldown + updatedState.runeUseRandomness)) {
-//                    val runeAvailability = (1 to 4).flatMap { slot =>
-//                      (json \ "containersInfo" \ updatedState.attackRuneContainerName \ "items" \ s"slot$slot" \ "itemId").asOpt[Int].map(itemId => (itemId, slot))
-//                    }.find(_._1 == runeID)
-//
-//                    runeAvailability match {
-//                      case Some((_, slot)) =>
-//                        val inventoryPanelLoc = (json \ "screenInfo" \ "inventoryPanelLoc").as[JsObject]
-//                        val containerKey = inventoryPanelLoc.keys.find(_.contains(updatedState.attackRuneContainerName)).getOrElse("")
-//                        val contentsPath = inventoryPanelLoc \ containerKey \ "contentsPanel"
-//                        val runeScreenPos = (contentsPath \ s"item$slot").asOpt[JsObject].map { item =>
-//                          (item \ "x").asOpt[Int].getOrElse(-1) -> (item \ "y").asOpt[Int].getOrElse(-1)
-//                        }.getOrElse((-1, -1))
-//
-//                        val monsterPos = (json \ "screenInfo" \ "battlePanelLoc" \ s"$attackedCreatureTarget").asOpt[JsObject].map { monster =>
-//                          ((monster \ "PosX").as[Int], (monster \ "PosY").as[Int])
-//                        }.getOrElse((-1, -1))
-//
-//                        println(s"Rune position on screen: X=${runeScreenPos._1}, Y=${runeScreenPos._2}")
-//                        println(s"Monster position on battle screen: X=${monsterPos._1}, Y=${monsterPos._2}")
-//
-//                        // Check if the monster's position is valid (not -1 or less than 2)
-//                        if (monsterPos._1 >= 2 && monsterPos._2 >= 2) {
-//                          // Define actions sequence here and ensure they are triggered correctly
-//                          val actionsSeq = Seq(
-//                            MouseAction(runeScreenPos._1, runeScreenPos._2, "move"),
-//                            MouseAction(runeScreenPos._1, runeScreenPos._2, "pressRight"),
-//                            MouseAction(runeScreenPos._1, runeScreenPos._2, "releaseRight"),
-//                            MouseAction(monsterPos._1, monsterPos._2, "move"),
-//                            MouseAction(monsterPos._1, monsterPos._2, "pressLeft"),
-//                            MouseAction(monsterPos._1, monsterPos._2, "releaseLeft")
-//                          )
-//                          actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-//                          val newRandomDelay = generateRandomDelay(updatedState.runeUseTimeRange)
-//                          updatedState = updatedState.copy(
-//                            lastRuneUseTime = currentTime,
-//                            runeUseRandomness = newRandomDelay
-//                          )
-//                          println("Actions executed: Monster was in a valid position.")
-//                        } else {
-//                          println("No actions executed: Monster position indicates it is no longer on the screen or too close to the edge.")
-//                        }
-//                      case None =>
-//                        println("Rune is not available in the first four slots of the specified backpack.")
-//                    }
-//                  } else {
-//                    println("Rune cannot be used yet due to cooldown.")
-//                  }
-//                case None =>
-//                  println("Invalid or missing rune ID in settings.")
-//              }
-//            case None =>
-//              println(s"No settings found for $targetName.")
-//          }
-//
-//
-//
-//
-//
-//        case None =>
-//          println(s"Attack Info is empty. Switching to free")
-//          updatedState = updatedState.copy(stateHunting = "free")
-//      }
-//    }
 
     val endTime = System.nanoTime()
     val duration = (endTime - startTime) / 1e9d
@@ -937,6 +630,7 @@ object AutoTarget {
   }
 
 
+
   case class CreatureSettings(
                                name: String,
                                count: Int,
@@ -949,28 +643,76 @@ object AutoTarget {
                                keepDistance: Boolean,
                                avoidWaves: Boolean,
                                useRune: Boolean,
-                               runeType: Option[String],  // Optional, as rune type may not always be provided
-                               useRuneOnScreen: Boolean,  // New field for runes on screen
-                               useRuneOnBattle: Boolean   // New field for runes in battle
-                             )
+                               runeType: Option[String],
+                               useRuneOnScreen: Boolean,
+                               useRuneOnBattle: Boolean,
+                               lootMonsterImmediately: Boolean,   // new field
+                               lootMonsterAfterFight: Boolean,    // new field
+                               lureCreatureToTeam: Boolean        // new field
+    )
+
 
   def parseCreature(description: String): CreatureSettings = {
     val parts = description.split(", ")
-    val name = parts(0)
+    val name = parts(0).substring("Name: ".length)
     val count = parts(1).split(": ")(1).toInt
     val hpRange = parts(2).split(": ")(1).split("-").map(_.toInt)
     val danger = parts(3).split(": ")(1).toInt
     val targetBattle = parts(4).split(": ")(1).equalsIgnoreCase("yes")
     val loot = parts(5).split(": ")(1).equalsIgnoreCase("yes")
-    val chase = parts(6).split(": ")(1).equalsIgnoreCase("yes")
-    val keepDistance = parts(7).split(": ")(1).equalsIgnoreCase("yes")
-    val avoidWaves = parts(8).split(": ")(1).equalsIgnoreCase("yes")
-    val useRune = parts(9).split(": ")(1).equalsIgnoreCase("yes")
-    val runeType = if (parts.length > 10 && parts(10).split(": ").length > 1) Some(parts(10).split(": ")(1)) else None
-    val useRuneOnScreen = if (parts.length > 11) parts(11).split(": ")(1).equalsIgnoreCase("yes") else false
-    val useRuneOnBattle = if (parts.length > 12) parts(12).split(": ")(1).equalsIgnoreCase("yes") else false
 
-    CreatureSettings(name, count, hpRange(0), hpRange(1), danger, targetBattle, loot, chase, keepDistance, avoidWaves, useRune, runeType, useRuneOnScreen, useRuneOnBattle)
+    val lootMonsterImmediately = parts(6).split(": ")(1).equalsIgnoreCase("yes")
+    val lootMonsterAfterFight = parts(7).split(": ")(1).equalsIgnoreCase("yes")
+    val chase = parts(8).split(": ")(1).equalsIgnoreCase("yes")
+    val keepDistance = parts(9).split(": ")(1).equalsIgnoreCase("yes")
+    val lureCreatureToTeam = parts(10).split(": ")(1).equalsIgnoreCase("yes")
+    val avoidWaves = parts(11).split(": ")(1).equalsIgnoreCase("yes")
+    val useRune = parts(12).split(": ")(1).equalsIgnoreCase("yes")
+    val runeType = if (parts.length > 13 && parts(13).split(": ").length > 1) Some(parts(13).split(": ")(1)) else None
+    val useRuneOnScreen = if (parts.length > 14) parts(14).split(": ")(1).equalsIgnoreCase("yes") else false
+    val useRuneOnBattle = if (parts.length > 15) parts(15).split(": ")(1).equalsIgnoreCase("yes") else false
+
+    // Debug: Print parsed values for keepDistance and chase
+    println(s"[DEBUG] Parsing Creature: $name, Chase: $chase, Keep Distance: $keepDistance, Lure to Team: $lureCreatureToTeam")
+
+    CreatureSettings(
+      name, count, hpRange(0), hpRange(1), danger, targetBattle, loot, chase, keepDistance,
+      avoidWaves, useRune, runeType, useRuneOnScreen, useRuneOnBattle, lootMonsterImmediately, lootMonsterAfterFight, lureCreatureToTeam
+    )
+  }
+
+
+
+  def transformToObject(creatureData: CreatureInfo, creatureSettingsList: Seq[String]): Option[CreatureSettings] = {
+    // Debug: Print the creatureSettingsList
+    println(s"[DEBUG] CreatureSettingsList: $creatureSettingsList")
+
+    // Parse each creature setting description into CreatureSettings objects
+    val parsedSettings = creatureSettingsList.map(parseCreature)
+
+    // Debug: print the parsed creature settings for comparison
+    parsedSettings.foreach { setting =>
+      println(s"[DEBUG] Parsed Creature: ${setting.name}, Keep Distance: ${setting.keepDistance}")
+    }
+
+    // Find the matching creature settings by name (case-insensitive)
+    parsedSettings.find(_.name.equalsIgnoreCase(creatureData.name)) match {
+      case Some(creatureSettings) => Some(creatureSettings)
+      case None =>
+        // If no exact match is found, look for settings with the name "All"
+        parsedSettings.find(_.name.equalsIgnoreCase("All"))
+    }
+  }
+
+  def transformToJSON(creaturesData: Seq[String]): List[JsValue] = {
+    creaturesData.map(description => {
+      val creatureSettings = parseCreature(description)
+
+      // Debug: Print parsed creature settings before converting to JSON
+      println(s"[DEBUG] Parsed CreatureSettings: $creatureSettings")
+
+      Json.toJson(creatureSettings) // Convert creature settings to JsValue
+    }).toList
   }
 
 
@@ -982,9 +724,8 @@ object AutoTarget {
 
 
   // Transform to JSON function
-  def transformToJSON(creaturesData: Seq[String]): List[JsValue] = {
-    creaturesData.map(description => Json.toJson(parseCreature(description))).toList
-  }
+
+
 
   // Define a helper function to extract the rune ID from a string
 
@@ -1010,36 +751,51 @@ object AutoTarget {
 
   // Function to extract battleInfo and sort by danger, healthPercent, and keepDistance
   def extractInfoAndSortMonstersFromBattle(json: JsValue, settings: UISettings): List[CreatureInfo] = {
-//    println(s"extractInfoAndSortMonstersFromBattle start")
-
-    // Extract battleInfo from JSON
+    // Extract battleInfo from the JSON
     val battleInfo = (json \ "battleInfo").as[Map[String, JsValue]]
 
-    // Transform creatureList from settings into a map of (name -> danger, keepDistance)
+    // Transform creatureList from settings into JSON
     val targetMonstersJsons = transformToJSON(settings.autoTargetSettings.creatureList)
-    println(targetMonstersJsons)
 
+    // Check if we are targeting all creatures
     val targetAllCreatures = targetMonstersJsons.exists { creatureJson =>
       (creatureJson \ "name").as[String].equalsIgnoreCase("All")
     }
 
-    // Map of creature name to (danger, keepDistance)
-    val creatureSettingsMap: Map[String, (Int, Boolean)] = targetMonstersJsons.map { creatureJson =>
+    // Map creature name to CreatureSettings
+    val creatureSettingsMap: Map[String, CreatureSettings] = targetMonstersJsons.map { creatureJson =>
       val creature = creatureJson.as[CreatureSettings]
-      (creature.name, (creature.danger, creature.keepDistance))
+      (creature.name, creature)
     }.toMap
 
-    // Extract and map the battle targets from the battleInfo
+    // Extract and map battle targets from battleInfo
     val battleTargets: List[CreatureInfo] = battleInfo.flatMap { case (_, battleData) =>
-      // Extract creature information
       val isMonster = (battleData \ "IsMonster").asOpt[Boolean].getOrElse(false)
       val isPlayer = (battleData \ "IsPlayer").asOpt[Boolean].getOrElse(false)
 
       if ((isMonster || targetAllCreatures) && !isPlayer) {
         val creatureName = (battleData \ "Name").as[String]
 
-        // Get danger and keepDistance from the map, or default to (0, false) if not found
-        val (danger, keepDistance) = creatureSettingsMap.getOrElse(creatureName, (0, false))
+        // Retrieve creature settings or use default settings
+        val creatureSettings = creatureSettingsMap.getOrElse(creatureName, CreatureSettings(
+          name = creatureName,
+          count = 0,
+          hpFrom = 0,
+          hpTo = 100,
+          danger = 0,
+          targetBattle = false,
+          loot = false,
+          chase = false,
+          keepDistance = false,
+          avoidWaves = false,
+          useRune = false,
+          runeType = None,
+          useRuneOnScreen = false,
+          useRuneOnBattle = false,
+          lootMonsterImmediately = false,  // new field
+          lootMonsterAfterFight = false,   // new field
+          lureCreatureToTeam = false       // new field
+        ))
 
         Some(CreatureInfo(
           id = (battleData \ "Id").as[Int],
@@ -1047,12 +803,15 @@ object AutoTarget {
           healthPercent = (battleData \ "HealthPercent").as[Int],
           isShootable = (battleData \ "IsShootable").as[Boolean],
           isMonster = isMonster,
-          danger = danger, // Set danger from settings
-          keepDistance = keepDistance, // Set keepDistance from settings
+          danger = creatureSettings.danger,           // Set danger level from settings
+          keepDistance = creatureSettings.keepDistance, // Set keep distance from settings
           isPlayer = isPlayer,
           posX = (battleData \ "PositionX").as[Int],
           posY = (battleData \ "PositionY").as[Int],
-          posZ = (battleData \ "PositionZ").as[Int]
+          posZ = (battleData \ "PositionZ").as[Int],
+          lootMonsterImmediately = creatureSettings.lootMonsterImmediately,  // new field
+          lootMonsterAfterFight = creatureSettings.lootMonsterAfterFight,    // new field
+          lureCreatureToTeam = creatureSettings.lureCreatureToTeam           // new field
         ))
       } else {
         None
@@ -1060,65 +819,7 @@ object AutoTarget {
     }.toList
 
     // Sort creatures by danger (descending) and healthPercent (ascending)
-    battleTargets
-      .sortBy(monster => (monster.danger * -1, monster.healthPercent))
-  }
-
-
-  // Function to extract battleInfo and sort by danger, healthPercent, and keepDistance
-  def extractInfoAndSortMonstersFromBattleOld(json: JsValue, settings: UISettings): List[CreatureInfo] = {
-    println(s"extractInfoAndSortMonstersFromBattle start")
-
-    // Extract battleInfo from JSON
-    val battleInfo = (json \ "battleInfo").as[Map[String, JsValue]]
-
-    // Transform creatureList from settings into a map of (name -> danger, keepDistance)
-    val targetMonstersJsons = transformToJSON(settings.autoTargetSettings.creatureList)
-    println(targetMonstersJsons)
-
-    val targetAllCreatures = targetMonstersJsons.exists { creatureJson =>
-      (creatureJson \ "name").as[String].equalsIgnoreCase("All")
-    }
-
-    // Map of creature name to (danger, keepDistance)
-    val creatureSettingsMap: Map[String, (Int, Boolean)] = targetMonstersJsons.map { creatureJson =>
-      val creature = creatureJson.as[CreatureSettings]
-      (creature.name, (creature.danger, creature.keepDistance))
-    }.toMap
-
-    // Extract and map the battle targets from the battleInfo
-    val battleTargets: List[CreatureInfo] = battleInfo.flatMap { case (_, battleData) =>
-      // Extract creature information
-      val isMonster = (battleData \ "IsMonster").asOpt[Boolean].getOrElse(false)
-      val isPlayer = (battleData \ "IsPlayer").asOpt[Boolean].getOrElse(false)
-
-      if (isMonster || targetAllCreatures) {
-        val creatureName = (battleData \ "Name").as[String]
-
-        // Get danger and keepDistance from the map, or default to (0, false) if not found
-        val (danger, keepDistance) = creatureSettingsMap.getOrElse(creatureName, (0, false))
-
-        Some(CreatureInfo(
-          id = (battleData \ "Id").as[Int],
-          name = creatureName,
-          healthPercent = (battleData \ "HealthPercent").as[Int],
-          isShootable = (battleData \ "IsShootable").as[Boolean],
-          isMonster = isMonster,
-          danger = danger, // Set danger from settings
-          keepDistance = keepDistance, // Set keepDistance from settings
-          isPlayer = isPlayer,
-          posX = (battleData \ "PositionX").as[Int],
-          posY = (battleData \ "PositionY").as[Int],
-          posZ = (battleData \ "PositionZ").as[Int]
-        ))
-      } else {
-        None
-      }
-    }.toList
-
-    // Sort creatures by danger (descending) and healthPercent (ascending)
-    battleTargets
-      .sortBy(monster => (monster.danger * -1, monster.healthPercent))
+    battleTargets.sortBy(monster => (monster.danger * -1, monster.healthPercent))
   }
 
 
@@ -1157,26 +858,25 @@ object AutoTarget {
       false
     }
   }
-
   def findCreatureInfoById(creatureId: Long, battleInfo: Map[String, JsValue]): Option[CreatureInfo] = {
-    // Find the creature with the matching Id in battleInfo
     battleInfo.collectFirst {
       case (_, creatureData) if (creatureData \ "Id").as[Long] == creatureId =>
-        // Extract all necessary fields to construct a CreatureInfo object
         val id = (creatureData \ "Id").as[Int]
         val name = (creatureData \ "Name").as[String]
         val healthPercent = (creatureData \ "HealthPercent").as[Int]
         val isShootable = (creatureData \ "IsShootable").as[Boolean]
         val isMonster = (creatureData \ "IsMonster").as[Boolean]
-        val danger = (creatureData \ "Danger").asOpt[Int].getOrElse(0) // Optional field
-        val keepDistance = (creatureData \ "keepDistance").asOpt[Boolean].getOrElse(false) // Optional field
+        val danger = (creatureData \ "Danger").asOpt[Int].getOrElse(0)
+        val keepDistance = (creatureData \ "keepDistance").asOpt[Boolean].getOrElse(false)
+        val lootMonsterImmediately = (creatureData \ "lootMonsterImmediately").asOpt[Boolean].getOrElse(false)  // new field
+        val lootMonsterAfterFight = (creatureData \ "lootMonsterAfterFight").asOpt[Boolean].getOrElse(false)    // new field
+        val lureCreatureToTeam = (creatureData \ "lureCreatureToTeam").asOpt[Boolean].getOrElse(false)          // new field
         val isPlayer = (creatureData \ "IsPlayer").as[Boolean]
         val posX = (creatureData \ "PositionX").as[Int]
         val posY = (creatureData \ "PositionY").as[Int]
         val posZ = (creatureData \ "PositionZ").as[Int]
 
-        // Return the CreatureInfo object
-        CreatureInfo(id, name, healthPercent, isShootable, isMonster, danger, keepDistance, isPlayer, posX, posY, posZ)
+        CreatureInfo(id, name, healthPercent, isShootable, isMonster, danger, keepDistance, isPlayer, posX, posY, posZ, lootMonsterImmediately, lootMonsterAfterFight, lureCreatureToTeam)
     }
   }
 
@@ -1265,6 +965,10 @@ object AutoTarget {
     // Convert settings to a CreatureSettings object for the targeted creature
     val targetedCreatureSettings = transformToObject(creatureData, settings.autoTargetSettings.creatureList)
 
+    println(s"settings.teamHuntSettings.teamMembersList): ${settings.teamHuntSettings.teamMembersList}")
+    println(s"targetedCreatureSettings: ${targetedCreatureSettings}")
+    println(s"settings.autoTargetSettings.creatureList: ${settings.autoTargetSettings.creatureList}")
+
     targetedCreatureSettings match {
       case Some(creatureSettings) =>
         // Determine the mode based on the settings
@@ -1272,6 +976,8 @@ object AutoTarget {
           mode = "chase"
         } else if (creatureSettings.keepDistance) {
           mode = "keepDistance"
+        } else if (creatureSettings.lureCreatureToTeam) {
+          mode = "lureCreatureToTeam"
         } else {
           mode = "none"
           logs :+= Log("[DEBUG] No engagement mode selected.")
@@ -1283,7 +989,7 @@ object AutoTarget {
         mode match {
           case "chase" =>
             // Move toward the creature
-            logs :+= Log("[DEBUG] Engaging creature in chase mode.")
+            println(s"[DEBUG] Engaging creature in chase mode.")
             updatedState = generateSubwaypointsToCreature(Vec(creatureData.posX, creatureData.posY), updatedState, json)
 
             if (updatedState.subWaypoints.nonEmpty) {
@@ -1303,6 +1009,7 @@ object AutoTarget {
 
           case "keepDistance" =>
             // Try to maintain distance from the creature
+            println(s"[DEBUG] Engaging creature in keepDistance mode.")
             val requiredDistance = 3
 
             val chebyshevDistance = Math.max(
@@ -1334,9 +1041,68 @@ object AutoTarget {
               logs :+= Log("[DEBUG] Safe distance maintained, no action needed.")
             }
 
+
+          case "lureCreatureToTeam" =>
+            println(s"[DEBUG] Engaging creature in Lure to Team mode.")
+            val requiredDistance = 5
+            val chebyshevDistance = Math.max(
+              Math.abs(creatureData.posX - presentCharLocation.x),
+              Math.abs(creatureData.posY - presentCharLocation.y)
+            )
+
+            if (chebyshevDistance > requiredDistance) {
+              // Approach the creature first until within 5 tiles
+              logs :+= Log("[DEBUG] Creature is far, approaching it.")
+              updatedState = generateSubwaypointsToCreature(Vec(creatureData.posX, creatureData.posY), updatedState, json)
+
+              if (updatedState.subWaypoints.nonEmpty) {
+                val nextWaypoint = updatedState.subWaypoints.head
+                val direction = calculateDirection(presentCharLocation, nextWaypoint, updatedState.lastDirection)
+                logs :+= Log(f"[DEBUG] Calculated Next Direction (Approach): $direction")
+
+                updatedState = updatedState.copy(lastDirection = direction)
+
+                direction.foreach { dir =>
+                  actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(dir)))
+                  logs :+= Log(s"Approaching the creature in direction: $dir")
+                }
+
+                updatedState = updatedState.copy(subWaypoints = updatedState.subWaypoints.tail)
+              }
+            } else {
+              // Creature is within 5 tiles, move towards the team
+              logs :+= Log("[DEBUG] Creature is close, moving toward the team.")
+
+              val defaultVec = presentCharLocation
+              val teamMemberPos = getClosestTeamMemberPosition(json, presentCharLocation, settings)
+              println(s"teamMemberPos: ${teamMemberPos}")
+              // Use getOrElse to provide a default Vec if teamMemberPos is None
+              updatedState = generateSubwaypointsToCreature(teamMemberPos.getOrElse(defaultVec), updatedState, json)
+
+              println(s"updatedState.subWaypoints: ${updatedState.subWaypoints}")
+              if (updatedState.subWaypoints.nonEmpty) {
+                val nextWaypoint = updatedState.subWaypoints.head
+                val direction = calculateDirection(presentCharLocation, nextWaypoint, updatedState.lastDirection)
+                logs :+= Log(f"[DEBUG] Calculated Next Direction (Lure to Team): $direction")
+
+                updatedState = updatedState.copy(lastDirection = direction)
+
+                direction.foreach { dir =>
+                  actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(dir)))
+                  logs :+= Log(s"Moving toward the team in direction: $dir with creature.")
+                }
+
+                updatedState = updatedState.copy(subWaypoints = updatedState.subWaypoints.tail)
+              }
+            }
+
+
           case _ =>
             logs :+= Log("[DEBUG] No valid engagement mode, no action taken.")
         }
+
+
+
 
       case None =>
         logs :+= Log(s"[DEBUG] No matching settings found for creature: ${creatureData.name}")
@@ -1361,7 +1127,7 @@ object AutoTarget {
     // Get the character's current location
     val presentCharLocation = updatedState.presentCharLocation
     println(s"[DEBUG] Character location: $presentCharLocation")
-
+    println(s"[DEBUG] targetLocation: $targetLocation")
     // Use A* search to calculate the path to the target location (creature)
     var newPath: List[Vec] = List()
 
@@ -1506,7 +1272,9 @@ object AutoTarget {
     neighbors.find(n => isTileWalkable(n, grid, minX, minY)).getOrElse(pos)
   }
 
-  def transformToObject(creatureData: CreatureInfo, creatureSettingsList: Seq[String]): Option[CreatureSettings] = {
+
+
+  def transformToObjectOld(creatureData: CreatureInfo, creatureSettingsList: Seq[String]): Option[CreatureSettings] = {
     // Parse each creature setting description into CreatureSettings objects
     val parsedSettings = creatureSettingsList.map(parseCreature)
 
@@ -2162,6 +1930,65 @@ object AutoTarget {
 
     }
     ((actions, logs), updatedState)
+  }
+
+  def getClosestTeamMemberPosition(json: JsValue, blockerPosition: Vec, settings: UISettings): Option[Vec] = {
+    // Extract battleInfo from the JSON
+    val battleInfo = (json \ "battleInfo").as[Map[String, JsValue]]
+
+    // Extract the list of team members from settings
+    val teamMembersList = settings.teamHuntSettings.teamMembersList
+
+    // Debug: Print the team members list
+    println(s"[DEBUG] teamMembersList: $teamMembersList")
+    println(s"[DEBUG] blockerPosition: $blockerPosition")
+
+    // Initialize a variable to store the closest position and the smallest distance
+    var closestPosition: Option[Vec] = None
+    var smallestDistance: Int = Int.MaxValue
+
+    // Iterate over the battleInfo entries
+    battleInfo.foreach { case (key, data) =>
+      val name = (data \ "Name").asOpt[String].getOrElse("Unknown")
+      val isPlayer = (data \ "IsPlayer").asOpt[Boolean].getOrElse(false)
+
+      // Debug: Print battle info entry
+      println(s"[DEBUG] Processing battleInfo entry: Key: $key, Name: $name, IsPlayer: $isPlayer")
+
+      // Check if the name is in the teamMembersList and the entity is a player
+      if (teamMembersList.contains(name) && isPlayer) {
+        val posX = (data \ "PositionX").as[Int]
+        val posY = (data \ "PositionY").as[Int]
+
+        // Calculate Chebyshev distance to the blocker
+        val distance = Math.max(
+          Math.abs(posX - blockerPosition.x),
+          Math.abs(posY - blockerPosition.y)
+        )
+
+        // Debug: Print distance calculation
+        println(s"[DEBUG] Team member found: $name, Position: ($posX, $posY), Distance: $distance")
+
+        // If this team member is closer, update the closest position and smallest distance
+        if (distance < smallestDistance) {
+          smallestDistance = distance
+          closestPosition = Some(Vec(posX, posY))
+
+          // Debug: Print updated closest position
+          println(s"[DEBUG] New closest team member: $name, Position: ($posX, $posY), Distance: $distance")
+        }
+      } else {
+        // Debug: If the team member is not valid, print the reason
+        if (!teamMembersList.contains(name)) println(s"[DEBUG] Name $name not in teamMembersList")
+        if (!isPlayer) println(s"[DEBUG] Entity $name is not a player")
+      }
+    }
+
+    // Debug: Print final closest position
+    println(s"[DEBUG] Closest team member position: $closestPosition")
+
+    // Return the closest position found
+    closestPosition
   }
 
 

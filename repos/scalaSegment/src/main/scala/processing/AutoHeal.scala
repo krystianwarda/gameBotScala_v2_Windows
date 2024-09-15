@@ -21,7 +21,9 @@ object AutoHeal {
     val currentTime = System.currentTimeMillis()
 
     if (settings.healingSettings.enabled) {
+
       println("Inside autohealing")
+
       if (updatedState.statusOfRuneAutoheal == "verifying") {
         // Step 2: Verify if the newly opened backpack contains UH runes
         logs = logs :+ Log(s"Verifying if container ${updatedState.uhRuneContainerName} contains UH runes...")
@@ -90,9 +92,6 @@ object AutoHeal {
       }
 
 
-
-
-
       if (updatedState.uhRuneContainerName != "not_set" && updatedState.statusOfRuneAutoheal == "ready") {
         logs = logs :+ Log(s"UH Rune container set to ${updatedState.uhRuneContainerName}. Checking for free space and parent...")
         (json \ "containersInfo" \ updatedState.uhRuneContainerName).asOpt[JsObject].foreach { containerInfo =>
@@ -112,13 +111,91 @@ object AutoHeal {
       }
 
 
+      if (updatedState.dangerLevelHealing == "high") {
+
+        // Extract characterInfo
+        val characterInfo = (json \ "characterInfo").asOpt[JsObject].getOrElse(Json.obj())
+        val isCrosshairActive = (characterInfo \ "IsCrosshairActive").asOpt[Boolean].getOrElse(false)
+        updatedState = updatedState.copy(healingCrosshairActive=isCrosshairActive)
+
+        // Extract battleInfo
+        val battleInfo = (json \ "battleInfo").asOpt[JsObject].getOrElse(Json.obj())
+        val battleCreatures = battleInfo.fields.map { case (_, battleObj) =>
+          val creatureName = (battleObj \ "Name").asOpt[String].getOrElse("Unknown")
+          (creatureName, 1) // Each creature counts as 1
+        }.groupBy(_._1).view.mapValues(_.size).toMap
+
+        println(s"battleCreatures: $battleCreatures")
+        println(s"updatedState.dangerCreaturesList: ${updatedState.dangerCreaturesList}")
+
+        // Flag to track if any danger condition is still met
+        var dangerConditionStillMet = false
+
+        // Iterate over dangerCreaturesList
+        updatedState.dangerCreaturesList.foreach { creature =>
+          val creatureName = creature.name
+          val dangerCount = creature.count
+          val creatureDanger = creature.danger
+
+          val creatureBattleCount = battleCreatures.getOrElse(creatureName, 0)
+
+          // Condition for whether the creature in battle matches or exceeds the danger count
+          val conditionMet = if (dangerCount == 0) {
+            creatureBattleCount >= 1
+          } else {
+            creatureBattleCount >= dangerCount
+          }
+
+          println(s"conditionMet: $conditionMet for $creatureName")
+          if (conditionMet) {
+            println(s"Character in danger due to $creatureName in number $creatureBattleCount")
+
+            // Danger condition still exists
+            dangerConditionStillMet = true
+
+            // If the crosshair is not active, it should be activated due to the danger
+            if (!isCrosshairActive) {
+              println(s"Crosshair is NOT active but danger creature $creatureName count is critical")
+
+              // Extracting target position from the mapPanelLoc in the JSON
+              val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
+              val targetX = (mapTarget \ "x").as[Int]
+              val targetY = (mapTarget \ "y").as[Int]
+
+              findItemInContainerSlot14(json, updatedState, 3160, 1).headOption.map { runePosition =>
+                val runeX = (runePosition \ "x").as[Int]
+                val runeY = (runePosition \ "y").as[Int]
+
+                var actionsSeq = Seq(
+                  MouseAction(runeX, runeY, "move"),
+                  MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
+                  MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
+                  MouseAction(targetX, targetY, "move") // Move to target position
+                )
+                actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+                updatedState = updatedState.copy(healingCrosshairActive=true)
+              }
+            }
+          }
+        }
+
+        // If no dangerous creatures still meet the condition, the crosshair can be unclicked
+        if (!dangerConditionStillMet && isCrosshairActive) {
+          println(s"Crosshair is active, but no danger conditions met. It can be unclicked.")
+          var actionsSeq = Seq(
+            MouseAction(0, 0, "releaseRight") // Release right-click
+          )
+          actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+        }
+      }
+
+
       if (((currentState.currentTime - currentState.lastHealingTime) >= updatedState.healingSpellCooldown) && (updatedState.statusOfRuneAutoheal == "ready") && (updatedState.stateHealingWithRune == "free")) {
 
         val healthPercent = (json \ "characterInfo" \ "HealthPercent").as[Int]
         val mana = (json \ "characterInfo" \ "Mana").as[Int]
         val manaMax = (json \ "characterInfo" \ "ManaMax").as[Int]
         val manaPercent = (mana.toDouble / manaMax.toDouble * 100).toInt
-
 
         val friend1HealthPercentage = if (
           settings.healingSettings.friendsHealSettings.head.friend1HealSpell.length > 1 &&
@@ -175,18 +252,41 @@ object AutoHeal {
 
             if (currentTime - updatedState.lastHealUseTime  > (updatedState.healingUseCooldown + updatedState.healUseRandomness)) {
               printInColor(ANSI_RED, f"[DEBUG] HEAL")
-              val actionsSeq = Seq(
-                MouseAction(runeX, runeY, "move"),
-                MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
-                MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
-                MouseAction(targetX, targetY, "move"), // Move to target position
-                MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
-                MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
-              )
+
+
+
+              var actionsSeq = Seq.empty[MouseAction] // Initialize the outer actionsSeq variable
+
+              if (updatedState.healingCrosshairActive) {
+                println("healing with single click. crosshair active")
+                actionsSeq = Seq( // Remove 'var' to update the outer actionsSeq
+                  MouseAction(targetX, targetY, "move"), // Move to target position
+                  MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
+                  MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
+                )
+              } else {
+                println("Crosshair not active. need to find uh in bp")
+                actionsSeq = Seq( // Remove 'var' to update the outer actionsSeq
+                  MouseAction(runeX, runeY, "move"),
+                  MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
+                  MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
+                  MouseAction(targetX, targetY, "move"), // Move to target position
+                  MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
+                  MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
+                )
+              }
+
+              // Update the last healing time right after scheduling the action
+
               // Update the last healing time right after scheduling the action
               updatedState = updatedState.copy(lastHealingTime = currentState.currentTime, stateHealingWithRune = "healing")
+
+              // Now actionsSeq should contain the correct sequence of actions
+
               actions = actions :+ FakeAction("useMouse", Some(ItemInfo(3160, None)), Some(MouseActions(actionsSeq)))
+
 //                logs = logs :+ Log(s"Using item 3160 at position ($runeX, $runeY) - Actions: $actionsSeq")
+
 
               val newHealUseRandomness = generateRandomDelay(updatedState.highHealUseTimeRange)
 
@@ -312,10 +412,6 @@ object AutoHeal {
             logs = logs :+ Log("use keyboard for strong healing spell")
             actions = actions :+ FakeAction("typeText", None, Some(KeyboardText(settings.healingSettings.spellsHealSettings.head.strongHealSpell)))
           }
-//          } else {
-////            logs = logs :+ Log("use function for strong healing spell")
-////            actions = actions :+ FakeAction("sayText", None, Some(KeyboardText(spellText)))
-//          }
         }
 
         else if (settings.healingSettings.spellsHealSettings.head.lightHealSpell.length > 1 &&

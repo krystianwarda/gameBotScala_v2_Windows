@@ -242,6 +242,15 @@ object Process {
     Seq(FakeAction("useMouse", None, Some(MouseActions(actionsSeq))))
   }
 
+  def addMouseAction(command: String, itemData: Option[ItemInfo], updatedState: ProcessorState, actionsSeq: Seq[MouseAction]): FakeAction = {
+    val modifiedSeq = if (updatedState.healingCrosshairActive) {
+      println("Have to unclick crosshair.")
+      MouseAction(0, 0, "pressRight") +: actionsSeq
+    } else {
+      actionsSeq
+    }
+    FakeAction(command, itemData, Some(MouseActions(modifiedSeq)))
+  }
 
 
 }

@@ -4,7 +4,7 @@ import mouse.FakeAction
 import play.api.libs.json.{JsError, JsObject, JsValue}
 import userUI.SettingsUtils.UISettings
 import play.api.libs.json._
-import processing.Process.extractOkButtonPosition
+import processing.Process.{addMouseAction, extractOkButtonPosition}
 import utils.consoleColorPrint.{ANSI_GREEN, ANSI_RED, printInColor}
 
 import scala.util.Random
@@ -46,7 +46,9 @@ object AutoLoot {
               MouseAction(posX, posY, "releaseLeft")
             )
             printInColor(ANSI_RED, "[DEBUG] Closing object movement window.")
-            actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+
+            actions = actions :+ addMouseAction("useMouse", None, updatedState, actionsSeq)
+//            actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
 
             // Update the extraWidowLootStatus with the current time to mark this execution
             updatedState = updatedState.copy(lastExtraWindowLoot = updatedState.currentTime)
@@ -504,12 +506,13 @@ object AutoLoot {
                     val actionsSeq = Seq(
                       MouseAction(xPositionScreen, yPositionScreen, "move"),
                       MouseAction(xPositionScreen, yPositionScreen, "pressCtrl"),
-                      MouseAction(xPositionScreen, yPositionScreen, "pressLeft"),
-                      MouseAction(xPositionScreen, yPositionScreen, "releaseLeft"),
+                      MouseAction(xPositionScreen, yPositionScreen, "pressRight"),
+                      MouseAction(xPositionScreen, yPositionScreen, "releaseRight"),
                       MouseAction(xPositionScreen, yPositionScreen, "releaseCtrl")
                     )
 
-                    actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+                    actions = actions :+ addMouseAction("useMouse", None, updatedState, actionsSeq)
+//                    actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
                     updatedState = updatedState.copy(stateHunting = "opening window")
 
                   case None =>
