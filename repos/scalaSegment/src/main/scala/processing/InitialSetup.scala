@@ -1,12 +1,11 @@
 package processing
 
 import mouse.FakeAction
-import play.api.libs.json.{JsArray, JsValue, Json}
-import processing.AutoTarget.parseCreature
+import play.api.libs.json.{JsArray, JsValue, Json, JsObject, JsSuccess}
+import processing.AutoTarget.{CreatureSettings, parseCreature, transformToJSON}
 import userUI.SettingsUtils
 import userUI.SettingsUtils.UISettings
 import utils.consoleColorPrint.{ANSI_GREEN, printInColor}
-
 
 case class Creature(
                      name: String,
@@ -32,9 +31,8 @@ object InitialSetup {
     val currentTime = System.currentTimeMillis()
 
     if (!updatedState.initialSettingsSet) {
-
+      updatedState = defineCreaturesToLoot(json, updatedState, settings)
       updatedState = checkDynamicHealing(updatedState, settings)
-
       updatedState = updatedState.copy(initialSettingsSet=true)
     }
 
@@ -45,6 +43,56 @@ object InitialSetup {
     printInColor(ANSI_GREEN, f"[INFO] Processing computeInitialSetupActions took $duration%.6f seconds")
 
     ((actions, logs), updatedState)
+  }
+
+
+  def defineCreaturesToLoot(json: JsValue, currentState: ProcessorState, settings: UISettings): ProcessorState = {
+
+    val monsters: Seq[(Int, String)] = (json \ "battleInfo").as[JsObject].values.flatMap { creature =>
+      println("gate5")
+      val isMonster = (creature \ "IsMonster").as[Boolean]
+      println("gate6")
+      if (isMonster) {
+        Some((creature \ "Id").as[Int], (creature \ "Name").as[String])
+      } else None
+    }.toSeq
+
+    var updatedState = currentState
+    // Use the existing creatureList from settings
+    val jsonResult = transformToJSON(settings.autoTargetSettings.creatureList)
+    //          println(Json.prettyPrint(Json.toJson(jsonResult)))
+
+
+    // Checking if 'All' creatures are targeted
+    val targetAllCreatures = jsonResult.exists { json =>
+      (json \ "name").as[String].equalsIgnoreCase("All")
+    }
+
+    // Now use Reads from the Creature object
+    val creatureDangerMap = jsonResult.map { json =>
+      val creature = Json.parse(json.toString()).as[CreatureSettings](CreatureSettings.reads)
+      (creature.name, creature.danger)
+    }.toMap
+
+    // create a list of monsters to be looted
+    if (updatedState.monstersListToLoot.isEmpty) {
+      val monstersWithLoot = if (targetAllCreatures) {
+        // Take all monster names if targeting "All" and convert to List
+        monsters.map(_._2).toList
+      } else {
+        // Parse JSON to List of Creature objects and filter to get names of creatures with loot
+        jsonResult.flatMap { json =>
+          Json.parse(json.toString()).validate[CreatureSettings] match {
+            case JsSuccess(creature, _) if creature.loot => Some(creature.name)
+            case _ => None
+          }
+        }.toList // Ensure the result is a List
+      }
+      // Assuming updatedState is being updated within a case class or similar context
+      updatedState = updatedState.copy(monstersListToLoot = monstersWithLoot)
+    }
+    println(s"monstersListToLoot set to: ${updatedState.monstersListToLoot}")
+    updatedState
   }
 
   def checkDynamicHealing(currentState: ProcessorState, settings: UISettings): ProcessorState = {

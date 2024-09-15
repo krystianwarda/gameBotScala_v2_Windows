@@ -167,6 +167,7 @@ case class ProcessorState(
                            caveBotLevelsList: List[Int] = List(),
                            antiOverpassDelay: Long = 0,
                            monstersListToLoot: List[String] = List(),
+                           carsassToLoot: List[String] = List(),
                            staticContainersList: List[String] = List(),
                            gridState: Array[Array[Boolean]] = Array.ofDim[Boolean](10, 10), // Example default value
                            gridBoundsState: (Int, Int, Int, Int) = (0, 0, 0, 0), // Example default value
@@ -359,18 +360,27 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     val updatedState = initialState.copy(currentTime = Instant.now().toEpochMilli())
 
     val afterInitialSetupState = performInitialSetup(json, updatedState)
+    println(s"1: ${updatedState.lastTargetName}")
+
     val afterGMDetectorState = performGMDetector(json, afterInitialSetupState)
+
     val afterGuardianState = performGuardian(json, afterGMDetectorState)
+
     val afterFishingState = performFishing(json, afterGuardianState)
+
     val afterHealingState = performAutoHealing(json, afterFishingState)
     val afterRuneMakingState = performRuneMaking(json, afterHealingState)
     val afterTrainingState = performTraining(json, afterRuneMakingState)
     val afterAutoResponderState = performAutoResponder(json, afterTrainingState)
     val afterAutoLootState = performAutoLoot(json, afterAutoResponderState)
+    println(s"2: ${afterAutoLootState.lastTargetName}")
+
     val afterAutoTargetState = performAutoTarget(json, afterAutoLootState)
+    println(s"3: ${afterAutoTargetState.lastTargetName}")
     val afterCaveBotState = performCaveBot(json, afterAutoTargetState)
     val afterTeamHuntState = performTeamHunt(json, afterCaveBotState)
     val afterChatReader = performChatReader(json, afterTeamHuntState)
+    println(s"4: ${afterChatReader.lastTargetName}")
     // The final state after all updates
     afterChatReader
   }
