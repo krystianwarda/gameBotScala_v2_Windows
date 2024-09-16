@@ -4,11 +4,13 @@ import mouse.FakeAction
 import play.api.libs.json.{JsError, JsObject, JsValue}
 import userUI.SettingsUtils.UISettings
 import play.api.libs.json._
-import processing.AutoTarget.parseCreature
+import processing.AutoTarget.{parseCreature, transformToJSON}
 import processing.Process.{addMouseAction, extractOkButtonPosition}
 import utils.consoleColorPrint.{ANSI_GREEN, ANSI_RED, printInColor}
 
 import scala.util.Random
+
+case class ProcessResult(actions: Seq[FakeAction], logs: Seq[Log], updatedState: ProcessorState)
 
 object AutoLoot {
   def computeAutoLootActions(json: JsValue, settings: UISettings, currentState: ProcessorState): ((Seq[FakeAction], Seq[Log]), ProcessorState) = {
@@ -51,7 +53,7 @@ object AutoLoot {
             printInColor(ANSI_RED, "[DEBUG] Closing object movement window.")
 
             actions = actions :+ addMouseAction("useMouse", None, updatedState, actionsSeq)
-//            actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+            //            actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
 
             // Update the extraWidowLootStatus with the current time to mark this execution
             updatedState = updatedState.copy(lastExtraWindowLoot = updatedState.currentTime)
@@ -61,6 +63,188 @@ object AutoLoot {
 
         case None => // Do nothing
       }
+
+
+      def processStateHunting(json: JsValue, settings: UISettings, updatedState: ProcessorState): ProcessResult = {
+        updatedState.stateHunting match {
+          case "attacking" =>
+            println("Still fighting.")
+            ProcessResult(Seq(), Seq(), updatedState)
+
+          case "creature killed" =>
+            println("Creature killed.")
+            val ProcessResult(actions, logs, newState) = handleCreatureKilledState(json, settings, updatedState)
+            ProcessResult(actions, logs, newState)
+
+          case "loot or fight" =>
+            println("Loot or fight.")
+            val ProcessResult(actions, logs, newState) = handleLootOrFightState(json, settings, updatedState)
+            ProcessResult(actions, logs, newState)
+
+          case "looting in progress" =>
+            println("Looting in progress.")
+            val ProcessResult(actions, logs, newState) = handleLooting(json, settings, updatedState)
+            ProcessResult(actions, logs, newState)
+
+          case "free" =>
+            println("Back to fight.")
+            ProcessResult(Seq(), Seq(), updatedState.copy(stateHunting = "attacking"))
+
+          case _ =>
+            println("Unknown state, doing nothing.")
+            ProcessResult(Seq(), Seq(), updatedState)
+        }
+      }
+
+
+      def handleLooting(json: JsValue, settings: UISettings, currentState: ProcessorState): ProcessResult = {
+        // Initialize empty actions and logs
+        val actions: Seq[FakeAction] = Seq.empty
+        var logs: Seq[Log] = Seq.empty
+        var updatedState = currentState
+
+        updatedState.stateLooting match {
+          case "free" =>
+            println("Looting -> free.")
+
+          case "opening carcass" =>
+            println("Looting -> opening carcass.")
+
+          case "clicking open button" =>
+            println("Looting -> clicking open button.")
+
+          case "assess loot" =>
+            println("Looting -> assess loot.")
+
+          case "check food" =>
+            println("Looting -> check food.")
+
+        }
+
+        ProcessResult(actions, logs, updatedState)
+      }
+
+
+      def handleCreatureKilledState(json: JsValue, settings: UISettings, currentState: ProcessorState): ProcessResult = {
+        // Initialize empty actions and logs
+        val actions: Seq[FakeAction] = Seq.empty
+        var logs: Seq[Log] = Seq.empty
+        var updatedState = currentState
+
+        println(s"updatedState.lastTargetName: ${updatedState.lastTargetName}")
+
+        // Retrieve position coordinates
+        val xPositionGame = updatedState.lastTargetPos._1
+        val yPositionGame = updatedState.lastTargetPos._2
+        val zPositionGame = updatedState.lastTargetPos._3
+
+        printInColor(ANSI_RED, f"[DEBUG] Creature (${updatedState.lastTargetName}) in game position $xPositionGame, $yPositionGame, $zPositionGame")
+
+        // Generate the position key
+        val mainPositionKey = generatePositionKey(xPositionGame, yPositionGame, zPositionGame)
+        println(s"mainPositionKey: $mainPositionKey")
+
+        // Retrieve the main index from the game state (using your custom logic)
+        val mainIndexOpt = checkForBloodAndContainerAndGetIndex(json, mainPositionKey)
+        println(s"mainIndexOpt: $mainIndexOpt")
+
+        // Extract the creature settings based on the lastTargetName
+        val creatureSettingsOpt = settings.autoTargetSettings.creatureList
+          .find(creatureStr => parseCreature(creatureStr).name.equalsIgnoreCase(updatedState.lastTargetName))
+          .map(parseCreature)
+
+        println(s"creatureSettingsOpt: $creatureSettingsOpt")
+
+        // Handle the creature settings
+        val (newState, updatedLogs) = creatureSettingsOpt match {
+          case Some(creatureSettings) =>
+            mainIndexOpt match {
+              case Some(mainIndex) =>
+                if (creatureSettings.lootMonsterImmediately) {
+                  // Add the carcass index to carsassToLootImmediately
+                  logs = logs :+ Log(s"${updatedState.lastTargetName} will be looted immediately.")
+                  (updatedState.copy(
+                    carsassToLootImmediately = updatedState.carsassToLootImmediately :+ mainIndex.toString, // Assuming mainIndex is the index
+                    stateHunting = "loot or fight"
+                  ), logs)
+
+                } else if (creatureSettings.lootMonsterAfterFight) {
+                  // Add the carcass index to carsassToLootAfterFight
+                  logs = logs :+ Log(s"${updatedState.lastTargetName} will be looted after the fight.")
+                  (updatedState.copy(
+                    carsassToLootAfterFight = updatedState.carsassToLootAfterFight :+ mainIndex.toString, // Assuming mainIndex is the index
+                    stateHunting = "loot or fight"
+                  ), logs)
+
+                } else {
+                  // No looting settings, just log it
+                  logs = logs :+ Log(s"${updatedState.lastTargetName} has no looting settings.")
+                  (updatedState.copy(stateHunting = "free"), logs)
+                }
+
+              case None =>
+                // Handle the case where mainIndexOpt is None
+                logs = logs :+ Log(s"No valid index found for ${updatedState.lastTargetName}.")
+                (updatedState.copy(stateHunting = "free"), logs)
+            }
+
+          case None =>
+            logs = logs :+ Log(s"No creature settings found for ${updatedState.lastTargetName}.")
+            (updatedState.copy(stateHunting = "free"), logs)
+        }
+
+        // Return the ProcessResult with the updated actions, updated logs, and updated state
+        ProcessResult(actions, updatedLogs, newState)
+      }
+
+
+      def handleLootOrFightState(json: JsValue, settings: UISettings, currentState: ProcessorState): ProcessResult = {
+        var actions: Seq[FakeAction] = Seq.empty
+        var logs: Seq[Log] = Seq.empty
+        var updatedState = currentState
+
+        // Retrieve the battleShootableCreaturesList from the game state
+        val battleShootableCreaturesList = getBattleShootableCreaturesList(json)
+        println(s"battleShootableCreaturesList: $battleShootableCreaturesList")
+
+        // Check if carsassToLootImmediately is empty
+        if (updatedState.carsassToLootImmediately.nonEmpty) {
+          // Loot immediately
+          logs = logs :+ Log(s"Looting immediately. Carcass to loot: ${updatedState.carsassToLootImmediately}")
+          updatedState = updatedState.copy(stateHunting = "looting in progress")
+        }
+        // Check if carsassToLootAfterFight is empty and if the player is safe
+        else if (updatedState.carsassToLootAfterFight.nonEmpty && battleShootableCreaturesList.isEmpty) {
+          // Safe to loot after fight
+          logs = logs :+ Log(s"Looting after fight. Carcass to loot: ${updatedState.carsassToLootAfterFight}")
+          updatedState = updatedState.copy(stateHunting = "looting in progress")
+        }
+        // If neither looting list is non-empty or it's not safe, set state to "free"
+        else {
+          logs = logs :+ Log("No carcass to loot or not safe to loot. Setting state to free.")
+          updatedState = updatedState.copy(stateHunting = "free")
+        }
+
+        // Return the ProcessResult with updated actions, logs, and state
+        ProcessResult(actions, logs, updatedState)
+      }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
       // check if updatedState.carsassToLoot has elements create match case else create different case
       def getBattleShootableCreaturesList(json: JsValue): List[String] = {
@@ -85,12 +269,14 @@ object AutoLoot {
 
 
 
-      val battleShootableCreaturesList = getBattleShootableCreaturesList(json)
+
 
       println(s"updatedState.carsassToLoot: ${updatedState.carsassToLoot}")
-      println(s"battleShootableCreaturesList: ${battleShootableCreaturesList}")
+
       println(s"lastTargetName: ${updatedState.lastTargetName}")
 
+      val battleShootableCreaturesList = getBattleShootableCreaturesList(json)
+      println(s"battleShootableCreaturesList: ${battleShootableCreaturesList}")
       if (battleShootableCreaturesList.isEmpty) {
         println(s"battleShootableCreaturesList.isEmpty")
         // If battleShootableCreaturesList is empty, check if carsassToLoot is not empty
@@ -201,14 +387,16 @@ object AutoLoot {
           println(s"creatureSettings: ${creatureSettings}")
           if (creatureSettings.lootMonsterAfterFight) {
             println(s"Placeholder for Loot After Fight for creature: ${updatedState.lastTargetName}")
+            println(s"Before updatedState.carsassToLoot: ${updatedState.carsassToLoot}")
             updatedState = updatedState.copy(carsassToLoot = mainIndexOpt.toList, stateHunting = "free")
+            println(s"After updatedState.carsassToLoot: ${updatedState.carsassToLoot}")
             println(s"Setting up stateHunting to free (2)")
 
           } else {
             mainIndexOpt match {
               case Some(index) =>
                 // Fetch screen coordinates from JSON using the index
-                println(s"Loot immediately and carcass index exists")
+                println(s"Loot immediately and carcass index ($index) exists")
                 val screenCoordsOpt = (json \ "screenInfo" \ "mapPanelLoc" \ index).asOpt[JsObject].flatMap { coords =>
                   for {
                     x <- (coords \ "x").asOpt[Int]
@@ -678,13 +866,17 @@ object AutoLoot {
     var logs: Seq[Log] = Seq()
 
 
-    println(s"Loot carcass processFreeStateAfterFight")
-    val screenCoordsOpt = (json \ "screenInfo" \ "mapPanelLoc" \ carcassIndexList.head).asOpt[JsObject].flatMap { coords =>
-      for {
-        x <- (coords \ "x").asOpt[Int]
-        y <- (coords \ "y").asOpt[Int]
-      } yield (x, y)
-    }.getOrElse((0, 0)) // Default coordinates if not found
+    val mapPanelLoc = (json \ "screenInfo" \ "mapPanelLoc").asOpt[JsObject].getOrElse(Json.obj())
+    val carcassToLootId = updatedState.carsassToLoot.headOption.getOrElse("")
+
+    // Find the coordinates corresponding to the carcassToLoot id
+    val screenCoordsOpt = mapPanelLoc.fields.collectFirst {
+      case (_, obj: JsObject) if (obj \ "id").asOpt[String].contains(carcassToLootId) =>
+        for {
+          x <- (obj \ "x").asOpt[Int]
+          y <- (obj \ "y").asOpt[Int]
+        } yield (x, y)
+    }.flatten.getOrElse((0, 0)) // Default coordinates if not found
 
     // Define the sequence of mouse actions based on retrieved screen coordinates
     val (xPositionScreen, yPositionScreen) = screenCoordsOpt
@@ -728,8 +920,11 @@ object AutoLoot {
     // Check if the carcass is on a different level (Z position) or farther than 5 tiles
     if (zPos != charZPos || distance > 5) {
       println(s"Carcass is either on a different level (Z: $zPos vs. $charZPos) or too far from the character. Distance: $distance")
+
       // Remove this carcass from the list by updating the state
       updatedState = updatedState.copy(carsassToLoot = carcassIndexList.tail)
+
+
     } else {
       // Carcass is on the same level and within 5 tiles
 
@@ -738,12 +933,14 @@ object AutoLoot {
 
       updatedState.stateHunting match {
         case "looting" =>
+          printInColor(ANSI_RED, f"[DEBUG] looting window")
           val resultProcessLootingState = processLootingState(json, settings, updatedState)
           actions = actions ++ resultProcessLootingState._1._1
           logs = logs ++ resultProcessLootingState._1._2
           updatedState = resultProcessLootingState._2
 
         case "opening window" =>
+          printInColor(ANSI_RED, f"[DEBUG] opening window")
           val resultProcessOpeningWindowState = processOpeningWindowState(json, settings, updatedState)
           actions = actions ++ resultProcessOpeningWindowState._1._1
           logs = logs ++ resultProcessOpeningWindowState._1._2
