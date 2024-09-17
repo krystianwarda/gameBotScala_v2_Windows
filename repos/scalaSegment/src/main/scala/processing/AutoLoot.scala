@@ -106,9 +106,18 @@ object AutoLoot {
         updatedState.stateLooting match {
           case "free" =>
             println("Looting -> free.")
+            val ProcessResult(actions, logs, newState) = handleLootOrMoveCarcass(json, settings, updatedState)
+            ProcessResult(actions, logs, newState)
+
+          case "moving carcass" =>
+            println("Looting -> moving carcass.")
+            val ProcessResult(actions, logs, newState) = handleMovingOldCarcass(json, settings, updatedState)
+            ProcessResult(actions, logs, newState)
 
           case "opening carcass" =>
             println("Looting -> opening carcass.")
+            val ProcessResult(actions, logs, newState) = handleOpeningCarcass(json, settings, updatedState)
+            ProcessResult(actions, logs, newState)
 
           case "clicking open button" =>
             println("Looting -> clicking open button.")
@@ -121,6 +130,156 @@ object AutoLoot {
 
         }
 
+        ProcessResult(actions, logs, updatedState)
+      }
+
+      def handleMovingOldCarcass(json: JsValue, settings: UISettings, currentState: ProcessorState): ProcessResult = {
+        var actions: Seq[FakeAction] = Seq.empty
+        var logs: Seq[Log] = Seq.empty
+        var updatedState = currentState
+
+        // Convert tiles from carsassToLootImmediately and carsassToLootAfterFight to grid format, ignoring those not found in mapPanelLoc
+        val excludedTilesGrid = (updatedState.carsassToLootImmediately ++ updatedState.carsassToLootAfterFight)
+          .flatMap(tileId => convertGameLocationToGrid(json, tileId)).toSet
+
+        // Use lastLootedCarcassTile for the carcass to move
+        val carcassToMove = updatedState.lastLootedCarcassTile
+
+        // Extract the item position from mapPanelLoc based on lastLootedCarcassTile
+        val itemPositionToMoveOpt = extractItemPositionFromMap(json, carcassToMove)
+
+        itemPositionToMoveOpt match {
+          case Some((itemToMovePosX, itemToMovePosY)) =>
+            // List of possible walkable tiles
+            val possibleTiles = List("7x5", "7x6", "7x7", "8x5", "8x6", "8x7", "9x5", "9x6", "9x7")
+            val areaInfo = (json \ "areaInfo").as[JsObject]
+
+            // Find a random walkable tile, excluding the ones that map to excludedTilesGrid
+            val walkableTileIndexOpt = findRandomWalkableTile(areaInfo, possibleTiles.filterNot(excludedTilesGrid.contains))
+
+            walkableTileIndexOpt match {
+              case Some(tileIndex) =>
+                // Extract x and y coordinates for the selected walkable tile
+                val mapPanelLoc = (json \ "screenInfo" \ "mapPanelLoc" \ tileIndex).as[JsObject]
+                val (targetX, targetY) = ((mapPanelLoc \ "x").as[Int], (mapPanelLoc \ "y").as[Int])
+
+                // Move the carcass to the random walkable tile
+                val actionsSeq = moveSingleItem(itemToMovePosX, itemToMovePosY, targetX, targetY)
+                actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+                updatedState = updatedState.copy(stateLooting = "opening carcass")
+                logs = logs :+ Log(s"Moving carcass to random walkable tile at ($targetX, $targetY), avoiding tiles in carsassToLootImmediately and carsassToLootAfterFight.")
+
+              case None =>
+                logs = logs :+ Log("No walkable tile found.")
+                updatedState = updatedState.copy(stateLooting = "free", stateHunting = "free")
+            }
+
+          case None =>
+            logs = logs :+ Log(s"Could not find position for carcass tile ${updatedState.lastLootedCarcassTile}.")
+            updatedState = updatedState.copy(stateLooting = "free", stateHunting = "free")
+
+        }
+
+        ProcessResult(actions, logs, updatedState)
+      }
+
+
+      def convertGameLocationToGrid(json: JsValue, tileId: String): Option[String] = {
+        val mapPanelLoc = (json \ "screenInfo" \ "mapPanelLoc").asOpt[JsObject]
+
+        // Look for the tileId in mapPanelLoc and return the corresponding grid key, otherwise return None
+        mapPanelLoc.flatMap(_.fields.collectFirst {
+          case (gridKey, jsValue) if (jsValue \ "id").asOpt[String].contains(tileId) =>
+            gridKey // Return the grid key if the id matches
+        })
+      }
+
+
+
+      def handleOpeningCarcass(json: JsValue, settings: UISettings, currentState: ProcessorState): ProcessResult = {
+        var actions: Seq[FakeAction] = Seq.empty
+        var logs: Seq[Log] = Seq.empty
+        var updatedState = currentState
+
+        // Attempt to retrieve the position of the "Open" button from the extra window
+        val openPosOpt = (json \ "screenInfo" \ "extraWindowLoc").asOpt[JsObject].flatMap { extraWindowLoc =>
+          (extraWindowLoc \ "Open").asOpt[JsObject].flatMap { open =>
+            for {
+              posX <- (open \ "posX").asOpt[Int]
+              posY <- (open \ "posY").asOpt[Int]
+            } yield (posX, posY)
+          }
+        }
+
+        // Handle the result of the attempt to click on the "Open" button
+        openPosOpt match {
+          case Some((xPosWindowOpen, yPosWindowOpen)) =>
+            // Clicking on the "Open" button
+            logs = logs :+ Log(s"Clicking on 'Open' button at coordinates: x=$xPosWindowOpen, y=$yPosWindowOpen")
+            val actionsSeq = Seq(
+              MouseAction(xPosWindowOpen, yPosWindowOpen, "move"),
+              MouseAction(xPosWindowOpen, yPosWindowOpen, "pressLeft"),
+              MouseAction(xPosWindowOpen, yPosWindowOpen, "releaseLeft")
+            )
+            actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+            updatedState = updatedState.copy(stateLooting = "clicking open button")
+
+          case None =>
+            // Handle failure to open the window
+            logs = logs :+ Log("Failed to open looting window. Cancelling looting.")
+            updatedState = updatedState.copy(stateLooting = "free", stateHunting = "free")
+        }
+
+        // Return the ProcessResult with updated actions, logs, and state
+        ProcessResult(actions, logs, updatedState)
+      }
+
+
+
+      def extractItemPositionFromMap(json: JsValue, carcassTileToLoot: String): Option[(Int, Int)] = {
+        // Extract the key from the carcassTileToLoot (in this case, "345323456507" format)
+        val posX = carcassTileToLoot.substring(0, 5)
+        val posY = carcassTileToLoot.substring(5, 10)
+        val posZ = carcassTileToLoot.substring(10, 12)
+
+        // Search for the position in the mapPanelLoc
+        val mapPanelLoc = (json \ "screenInfo" \ "mapPanelLoc").asOpt[JsObject]
+        val tileKeyOpt = mapPanelLoc.flatMap(_.fields.collectFirst {
+          case (tileIndex, jsValue) if (jsValue \ "id").asOpt[String].contains(carcassTileToLoot) =>
+            (jsValue \ "x").asOpt[Int].getOrElse(0) -> (jsValue \ "y").asOpt[Int].getOrElse(0)
+        })
+
+        tileKeyOpt match {
+          case Some((x, y)) =>
+            println(s"Found coordinates for $carcassTileToLoot: x=$x, y=$y")
+            Some((x, y))
+          case None =>
+            println(s"No coordinates found for $carcassTileToLoot")
+            None
+        }
+      }
+
+
+      def handleLootOrMoveCarcass(json: JsValue, settings: UISettings, currentState: ProcessorState): ProcessResult = {
+        var actions: Seq[FakeAction] = Seq.empty
+        var logs: Seq[Log] = Seq.empty
+        var updatedState = currentState
+
+
+        // TO DO cases for item/items on carcass
+        // TO DO cases for field on carcass
+
+
+        // Compare carcassTileToLoot with lastLootedCarcassTile
+        if (updatedState.carcassTileToLoot == updatedState.lastLootedCarcassTile) {
+          println("Same carcass tile as last looted. Setting state to 'moving carcass'.")
+          updatedState = updatedState.copy(stateLooting = "moving carcass")
+        } else {
+          println("Different carcass tile. Setting state to 'opening carcass'.")
+          updatedState = updatedState.copy(stateLooting = "opening carcass")
+        }
+
+        // Return the ProcessResult with the updated actions, logs, and state
         ProcessResult(actions, logs, updatedState)
       }
 
@@ -209,15 +368,25 @@ object AutoLoot {
 
         // Check if carsassToLootImmediately is empty
         if (updatedState.carsassToLootImmediately.nonEmpty) {
-          // Loot immediately
-          logs = logs :+ Log(s"Looting immediately. Carcass to loot: ${updatedState.carsassToLootImmediately}")
-          updatedState = updatedState.copy(stateHunting = "looting in progress")
+
+          // sort carcass by char proximity
+          if (updatedState.carsassToLootImmediately.length > 1) {
+            updatedState = updatedState.copy(carsassToLootImmediately = sortTileListByCharacterProximity(json, updatedState.carsassToLootImmediately))
+          }
+
+          logs = logs :+ Log(s"Looting immediately. Carcass to loot: ${updatedState.carsassToLootImmediately.head}")
+          updatedState = updatedState.copy(stateHunting = "looting in progress", carcassTileToLoot=updatedState.carsassToLootImmediately.head)
         }
         // Check if carsassToLootAfterFight is empty and if the player is safe
         else if (updatedState.carsassToLootAfterFight.nonEmpty && battleShootableCreaturesList.isEmpty) {
-          // Safe to loot after fight
-          logs = logs :+ Log(s"Looting after fight. Carcass to loot: ${updatedState.carsassToLootAfterFight}")
-          updatedState = updatedState.copy(stateHunting = "looting in progress")
+
+          // sort carcass by char proximity
+          if (updatedState.carsassToLootAfterFight.length > 1) {
+            updatedState = updatedState.copy(carsassToLootAfterFight = sortTileListByCharacterProximity(json, updatedState.carsassToLootAfterFight))
+          }
+
+          logs = logs :+ Log(s"Looting after fight. Carcass to loot: ${updatedState.carsassToLootAfterFight.head}")
+          updatedState = updatedState.copy(stateHunting = "looting in progress", carcassTileToLoot=updatedState.carsassToLootAfterFight.head)
         }
         // If neither looting list is non-empty or it's not safe, set state to "free"
         else {
@@ -233,6 +402,34 @@ object AutoLoot {
 
 
 
+      def sortTileListByCharacterProximity(json: JsValue, tileList: List[String]): List[String] = {
+        // Extract character position from JSON
+        val (charX, charY, charZ) = (json \ "characterInfo").asOpt[JsObject].map { characterInfo =>
+          val x = (characterInfo \ "PositionX").asOpt[Int].getOrElse(0)
+          val y = (characterInfo \ "PositionY").asOpt[Int].getOrElse(0)
+          val z = (characterInfo \ "PositionZ").asOpt[Int].getOrElse(0)
+          (x, y, z)
+        }.getOrElse((0, 0, 0)) // Default to (0, 0, 0) if character position is not found
+
+        // Helper function to extract posX, posY, posZ from tile string
+        def extractTilePosition(tile: String): (Int, Int, Int) = {
+          val posX = tile.substring(0, 5).toInt
+          val posY = tile.substring(5, 10).toInt
+          val posZ = tile.substring(10, 12).toInt
+          (posX, posY, posZ)
+        }
+
+        // Helper function to calculate the distance between two 3D points
+        def calculateDistance(x1: Int, y1: Int, z1: Int, x2: Int, y2: Int, z2: Int): Double = {
+          math.sqrt(math.pow(x2 - x1, 2) + math.pow(y2 - y1, 2) + math.pow(z2 - z1, 2))
+        }
+
+        // Sort the tiles by their distance to the character's position
+        tileList.sortBy { tile =>
+          val (tileX, tileY, tileZ) = extractTilePosition(tile)
+          calculateDistance(tileX, tileY, tileZ, charX, charY, charZ)
+        }
+      }
 
 
 

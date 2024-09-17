@@ -165,6 +165,8 @@ case class ProcessorState(
                            statusOfRuneAutoheal: String = "not_ready",
                            stateHunting: String = "free",
                            stateLooting: String = "free",
+                           carcassTileToLoot: String = "",
+                           lastLootedCarcassTile: String = "",
                            caveBotLevelsList: List[Int] = List(),
                            antiOverpassDelay: Long = 0,
                            monstersListToLoot: List[String] = List(),
