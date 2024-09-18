@@ -12,7 +12,6 @@ import processing.Process.captureScreen
 
 import java.lang.System.currentTimeMillis
 //import processing.Process.{captureScreen, generateNoise}
-import processing.TeamHunt.generateSubwaypointsToBlocker
 import utils.{Credentials, SendDiscordAlert, SendSoundAlert}
 case class IgnoredCreature(name: String, safe: Boolean)
 

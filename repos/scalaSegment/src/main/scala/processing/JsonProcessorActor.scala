@@ -163,8 +163,12 @@ case class ProcessorState(
                            lastChangeOfstatusOfAttackRune: Long = 0,
                            uhRuneContainerName: String = "not_set",
                            statusOfRuneAutoheal: String = "not_ready",
+
                            stateHunting: String = "free",
                            stateLooting: String = "free",
+                           stateLootPlunder: String = "free",
+                           itemLootToPlunder: Int = 0,
+
                            carcassTileToLoot: String = "",
                            lastLootedCarcassTile: String = "",
                            caveBotLevelsList: List[Int] = List(),

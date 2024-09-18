@@ -568,10 +568,7 @@ object TeamHunt {
   }
 
 
-
-
-
-  def generateSubwaypointsToBlocker(currentWaypointLocation: Vec, initialState: ProcessorState, json: JsValue): ProcessorState = {
+  def generateSubwaypointsToGamePosition(currentWaypointLocation: Vec, initialState: ProcessorState, json: JsValue): ProcessorState = {
     println("[DEBUG] Generating subwaypoints for current waypoint")
     var updatedState = initialState
     // Parse tiles to determine the grid bounds and create a boolean grid
@@ -834,7 +831,7 @@ object TeamHunt {
         // Check if the character is too far from the blocker
         if (chebyshevDistance > requiredDistance) {
           // Generate subwaypoints to move closer to the blocker
-          updatedState = generateSubwaypointsToBlocker(target, updatedState, json)
+          updatedState = generateSubwaypointsToGamePosition(target, updatedState, json)
 
           // If there are sub-waypoints, move towards the next one
           if (updatedState.subWaypoints.nonEmpty) {

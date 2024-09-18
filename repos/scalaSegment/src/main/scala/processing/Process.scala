@@ -4,7 +4,7 @@ import keyboard.KeyAction
 import play.api.libs.json.JsObject
 import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, Mouse, MouseMoveCommand, MouseMovementSettings}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
-import processing.CaveBot.Vec
+import processing.CaveBot.{Vec, aStarSearch, createBooleanGrid, printGrid}
 
 import scala.util.Random
 import play.api.libs.json._
@@ -14,6 +14,8 @@ import scala.io.Source
 import java.awt.Toolkit
 import com.sun.speech.freetts.Voice
 import com.sun.speech.freetts.VoiceManager
+import utils.consoleColorPrint.{ANSI_BLUE, printInColor}
+
 import java.awt.Robot
 import java.awt.Rectangle
 import java.awt.Toolkit
@@ -252,5 +254,57 @@ object Process {
     FakeAction(command, itemData, Some(MouseActions(modifiedSeq)))
   }
 
+
+  def generateSubwaypointsToGamePosition(currentWaypointLocation: Vec, initialState: ProcessorState, json: JsValue): ProcessorState = {
+    println("[DEBUG] Generating subwaypoints for current waypoint")
+    var updatedState = initialState
+    // Parse tiles to determine the grid bounds and create a boolean grid
+    val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+    val xs = tiles.keys.map(_.substring(0, 5).trim.toInt)
+    val ys = tiles.keys.map(_.substring(5, 10).trim.toInt)
+    val gridBounds = (xs.min, ys.min, xs.max, ys.max)
+    println(s"[DEBUG] GridBounds: $gridBounds")
+
+    val (grid, (min_x, min_y)) = createBooleanGrid(tiles, xs.min, ys.min)
+
+    // Determine current waypoint location
+    println(s"[DEBUG] Current Waypoint: $currentWaypointLocation")
+
+    // Determine character's current location and perform A* search
+    val presentCharLocation = updatedState.presentCharLocation
+    println(s"[DEBUG] Character location: $presentCharLocation")
+    var newPath: List[Vec] = List()
+
+    if (presentCharLocation != currentWaypointLocation) {
+      // Make sure to include min_x and min_y when calling aStarSearch
+      newPath = aStarSearch(presentCharLocation, currentWaypointLocation, grid, min_x, min_y)
+      printInColor(ANSI_BLUE, f"[WAYPOINTS] Path: $newPath.")
+    } else {
+      println("[DEBUG] Current location matches the current waypoint, moving to the next waypoint.")
+    }
+
+    // Remove the presentCharLocation from the newPath if it exists
+    val filteredPath = newPath.filterNot(loc => loc == presentCharLocation)
+
+    println(s"[DEBUG] Path: ${filteredPath.mkString(" -> ")}")
+    println(s"[DEBUG] Char loc: $presentCharLocation")
+    println(s"[DEBUG] Waypoint loc: $currentWaypointLocation")
+
+
+    if (presentCharLocation != currentWaypointLocation) {
+      printGrid(grid, gridBounds, filteredPath, updatedState.presentCharLocation, currentWaypointLocation)
+      // Locations are different, update state accordingly
+      updatedState.copy(
+        subWaypoints = filteredPath,
+        gridBoundsState = gridBounds,
+        gridState = grid,
+        currentWaypointLocation = currentWaypointLocation,
+        presentCharLocation = presentCharLocation
+      )
+    } else {
+      println(s"[DEBUG] presentCharLocation &  Char loc are the same.")
+      updatedState
+    }
+  }
 
 }

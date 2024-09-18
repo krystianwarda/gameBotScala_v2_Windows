@@ -5,7 +5,9 @@ import play.api.libs.json.{JsError, JsObject, JsValue}
 import userUI.SettingsUtils.UISettings
 import play.api.libs.json._
 import processing.AutoTarget.{parseCreature, transformToJSON}
+import processing.CaveBot.{Vec, calculateDirection}
 import processing.Process.{addMouseAction, extractOkButtonPosition}
+import processing.TeamHunt.generateSubwaypointsToGamePosition
 import utils.consoleColorPrint.{ANSI_GREEN, ANSI_RED, printInColor}
 
 import scala.util.Random
@@ -121,17 +123,163 @@ object AutoLoot {
 
           case "clicking open button" =>
             println("Looting -> clicking open button.")
+            val ProcessResult(actions, logs, newState) = handleClickingOpen(json, settings, updatedState)
+            ProcessResult(actions, logs, newState)
 
-          case "assess loot" =>
-            println("Looting -> assess loot.")
+          case "loot plunder" =>
+            println("Looting -> loot plunder.")
+            val ProcessResult(actions, logs, newState) = handleLootPlunder(json, settings, updatedState)
+            ProcessResult(actions, logs, newState)
 
-          case "check food" =>
-            println("Looting -> check food.")
 
         }
 
         ProcessResult(actions, logs, updatedState)
       }
+
+
+      def handleLootPlunder(json: JsValue, settings: UISettings, currentState: ProcessorState): ProcessResult = {
+        var actions: Seq[FakeAction] = Seq.empty
+        var logs: Seq[Log] = Seq.empty
+        var updatedState = currentState
+
+        // Process the stateLootPlunder to determine the appropriate looting action
+        updatedState.stateLootPlunder match {
+          case "free" =>
+            // Placeholder logic to assess the loot
+            logs = logs :+ Log("[DEBUG] Assessing the loot from the carcass.")
+            val ProcessResult(assessActions, assessLogs, newState) = handleAssessLoot(json, settings, updatedState)
+            ProcessResult(assessActions, assessLogs, newState)
+
+          case "move item to backpack" =>
+            // Placeholder logic to move item to the backpack
+            logs = logs :+ Log("[DEBUG] Moving loot item to the backpack.")
+            val ProcessResult(moveToBackpackActions, moveToBackpackLogs, newState) = handleMoveItemToBackpack(json, settings, updatedState)
+            ProcessResult(moveToBackpackActions, moveToBackpackLogs, newState)
+
+          case "move item to ground" =>
+            // Placeholder logic to move item to the ground
+            logs = logs :+ Log("[DEBUG] Moving loot item to the ground.")
+            val ProcessResult(moveToGroundActions, moveToGroundLogs, newState) = handleMoveItemToGround(json, settings, updatedState)
+            ProcessResult(moveToGroundActions, moveToGroundLogs, newState)
+
+          case "handle food" =>
+            // Placeholder logic to handle food
+            logs = logs :+ Log("[DEBUG] Handling food from the loot.")
+            val ProcessResult(handleFoodActions, handleFoodLogs, newState) = handleFood(json, settings, updatedState)
+            ProcessResult(handleFoodActions, handleFoodLogs, newState)
+
+          case "open subcontainer" =>
+            // Placeholder logic to open subcontainers
+            logs = logs :+ Log("[DEBUG] Opening subcontainer within the loot.")
+            val ProcessResult(openSubcontainerActions, openSubcontainerLogs, newState) = handleOpenSubcontainer(json, settings, updatedState)
+            ProcessResult(openSubcontainerActions, openSubcontainerLogs, newState)
+
+          case _ =>
+            // Default case if no state is matched
+            logs = logs :+ Log("[ERROR] Unknown state in stateLootPlunder.")
+            updatedState = updatedState.copy(stateLooting = "free", stateLootPlunder = "free")
+            ProcessResult(actions, logs, updatedState)
+        }
+      }
+
+
+      def handleAssessLoot(json: JsValue, settings: UISettings, currentState: ProcessorState): ProcessResult = {
+        var actions: Seq[FakeAction] = Seq.empty
+        var logs: Seq[Log] = Seq.empty
+        var updatedState = currentState
+
+        // Extract containers and screen info from the JSON
+        val containersInfo = (json \ "containersInfo").as[JsObject]
+        val screenInfo = (json \ "screenInfo").as[JsObject]
+
+        // Get the last opened container (assumed to be the loot container)
+        val lastContainerIndex = containersInfo.keys.maxBy(_.replace("container", "").toInt)
+        val lastContainer = (containersInfo \ lastContainerIndex).as[JsObject]
+
+        // Extract the items from the container
+        (lastContainer \ "items").validate[JsObject] match {
+          case JsSuccess(itemsInContainer, _) =>
+            logs = logs :+ Log(f"[DEBUG] Assessing items in container $lastContainerIndex.")
+
+            // Filter out already looted items
+            val unlootedItems = JsObject(itemsInContainer.fields.filterNot { case (_, itemInfo) =>
+              val itemId = (itemInfo \ "itemId").as[Int]
+              updatedState.alreadyLootedIds.contains(itemId)
+            })
+
+            // Prepare a set of item IDs from the loot settings
+            val lootItems = settings.autoLootSettings.lootList.map(_.trim.split(",\\s*")(0).toInt).toSet
+ 
+            // Try to find lootable items
+            val foundItemOpt = unlootedItems.fields.collectFirst {
+              case (slot, itemInfo) if lootItems.contains((itemInfo \ "itemId").as[Int]) =>
+                (slot, itemInfo)
+            }
+
+            foundItemOpt match {
+              case Some((slot, itemInfo)) =>
+                val itemId = (itemInfo \ "itemId").as[Int]
+                val action = settings.autoLootSettings.lootList
+                  .find(_.trim.split(",\\s*")(0).toInt == itemId)
+                  .map(_.trim.split(",\\s*")(1)) // Extract the action part (like "g" for ground)
+                  .getOrElse("")
+
+                action match {
+                  case "g" =>
+                    logs = logs :+ Log(f"[DEBUG] Item $itemId will be moved to the ground.")
+                    updatedState = updatedState.copy(
+                      stateLootPlunder = "move item to ground",
+                      itemLootToPlunder = itemId
+                    )
+
+                  case _ =>
+                    logs = logs :+ Log(f"[DEBUG] Placeholder for item $itemId with action $action.")
+                    updatedState = updatedState.copy(stateLootPlunder = "move item to backpack", itemLootToPlunder = itemId)
+                }
+
+              case None =>
+                // No lootable items found, check for food
+                logs = logs :+ Log(f"[DEBUG] No loot items found, checking for food.")
+                val foundFoodOpt = unlootedItems.fields.collectFirst {
+                  case (slot, itemInfo) if (itemInfo \ "itemId").as[Int] == 3577 => (slot, itemInfo)
+                }
+
+                foundFoodOpt match {
+                  case Some((slot, foodItem)) =>
+                    logs = logs :+ Log(f"[DEBUG] Food found in slot $slot.")
+                    updatedState = updatedState.copy(stateLootPlunder = "handle food", itemLootToPlunder = (foodItem \ "itemId").as[Int])
+
+                  case None =>
+                    // No food found, check for subcontainers
+                    logs = logs :+ Log(f"[DEBUG] No food found, checking for subcontainers.")
+                    val foundSubcontainerOpt = unlootedItems.fields.collectFirst {
+                      case (slot, itemInfo) if (itemInfo \ "isContainer").asOpt[Boolean].getOrElse(false) =>
+                        (slot, itemInfo)
+                    }
+
+                    foundSubcontainerOpt match {
+                      case Some((slot, subcontainer)) =>
+                        logs = logs :+ Log(f"[DEBUG] Subcontainer found in slot $slot.")
+                        updatedState = updatedState.copy(stateLootPlunder = "open subcontainer", itemLootToPlunder = (subcontainer \ "itemId").as[Int])
+
+                      case None =>
+                        // Nothing left to loot, set looting to free
+                        logs = logs :+ Log(f"[DEBUG] No more items, food, or subcontainers. Looting complete.")
+                        updatedState = updatedState.copy(stateLooting = "free", stateLootPlunder = "free", stateHunting = "free")
+                    }
+                }
+            }
+
+          case JsError(_) =>
+            logs = logs :+ Log(f"[ERROR] Failed to parse items in the container $lastContainerIndex.")
+            updatedState = updatedState.copy(stateLooting = "free", stateLootPlunder = "free", stateHunting = "free")
+        }
+
+        ProcessResult(actions, logs, updatedState)
+      }
+
+
 
       def handleMovingOldCarcass(json: JsValue, settings: UISettings, currentState: ProcessorState): ProcessResult = {
         var actions: Seq[FakeAction] = Seq.empty
@@ -146,7 +294,7 @@ object AutoLoot {
         val carcassToMove = updatedState.lastLootedCarcassTile
 
         // Extract the item position from mapPanelLoc based on lastLootedCarcassTile
-        val itemPositionToMoveOpt = extractItemPositionFromMap(json, carcassToMove)
+        val itemPositionToMoveOpt = extractItemPositionFromMapOnScreen(json, carcassToMove)
 
         itemPositionToMoveOpt match {
           case Some((itemToMovePosX, itemToMovePosY)) =>
@@ -195,8 +343,110 @@ object AutoLoot {
       }
 
 
-
       def handleOpeningCarcass(json: JsValue, settings: UISettings, currentState: ProcessorState): ProcessResult = {
+        var actions: Seq[FakeAction] = Seq.empty
+        var logs: Seq[Log] = Seq.empty
+        var updatedState = currentState
+
+        // Retrieve the carcass tile to loot
+        val carcassTileToLoot = updatedState.carcassTileToLoot
+
+        // Extract the carcass's in-game position
+        val carcassInGamePosition: Vec = Vec(
+          carcassTileToLoot.substring(0, 5).toInt,
+          carcassTileToLoot.substring(5, 10).toInt
+        )
+
+        // Extract the character's current position
+        val presentCharPosition = updatedState.presentCharLocation
+
+        // Calculate the Chebyshev distance between the character and the carcass
+        val chebyshevDistance = math.max(
+          math.abs(carcassInGamePosition.x - presentCharPosition.x),
+          math.abs(carcassInGamePosition.y - presentCharPosition.y)
+        )
+
+        // Check if the character is close enough to open the carcass
+        val isCloseEnough = chebyshevDistance <= 1
+
+        if (isCloseEnough) {
+          // If the character is close enough, proceed with opening the carcass
+
+          // Extract mapPanelLoc from JSON
+          val mapPanelLoc = (json \ "screenInfo" \ "mapPanelLoc").asOpt[JsObject].getOrElse(Json.obj())
+
+          // Find the screen coordinates for the carcass to loot
+          val screenCoordsOpt = mapPanelLoc.fields.collectFirst {
+            case (_, obj: JsObject) if (obj \ "id").asOpt[String].contains(carcassTileToLoot) =>
+              for {
+                x <- (obj \ "x").asOpt[Int]
+                y <- (obj \ "y").asOpt[Int]
+              } yield (x, y)
+          }.flatten
+
+          screenCoordsOpt match {
+            case Some((xPositionScreen, yPositionScreen)) =>
+              // Log the coordinates
+              logs = logs :+ Log(s"[DEBUG] Opening creature carcass at screen position ($xPositionScreen, $yPositionScreen)")
+
+              // Define the sequence of mouse actions to open the carcass
+              val actionsSeq = Seq(
+                MouseAction(xPositionScreen, yPositionScreen, "move"),
+                MouseAction(xPositionScreen, yPositionScreen, "pressCtrl"),
+                MouseAction(xPositionScreen, yPositionScreen, "pressRight"),
+                MouseAction(xPositionScreen, yPositionScreen, "releaseRight"),
+                MouseAction(xPositionScreen, yPositionScreen, "releaseCtrl")
+              )
+
+              // Add the mouse actions to the action list
+              actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+
+              // Update the state to indicate that the carcass is being opened
+              updatedState = updatedState.copy(stateLooting = "clicking open button")
+
+            case None =>
+              // Log the failure to find the carcass
+              logs = logs :+ Log(s"[ERROR] Could not find screen coordinates for carcass tile $carcassTileToLoot")
+
+              // Reset the state since the carcass could not be opened
+              updatedState = updatedState.copy(stateLooting = "free", stateHunting = "free")
+          }
+        } else {
+          // If the character is too far away, generate waypoints and move closer
+
+          logs = logs :+ Log(s"[DEBUG] Character is too far from the carcass at position ${carcassInGamePosition}. Distance: $chebyshevDistance")
+
+          // Generate subwaypoints to move closer to the carcass
+          updatedState = generateSubwaypointsToGamePosition(carcassInGamePosition, updatedState, json)
+
+          if (updatedState.subWaypoints.nonEmpty) {
+            val nextWaypoint = updatedState.subWaypoints.head
+            val direction = calculateDirection(presentCharPosition, nextWaypoint, updatedState.lastDirection)
+            logs = logs :+ Log(f"[DEBUG] Calculated Next Direction: $direction")
+
+            updatedState = updatedState.copy(lastDirection = direction)
+
+            direction.foreach { dir =>
+              // Add the movement action (key press) to the action sequence
+              actions = actions :+ FakeAction("pressKey", None, Some(PushTheButton(dir)))
+              logs = logs :+ Log(s"Moving closer to the carcass in direction: $dir")
+            }
+
+            // Remove the used waypoint from the state
+            updatedState = updatedState.copy(subWaypoints = updatedState.subWaypoints.tail)
+          } else {
+            // If no waypoints are found, reset the state
+            logs = logs :+ Log(s"[ERROR] No waypoints found to reach the carcass.")
+            updatedState = updatedState.copy(stateLooting = "free", stateHunting = "free")
+          }
+        }
+
+        ProcessResult(actions, logs, updatedState)
+      }
+
+
+
+      def handleClickingOpen(json: JsValue, settings: UISettings, currentState: ProcessorState): ProcessResult = {
         var actions: Seq[FakeAction] = Seq.empty
         var logs: Seq[Log] = Seq.empty
         var updatedState = currentState
@@ -222,10 +472,10 @@ object AutoLoot {
               MouseAction(xPosWindowOpen, yPosWindowOpen, "releaseLeft")
             )
             actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-            updatedState = updatedState.copy(stateLooting = "clicking open button")
+            updatedState = updatedState.copy(stateLooting = "assess loot")
 
           case None =>
-            // Handle failure to open the window
+
             logs = logs :+ Log("Failed to open looting window. Cancelling looting.")
             updatedState = updatedState.copy(stateLooting = "free", stateHunting = "free")
         }
@@ -236,7 +486,7 @@ object AutoLoot {
 
 
 
-      def extractItemPositionFromMap(json: JsValue, carcassTileToLoot: String): Option[(Int, Int)] = {
+      def extractItemPositionFromMapOnScreen(json: JsValue, carcassTileToLoot: String): Option[(Int, Int)] = {
         // Extract the key from the carcassTileToLoot (in this case, "345323456507" format)
         val posX = carcassTileToLoot.substring(0, 5)
         val posY = carcassTileToLoot.substring(5, 10)
@@ -268,7 +518,6 @@ object AutoLoot {
 
         // TO DO cases for item/items on carcass
         // TO DO cases for field on carcass
-
 
         // Compare carcassTileToLoot with lastLootedCarcassTile
         if (updatedState.carcassTileToLoot == updatedState.lastLootedCarcassTile) {
@@ -765,6 +1014,8 @@ object AutoLoot {
 
     printInColor(ANSI_RED, f"[DEBUG] Looting State started")
     try {
+
+
       val containersInfo = (json \ "containersInfo").as[JsObject]
       val screenInfo = (json \ "screenInfo").as[JsObject]
       println(containersInfo)
@@ -1063,9 +1314,10 @@ object AutoLoot {
     var logs: Seq[Log] = Seq()
 
 
-    val mapPanelLoc = (json \ "screenInfo" \ "mapPanelLoc").asOpt[JsObject].getOrElse(Json.obj())
+
     val carcassToLootId = updatedState.carsassToLoot.headOption.getOrElse("")
 
+    val mapPanelLoc = (json \ "screenInfo" \ "mapPanelLoc").asOpt[JsObject].getOrElse(Json.obj())
     // Find the coordinates corresponding to the carcassToLoot id
     val screenCoordsOpt = mapPanelLoc.fields.collectFirst {
       case (_, obj: JsObject) if (obj \ "id").asOpt[String].contains(carcassToLootId) =>
