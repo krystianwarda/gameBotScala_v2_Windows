@@ -158,7 +158,7 @@ case class ProcessorState(
                            positionStagnantCount: Int = 0,
                            lastPosition: Option[Vec] = None,
 
-//                           attackRuneContainerName: String = "not_set",
+                           //                           attackRuneContainerName: String = "not_set",
                            statusOfAttackRune: String = "not_set",
                            lastChangeOfstatusOfAttackRune: Long = 0,
                            uhRuneContainerName: String = "not_set",
@@ -167,7 +167,9 @@ case class ProcessorState(
                            stateHunting: String = "free",
                            stateLooting: String = "free",
                            stateLootPlunder: String = "free",
-                           itemLootToPlunder: Int = 0,
+                           lootIdToPlunder: Int = 0,
+                           lootCountToPlunder: Int = 0,
+                           lootScreenPosToPlunder: Vec = Vec(0,0),
 
                            carcassTileToLoot: String = "",
                            lastLootedCarcassTile: String = "",
