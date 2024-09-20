@@ -167,18 +167,23 @@ case class ProcessorState(
                            stateHunting: String = "free",
                            stateLooting: String = "free",
                            stateLootPlunder: String = "free",
+
+                           carsassToLoot: List[(String, Long)] = List(),
+                           carcassTileToLoot: Option[(String, Long)] = None,
+                           lastLootedCarcassTile: Option[(String, Long)] = None,
+                           carsassToLootImmediately: List[(String, Long)] = List(),
+                           carsassToLootAfterFight: List[(String, Long)] = List(),
+
                            lootIdToPlunder: Int = 0,
                            lootCountToPlunder: Int = 0,
                            lootScreenPosToPlunder: Vec = Vec(0,0),
+                           lastAutoLootAction: Long = 0,
 
-                           carcassTileToLoot: String = "",
-                           lastLootedCarcassTile: String = "",
+
                            caveBotLevelsList: List[Int] = List(),
                            antiOverpassDelay: Long = 0,
                            monstersListToLoot: List[String] = List(),
-                           carsassToLoot: List[String] = List(),
-                           carsassToLootImmediately: List[String] = List(),
-                           carsassToLootAfterFight: List[String] = List(),
+
                            staticContainersList: List[String] = List(),
                            gridState: Array[Array[Boolean]] = Array.ofDim[Boolean](10, 10), // Example default value
                            gridBoundsState: (Int, Int, Int, Int) = (0, 0, 0, 0), // Example default value

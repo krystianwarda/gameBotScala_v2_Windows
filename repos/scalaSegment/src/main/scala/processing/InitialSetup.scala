@@ -37,12 +37,49 @@ object InitialSetup {
     }
 
 
+    // Sort the carsassToLootImmediately and carsassToLootAfterFight lists
+    updatedState = updatedState.copy(
+      carsassToLootImmediately = sortCarcassesByDistanceAndTime(json, updatedState.carsassToLootImmediately, updatedState),
+      carsassToLootAfterFight = sortCarcassesByDistanceAndTime(json, updatedState.carsassToLootAfterFight, updatedState)
+    )
 
     val endTime = System.nanoTime()
     val duration = (endTime - startTime) / 1e9d
     printInColor(ANSI_GREEN, f"[INFO] Processing computeInitialSetupActions took $duration%.6f seconds")
 
     ((actions, logs), updatedState)
+  }
+
+
+  // Helper function to sort carcasses by proximity to the character and time of death
+  def sortCarcassesByDistanceAndTime(json: JsValue, carcassList: List[(String, Long)], state: ProcessorState): List[(String, Long)] = {
+    // Extract character's current position from JSON
+    val (charX, charY, charZ) = (json \ "characterInfo").asOpt[JsObject].map { characterInfo =>
+      val x = (characterInfo \ "PositionX").asOpt[Int].getOrElse(0)
+      val y = (characterInfo \ "PositionY").asOpt[Int].getOrElse(0)
+      val z = (characterInfo \ "PositionZ").asOpt[Int].getOrElse(0)
+      (x, y, z)
+    }.getOrElse((0, 0, 0))
+
+    // Helper function to extract position from tile string
+    def extractTilePosition(tile: String): (Int, Int, Int) = {
+      val posX = tile.substring(0, 5).toInt
+      val posY = tile.substring(5, 10).toInt
+      val posZ = tile.substring(10, 12).toInt
+      (posX, posY, posZ)
+    }
+
+    // Helper function to calculate the distance between two 3D points
+    def calculateDistance(x1: Int, y1: Int, z1: Int, x2: Int, y2: Int, z2: Int): Double = {
+      math.sqrt(math.pow(x2 - x1, 2) + math.pow(y2 - y1, 2) + math.pow(z2 - z1, 2))
+    }
+
+    // Sort the carcass list by proximity to the character first, then by time of death
+    carcassList.sortBy { case (tile, timeOfDeath) =>
+      val (tileX, tileY, tileZ) = extractTilePosition(tile)
+      val distance = calculateDistance(tileX, tileY, tileZ, charX, charY, charZ)
+      (distance, timeOfDeath) // Sort by distance first, then by time
+    }
   }
 
 
