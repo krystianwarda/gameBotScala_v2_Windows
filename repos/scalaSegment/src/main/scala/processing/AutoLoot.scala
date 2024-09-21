@@ -66,12 +66,17 @@ object AutoLoot {
         case None => // Do nothing
       }
 
+      val processResultDetectDeadCreatures = detectDeadCreatures(json, settings, updatedState)
+      actions ++= processResultDetectDeadCreatures.actions
+      logs ++= processResultDetectDeadCreatures.logs
+      updatedState = processResultDetectDeadCreatures.updatedState
+
 
       // Process the hunting state
-      val processResult = processStateHunting(json, settings, updatedState)
-      actions ++= processResult.actions
-      logs ++= processResult.logs
-      updatedState = processResult.updatedState
+      val processResultStateHunting = processStateHunting(json, settings, updatedState)
+      actions ++= processResultStateHunting.actions
+      logs ++= processResultStateHunting.logs
+      updatedState = processResultStateHunting.updatedState
 
       println(s"After stateLooting: ${updatedState.stateLooting},stateLootPlunder: ${updatedState.stateLootPlunder}.")
 
@@ -195,73 +200,74 @@ object AutoLoot {
     // Get the current system time to associate with the looting event
     val currentTime = updatedState.currentTime
 
-    println(s"updatedState.lastTargetName: ${updatedState.lastTargetName}")
 
-    // Retrieve position coordinates
-    val xPositionGame = updatedState.lastTargetPos._1
-    val yPositionGame = updatedState.lastTargetPos._2
-    val zPositionGame = updatedState.lastTargetPos._3
 
-    printInColor(ANSI_RED, f"[DEBUG] Creature (${updatedState.lastTargetName}) in game position $xPositionGame, $yPositionGame, $zPositionGame")
-
-    // Generate the position key
-    val mainPositionKey = generatePositionKey(xPositionGame, yPositionGame, zPositionGame)
-    println(s"mainPositionKey: $mainPositionKey")
-
-    // Retrieve the main index from the game state (using your custom logic)
-    val mainIndexOpt = checkForBloodAndContainerAndGetIndex(json, mainPositionKey)
-    println(s"mainIndexOpt: $mainIndexOpt")
-
-    // Extract the creature settings based on the lastTargetName
-    val creatureSettingsOpt = settings.autoTargetSettings.creatureList
-      .find(creatureStr => parseCreature(creatureStr).name.equalsIgnoreCase(updatedState.lastTargetName))
-      .map(parseCreature)
-
-    println(s"creatureSettingsOpt: $creatureSettingsOpt")
-
-    // Handle the creature settings
-    val (newState, updatedLogs) = creatureSettingsOpt match {
-      case Some(creatureSettings) =>
-        mainIndexOpt match {
-          case Some(mainIndex) =>
-            // Create the tuple for carcass with the current time
-            val carcassEntry = (mainIndex.toString, currentTime)
-
-            if (creatureSettings.lootMonsterImmediately) {
-              // Add the carcass index and time to carsassToLootImmediately
-              logs = logs :+ Log(s"${updatedState.lastTargetName} will be looted immediately.")
-              (updatedState.copy(
-                carsassToLootImmediately = updatedState.carsassToLootImmediately :+ carcassEntry, // Add (mainIndex, time)
-                stateHunting = "loot or fight or free"
-              ), logs)
-
-            } else if (creatureSettings.lootMonsterAfterFight) {
-              // Add the carcass index and time to carsassToLootAfterFight
-              logs = logs :+ Log(s"${updatedState.lastTargetName} will be looted after the fight.")
-              (updatedState.copy(
-                carsassToLootAfterFight = updatedState.carsassToLootAfterFight :+ carcassEntry, // Add (mainIndex, time)
-                stateHunting = "loot or fight or free"
-              ), logs)
-
-            } else {
-              // No looting settings, just log it
-              logs = logs :+ Log(s"${updatedState.lastTargetName} has no looting settings.")
-              (updatedState.copy(stateHunting = "loot or fight or free"), logs)
-            }
-
-          case None =>
-            // Handle the case where mainIndexOpt is None
-            logs = logs :+ Log(s"No valid index found for ${updatedState.lastTargetName}.")
-            (updatedState.copy(stateHunting = "loot or fight or free"), logs)
-        }
-
-      case None =>
-        logs = logs :+ Log(s"No creature settings found for ${updatedState.lastTargetName}.")
-        (updatedState.copy(stateHunting = "loot or fight or free"), logs)
-    }
-
+//    // Retrieve position coordinates
+//    val xPositionGame = updatedState.lastTargetPos._1
+//    val yPositionGame = updatedState.lastTargetPos._2
+//    val zPositionGame = updatedState.lastTargetPos._3
+//
+//    printInColor(ANSI_RED, f"[DEBUG] Creature (${updatedState.lastTargetName}) in game position $xPositionGame, $yPositionGame, $zPositionGame")
+//
+//    // Generate the position key
+//    val mainPositionKey = generatePositionKey(xPositionGame, yPositionGame, zPositionGame)
+//    println(s"mainPositionKey: $mainPositionKey")
+//
+//    // Retrieve the main index from the game state (using your custom logic)
+//    val mainIndexOpt = checkForBloodAndContainerAndGetIndex(json, mainPositionKey)
+//    println(s"mainIndexOpt: $mainIndexOpt")
+//
+//    // Extract the creature settings based on the lastTargetName
+//    val creatureSettingsOpt = settings.autoTargetSettings.creatureList
+//      .find(creatureStr => parseCreature(creatureStr).name.equalsIgnoreCase(updatedState.lastTargetName))
+//      .map(parseCreature)
+//
+//    println(s"creatureSettingsOpt: $creatureSettingsOpt")
+//
+//    // Handle the creature settings
+//    val (newState, updatedLogs) = creatureSettingsOpt match {
+//      case Some(creatureSettings) =>
+//        mainIndexOpt match {
+//          case Some(mainIndex) =>
+//            // Create the tuple for carcass with the current time
+//            val carcassEntry = (mainIndex.toString, currentTime)
+//
+//            if (creatureSettings.lootMonsterImmediately) {
+//              // Add the carcass index and time to carsassToLootImmediately
+//              logs = logs :+ Log(s"${updatedState.lastTargetName} will be looted immediately.")
+//              (updatedState.copy(
+//                carsassToLootImmediately = updatedState.carsassToLootImmediately :+ carcassEntry, // Add (mainIndex, time)
+//                stateHunting = "loot or fight or free"
+//              ), logs)
+//
+//            } else if (creatureSettings.lootMonsterAfterFight) {
+//              // Add the carcass index and time to carsassToLootAfterFight
+//              logs = logs :+ Log(s"${updatedState.lastTargetName} will be looted after the fight.")
+//              (updatedState.copy(
+//                carsassToLootAfterFight = updatedState.carsassToLootAfterFight :+ carcassEntry, // Add (mainIndex, time)
+//                stateHunting = "loot or fight or free"
+//              ), logs)
+//
+//            } else {
+//              // No looting settings, just log it
+//              logs = logs :+ Log(s"${updatedState.lastTargetName} has no looting settings.")
+//              (updatedState.copy(stateHunting = "loot or fight or free"), logs)
+//            }
+//
+//          case None =>
+//            // Handle the case where mainIndexOpt is None
+//            logs = logs :+ Log(s"No valid index found for ${updatedState.lastTargetName}.")
+//            (updatedState.copy(stateHunting = "loot or fight or free"), logs)
+//        }
+//
+//      case None =>
+//        logs = logs :+ Log(s"No creature settings found for ${updatedState.lastTargetName}.")
+//        (updatedState.copy(stateHunting = "loot or fight or free"), logs)
+//    }
+    println(s"updatedState.lastTargetName: ${updatedState.lastTargetName}. Creature is killed, setting to 'loot or fight or free'.")
+    updatedState = updatedState.copy(stateHunting = "loot or fight or free")
     // Return the ProcessResult with the updated actions, updated logs, and updated state
-    ProcessResult(actions, updatedLogs, newState)
+    ProcessResult(actions, logs, updatedState)
   }
 
 
@@ -1771,6 +1777,67 @@ object AutoLoot {
 //    ((actions, logs), updatedState)
 //  }
 
+  def detectDeadCreatures(json: JsValue, settings: UISettings, currentState: ProcessorState): ProcessResult = {
+    var actions: Seq[FakeAction] = Seq.empty
+    var logs: Seq[Log] = Seq.empty
+    var updatedState = currentState
+    val currentTime = System.currentTimeMillis()
+
+    // Extract the list of killed creatures from the JSON
+    val killedCreatures = (json \ "lastKilledCreatures").asOpt[JsObject].getOrElse(Json.obj())
+
+    // Iterate through each killed creature
+    killedCreatures.fields.foreach { case (creatureId, creatureInfo) =>
+      val creatureName = (creatureInfo \ "Name").asOpt[String].getOrElse("")
+      val creaturePosX = (creatureInfo \ "LastPositionX").asOpt[Int].getOrElse(0)
+      val creaturePosY = (creatureInfo \ "LastPositionY").asOpt[Int].getOrElse(0)
+      val creaturePosZ = (creatureInfo \ "LastPositionZ").asOpt[Int].getOrElse(0)
+      val isDead = (creatureInfo \ "IsDead").asOpt[Boolean].getOrElse(false)
+
+      // If the creature is dead, proceed with settings extraction and looting logic
+      if (isDead) {
+        // Generate the main position key (or index) based on the creature's last position
+        val mainIndex = generatePositionKey(creaturePosX, creaturePosY, creaturePosZ)
+
+        // Extract the creature settings based on the creature's name
+        val creatureSettingsOpt = settings.autoTargetSettings.creatureList
+          .find(creatureStr => parseCreature(creatureStr).name.equalsIgnoreCase(creatureName))
+          .map(parseCreature)
+
+        creatureSettingsOpt match {
+          case Some(creatureSettings) =>
+            // Create the tuple for the carcass with the current time
+            val carcassEntry = (mainIndex, currentTime)
+
+            if (creatureSettings.lootMonsterImmediately) {
+              // Add the carcass index and time to carsassToLootImmediately
+              logs = logs :+ Log(s"$creatureName will be looted immediately at position ($creaturePosX, $creaturePosY, $creaturePosZ).")
+              updatedState = updatedState.copy(
+                carsassToLootImmediately = updatedState.carsassToLootImmediately :+ carcassEntry
+              )
+
+            } else if (creatureSettings.lootMonsterAfterFight) {
+              // Add the carcass index and time to carsassToLootAfterFight
+              logs = logs :+ Log(s"$creatureName will be looted after the fight at position ($creaturePosX, $creaturePosY, $creaturePosZ).")
+              updatedState = updatedState.copy(
+                carsassToLootAfterFight = updatedState.carsassToLootAfterFight :+ carcassEntry
+              )
+
+            } else {
+              // No looting settings for this creature
+              logs = logs :+ Log(s"$creatureName has no looting settings.")
+            }
+
+          case None =>
+            // No settings found for this creature
+            logs = logs :+ Log(s"No creature settings found for $creatureName.")
+        }
+      }
+    }
+
+    // Return the ProcessResult with the updated actions, logs, and state
+    ProcessResult(actions, logs, updatedState)
+  }
 
 
 
