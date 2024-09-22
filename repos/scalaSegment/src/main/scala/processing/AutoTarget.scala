@@ -246,6 +246,53 @@ object AutoTarget {
       ) {
 //        println("Start autotarget")
 
+
+//        // Process the hunting state
+//        val processResultStateHunting = processStateTargeting(json, settings, updatedState)
+//        actions ++= processResultStateHunting.actions
+//        logs ++= processResultStateHunting.logs
+//        updatedState = processResultStateHunting.updatedState
+//
+//
+//
+//        def processStateTargeting(json: JsValue, settings: UISettings, currentState: ProcessorState): ProcessResult = {
+//          var updatedState = currentState
+//
+//          updatedState.stateTargeting match {
+//
+//            case "attacking" =>
+//              println("Attacking target.")
+//              val ProcessResult(actions, logs, newState) = handleAttackingTarget(json, settings, updatedState)
+//              ProcessResult(actions, logs, newState)
+//
+//            case "target chosen" =>
+//              println("Target has been chosen.")
+//              val ProcessResult(actions, logs, newState) = handleTargetChosen(json, settings, updatedState)
+//              ProcessResult(actions, logs, newState)
+//
+//            case "searching for target" =>
+//              println("Searching for a new target.")
+//              val ProcessResult(actions, logs, newState) = handleSearchingForTarget(json, settings, updatedState)
+//              ProcessResult(actions, logs, newState)
+//
+//            case "target acquired" =>
+//              println("Target acquired.")
+//              val ProcessResult(actions, logs, newState) = handleTargetAcquired(json, settings, updatedState)
+//              ProcessResult(actions, logs, newState)
+//
+//            case "free" =>
+//              println("No target, system is idle.")
+//              ProcessResult(Seq(), Seq(), updatedState)
+//
+//            case _ =>
+//              println("Unknown state, doing nothing.")
+//              ProcessResult(Seq(), Seq(), updatedState)
+//          }
+//        }
+
+
+
+
         val sortedMonstersInfo = extractInfoAndSortMonstersFromBattle(json, settings)
         println(s"chosenTargetId: ${updatedState.chosenTargetId}")
         println(s"sortedMonstersInfo: $sortedMonstersInfo")

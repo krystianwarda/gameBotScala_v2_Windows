@@ -179,6 +179,10 @@ case class ProcessorState(
                            lootScreenPosToPlunder: Vec = Vec(0,0),
                            lastAutoLootAction: Long = 0,
 
+                           stateTargeting: String = "free",
+
+
+
 
                            caveBotLevelsList: List[Int] = List(),
                            antiOverpassDelay: Long = 0,
