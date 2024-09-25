@@ -246,7 +246,6 @@ object AutoTarget {
       ) {
 //        println("Start autotarget")
 
-
 //        // Process the hunting state
 //        val processResultStateHunting = processStateTargeting(json, settings, updatedState)
 //        actions ++= processResultStateHunting.actions

@@ -10,6 +10,8 @@ import javax.swing.{DefaultListModel, JButton, JComboBox, JLabel, JList, JOption
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
+
+
 class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: ActorRef) {
 
 

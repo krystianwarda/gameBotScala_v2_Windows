@@ -24,7 +24,7 @@ object AutoLoot {
 
 //    printInColor(ANSI_RED, f"[DEBUG] autoLoot: ${settings.autoTargetSettings.enabled}, autoLoot: ${settings.autoLootSettings.enabled}")
     if (settings.autoTargetSettings.enabled && settings.autoLootSettings.enabled) {
-      printInColor(ANSI_RED, f"[DEBUG] computeAutoLootActions process started with status:${updatedState.stateHunting}")
+      printInColor(ANSI_RED, f"[DEBUG] computeAutoLootActions process started with status:${updatedState.cavebot.stateHunting}")
 
 
       if (updatedState.staticContainersList.isEmpty) {
@@ -78,7 +78,7 @@ object AutoLoot {
       logs ++= processResultStateHunting.logs
       updatedState = processResultStateHunting.updatedState
 
-      println(s"After stateLooting: ${updatedState.stateLooting},stateLootPlunder: ${updatedState.stateLootPlunder}.")
+      println(s"After stateLooting: ${updatedState.autoloot.stateLooting},stateLootPlunder: ${updatedState.autoloot.stateLootPlunder}.")
 
 
     }
@@ -93,7 +93,7 @@ object AutoLoot {
 
   def processStateHunting(json: JsValue, settings: UISettings, currentState: ProcessorState): ProcessResult = {
     var updatedState = currentState
-    updatedState.stateHunting match {
+    updatedState.cavebot.stateHunting match {
       case "attacking" =>
         println("Attacking creature")
         val ProcessResult(actions, logs, newState) = handleAttackingState(json, settings, updatedState)
@@ -130,9 +130,9 @@ object AutoLoot {
     val actions: Seq[FakeAction] = Seq.empty
     var logs: Seq[Log] = Seq.empty
     var updatedState = currentState
-    println(s"Start stateLooting: ${updatedState.stateLooting},stateLootPlunder: ${updatedState.stateLootPlunder}.")
+    println(s"Start stateLooting: ${updatedState.autoloot.stateLooting},stateLootPlunder: ${updatedState.autoloot.stateLootPlunder}.")
 
-    updatedState.stateLooting match {
+    updatedState.autoloot.stateLooting match {
       case "free" =>
         println("Looting -> free.")
         val ProcessResult(actions, logs, newState) = handleLootOrMoveCarcass(json, settings, updatedState)
@@ -167,10 +167,8 @@ object AutoLoot {
     var logs: Seq[Log] = Seq.empty
     var updatedState = currentState
 
-    println(s"Start (handleLootPlunder) stateLooting: ${updatedState.stateLooting},stateLootPlunder: ${updatedState.stateLootPlunder}.")
-    println(s"Start (handleLootPlunder) lootIdToPlunder: ${updatedState.lootIdToPlunder},lootScreenPosToPlunder: ${updatedState.lootScreenPosToPlunder}.")
     // Process the stateLootPlunder to determine the appropriate looting action
-    updatedState.stateLootPlunder match {
+    updatedState.autoloot.stateLootPlunder match {
       case "free" =>
         // Placeholder logic to assess the loot
         logs = logs :+ Log("[DEBUG] Assessing the loot from the carcass.")
@@ -205,7 +203,15 @@ object AutoLoot {
       case _ =>
         // Default case if no state is matched
         logs = logs :+ Log("[ERROR] Unknown state in stateLootPlunder.")
-        updatedState = updatedState.copy(stateLooting = "free", stateLootPlunder = "free")
+        // Correct usage of .copy to modify autoloot
+
+        updatedState = updatedState.copy(
+          autoloot = updatedState.autoloot.copy(
+            stateLooting = "free",
+            stateLootPlunder = "free"
+          )
+        )
+
         ProcessResult(actions, logs, updatedState)
     }
   }
@@ -218,7 +224,12 @@ object AutoLoot {
     var updatedState = currentState
 
     println(s"updatedState.lastTargetName: ${updatedState.lastTargetName}. Creature is killed, setting to 'loot or fight or free'.")
-    updatedState = updatedState.copy(stateHunting = "loot or fight or free")
+
+    updatedState = updatedState.copy(
+      cavebot = updatedState.cavebot.copy(
+        stateHunting = "loot or fight or free"
+      )
+    )
     // Return the ProcessResult with the updated actions, updated logs, and updated state
     ProcessResult(actions, logs, updatedState)
   }
@@ -239,10 +250,22 @@ object AutoLoot {
 
         if (isLastAttackedCreatureDead) {
           logs = logs :+ Log(f"[DEBUG] Creature with ID $lastAttackedId is dead.")
-          updatedState = updatedState.copy(stateHunting = "creature killed")
+
+          updatedState = updatedState.copy(
+            cavebot = updatedState.cavebot.copy(
+              stateHunting = "creature killed"
+            )
+          )
+
         } else {
           logs = logs :+ Log(f"[DEBUG] No active attack, but creature with ID $lastAttackedId is not dead yet.")
-          updatedState = updatedState.copy(stateHunting = "free")
+
+          updatedState = updatedState.copy(
+            cavebot = updatedState.cavebot.copy(
+              stateHunting = "free"
+            )
+          )
+
         }
 
       case Some(_) =>
@@ -262,7 +285,7 @@ object AutoLoot {
     var updatedState = currentState
 
     // Get the screen position of the subcontainer from lootScreenPosToPlunder
-    val subcontainerScreenPos = updatedState.lootScreenPosToPlunder
+    val subcontainerScreenPos = updatedState.autoloot.lootScreenPosToPlunder
 
     if (subcontainerScreenPos != Vec(0, 0)) {
       // Right-click on the subcontainer at the given screen position
@@ -278,18 +301,28 @@ object AutoLoot {
       actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
 
       // Update the state to indicate the subcontainer has been opened and reset loot status
+
       updatedState = updatedState.copy(
-        stateLootPlunder = "free",
-        lootIdToPlunder = 0,
-        lootScreenPosToPlunder = Vec(0, 0)
+        autoloot = updatedState.autoloot.copy(
+          stateLootPlunder = "free",
+          lootIdToPlunder = 0,
+          lootScreenPosToPlunder = Vec(0, 0)
+        )
       )
+
+
 
       logs = logs :+ Log(f"[DEBUG] Subcontainer opened, stateLootPlunder set to free.")
 
     } else {
       // If no valid screen position, log an error and reset state
       logs = logs :+ Log(f"[ERROR] No valid screen position found for subcontainer.")
-      updatedState = updatedState.copy(stateLootPlunder = "free")
+
+      updatedState = updatedState.copy(
+        autoloot = updatedState.autoloot.copy(
+          stateLootPlunder = "free"
+        )
+      )
     }
 
     ProcessResult(actions, logs, updatedState)
@@ -302,13 +335,13 @@ object AutoLoot {
     var updatedState = currentState
 
     // Convert tiles from carsassToLootImmediately and carsassToLootAfterFight to grid format, excluding those not in mapPanelLoc
-    val excludedTilesGrid = (updatedState.carsassToLootImmediately ++ updatedState.carsassToLootAfterFight)
+    val excludedTilesGrid = (updatedState.autoloot.carsassToLootImmediately ++ updatedState.autoloot.carsassToLootAfterFight)
       .flatMap { case (tileId, _) => convertGameLocationToGrid(json, tileId) }.toSet
 
     // Get the item's screen position, ID, and count
-    val itemScreenPos = updatedState.lootScreenPosToPlunder
-    val itemId = updatedState.lootIdToPlunder
-    val itemCount = updatedState.lootCountToPlunder
+    val itemScreenPos = updatedState.autoloot.lootScreenPosToPlunder
+    val itemId = updatedState.autoloot.lootIdToPlunder
+    val itemCount = updatedState.autoloot.lootCountToPlunder
 
     if (itemScreenPos != Vec(0, 0)) {
       // List of possible walkable tiles
@@ -338,20 +371,32 @@ object AutoLoot {
 
           // Update the state to reflect the item has been moved
           updatedState = updatedState.copy(
-            stateLootPlunder = "free",
-            lootIdToPlunder = 0,
-            lootCountToPlunder = 0,
-            lootScreenPosToPlunder = Vec(0, 0)
+            autoloot = updatedState.autoloot.copy(
+              stateLootPlunder = "free",
+              lootIdToPlunder = 0,
+              lootCountToPlunder = 0,
+              lootScreenPosToPlunder = Vec(0, 0)
+            )
           )
           logs = logs :+ Log(f"[DEBUG] Successfully moved item $itemId to ground at ($targetX, $targetY).")
 
         case None =>
           logs = logs :+ Log(f"[ERROR] No valid walkable tile found to move the item.")
-          updatedState = updatedState.copy(stateLootPlunder = "free")
+
+          updatedState = updatedState.copy(
+            autoloot = updatedState.autoloot.copy(
+              stateLootPlunder = "free"
+            )
+          )
       }
     } else {
       logs = logs :+ Log(f"[ERROR] No valid screen position found for the item to move.")
-      updatedState = updatedState.copy(stateLootPlunder = "free")
+
+      updatedState = updatedState.copy(
+        autoloot = updatedState.autoloot.copy(
+          stateLootPlunder = "free"
+        )
+      )
     }
 
     ProcessResult(actions, logs, updatedState)
@@ -365,7 +410,7 @@ object AutoLoot {
 
     // Get the current time and last time food was eaten
     val currentTime = updatedState.currentTime
-    val lastEatFoodTime = updatedState.lastEatFoodTime
+    val lastEatFoodTime = updatedState.autoloot.lastEatFoodTime
     val timeSinceLastEat = currentTime - lastEatFoodTime
 
     // Check if regTime is less than 600
@@ -376,7 +421,7 @@ object AutoLoot {
       // Check if enough time has passed since the last time food was eaten (at least 0.5 seconds)
       if (timeSinceLastEat >= 500) {
         // Get the screen position of the food to plunder
-        val foodScreenPos = updatedState.lootScreenPosToPlunder
+        val foodScreenPos = updatedState.autoloot.lootScreenPosToPlunder
 
         if (foodScreenPos != Vec(0, 0)) {
           // Right-click on the food
@@ -392,9 +437,12 @@ object AutoLoot {
 
           // Update the last eat food time and set stateLootPlunder to "free"
           updatedState = updatedState.copy(
-            lastEatFoodTime = currentTime,
-            stateLootPlunder = "free"
+            autoloot = updatedState.autoloot.copy(
+              lastEatFoodTime = currentTime,
+              stateLootPlunder = "free"
+            )
           )
+
           logs = logs :+ Log(f"[DEBUG] Food eaten. StateLootPlunder set to free.")
         } else {
           logs = logs :+ Log(f"[ERROR] No valid screen position for food found.")
@@ -405,7 +453,11 @@ object AutoLoot {
     } else {
       logs = logs :+ Log(f"[DEBUG] regTime is greater than 600. No need to eat food.")
       // If regTime is greater than 600, just set stateLootPlunder to free
-      updatedState = updatedState.copy(stateLootPlunder = "free")
+      updatedState = updatedState.copy(
+        autoloot = updatedState.autoloot.copy(
+          stateLootPlunder = "free"
+        )
+      )
     }
 
     ProcessResult(actions, logs, updatedState)
@@ -430,27 +482,26 @@ object AutoLoot {
       case Some(JsString("empty")) =>
         // If the items field is "empty", log it and mark looting as complete
         logs = logs :+ Log(f"[DEBUG] Container $lastContainerIndex is empty.")
+
         updatedState = updatedState.copy(
-          stateLooting = "free",
-          stateLootPlunder = "free",
-          stateHunting = "loot or fight or free"
+          autoloot = updatedState.autoloot.copy(
+            stateLooting = "free",
+            stateLootPlunder = "free",
+          ),
+          cavebot = updatedState.cavebot.copy(
+            stateHunting = "loot or fight or free"
+          )
         )
 
       case Some(itemsObj: JsObject) =>
         // If the container has items, process them
         logs = logs :+ Log(f"[DEBUG] Assessing items in container $lastContainerIndex.")
 
-        // Filter out already looted items
-        val unlootedItems = JsObject(itemsObj.fields.filterNot { case (_, itemInfo) =>
-          val itemId = (itemInfo \ "itemId").as[Int]
-          updatedState.alreadyLootedIds.contains(itemId)
-        })
-
         // Prepare a set of item IDs from the loot settings
         val lootItems = settings.autoLootSettings.lootList.map(_.trim.split(",\\s*")(0).toInt).toSet
 
         // Try to find lootable items
-        val foundItemOpt = unlootedItems.fields.collectFirst {
+        val foundItemOpt = itemsObj.fields.collectFirst {
           case (slot, itemInfo) if lootItems.contains((itemInfo \ "itemId").as[Int]) =>
             (slot, itemInfo)
         }
@@ -478,30 +529,37 @@ object AutoLoot {
             action match {
               case "g" =>
                 logs = logs :+ Log(f"[DEBUG] Item $itemId will be moved to the ground at screen position $lootScreenPosToPlunder.")
+
                 updatedState = updatedState.copy(
-                  stateLootPlunder = "move item to ground",
-                  lootIdToPlunder = itemId,
-                  lootCountToPlunder = itemCount, // Store the item count
-                  lootScreenPosToPlunder = lootScreenPosToPlunder
+                  autoloot = updatedState.autoloot.copy(
+                    stateLootPlunder = "move item to ground",
+                    lootIdToPlunder = itemId,
+                    lootCountToPlunder = itemCount, // Store the item count
+                    lootScreenPosToPlunder = lootScreenPosToPlunder
+                  )
                 )
 
               case _ =>
                 logs = logs :+ Log(f"[DEBUG] Placeholder for item $itemId with action $action.")
+
                 updatedState = updatedState.copy(
-                  stateLootPlunder = "move item to backpack",
-                  lootIdToPlunder = itemId,
-                  lootCountToPlunder = itemCount, // Store the item count
-                  lootScreenPosToPlunder = lootScreenPosToPlunder
+                  autoloot = updatedState.autoloot.copy(
+                    stateLootPlunder = "move item to backpack",
+                    lootIdToPlunder = itemId,
+                    lootCountToPlunder = itemCount, // Store the item count
+                    lootScreenPosToPlunder = lootScreenPosToPlunder
+                  )
                 )
             }
 
           case None =>
             // No lootable items found, check for food
             logs = logs :+ Log(f"[DEBUG] No loot items found, checking for food.")
-            val foundFoodOpt = unlootedItems.fields.collectFirst {
+            val foundFoodOpt = itemsObj.fields.collectFirst {
               case (slot, itemInfo) if StaticGameInfo.Items.FoodsIds.contains((itemInfo \ "itemId").as[Int]) =>
                 (slot, itemInfo)
             }
+
 
             foundFoodOpt match {
               case Some((slot, foodItem)) =>
@@ -517,20 +575,24 @@ object AutoLoot {
                 }
 
                 logs = logs :+ Log(f"[DEBUG] Food found in slot $slot at screen position $lootScreenPosToPlunder.")
+
                 updatedState = updatedState.copy(
-                  stateLootPlunder = "handle food",
-                  lootIdToPlunder = (foodItem \ "itemId").as[Int],
-                  lootCountToPlunder = (foodItem \ "itemCount").as[Int], // Store the food count
-                  lootScreenPosToPlunder = lootScreenPosToPlunder
+                  autoloot = updatedState.autoloot.copy(
+                    stateLootPlunder = "handle food",
+                    lootIdToPlunder = (foodItem \ "itemId").as[Int],
+                    lootCountToPlunder = (foodItem \ "itemCount").as[Int], // Store the food count
+                    lootScreenPosToPlunder = lootScreenPosToPlunder
+                  )
                 )
 
               case None =>
                 // No food found, check for subcontainers
                 logs = logs :+ Log(f"[DEBUG] No food found, checking for subcontainers.")
-                val foundSubcontainerOpt = unlootedItems.fields.collectFirst {
+                val foundSubcontainerOpt = itemsObj.fields.collectFirst {
                   case (slot, itemInfo) if (itemInfo \ "isContainer").asOpt[Boolean].getOrElse(false) =>
                     (slot, itemInfo)
                 }
+
 
                 foundSubcontainerOpt match {
                   case Some((slot, subcontainer)) =>
@@ -546,22 +608,29 @@ object AutoLoot {
                     }
 
                     logs = logs :+ Log(f"[DEBUG] Subcontainer found in slot $slot at screen position $lootScreenPosToPlunder.")
+
                     updatedState = updatedState.copy(
-                      stateLootPlunder = "open subcontainer",
-                      lootIdToPlunder = (subcontainer \ "itemId").as[Int],
-                      lootScreenPosToPlunder = lootScreenPosToPlunder
+                      autoloot = updatedState.autoloot.copy(
+                        stateLootPlunder = "open subcontainer",
+                        lootIdToPlunder = (subcontainer \ "itemId").as[Int],
+                        lootScreenPosToPlunder = lootScreenPosToPlunder
+                      )
                     )
 
                   case None =>
                     // Nothing left to loot, set looting to free
                     logs = logs :+ Log(f"[DEBUG] No more items, food, or subcontainers. Looting complete.")
+
                     updatedState = updatedState.copy(
-                      stateLooting = "free",
-                      stateLootPlunder = "free",
-                      stateHunting = "loot or fight or free",
-                      alreadyLootedIds = List(),
-                      lootIdToPlunder = 0,
-                      lootCountToPlunder = 0
+                      autoloot = updatedState.autoloot.copy(
+                        stateLooting = "free",
+                        stateLootPlunder = "free",
+                        lootIdToPlunder = 0,
+                        lootCountToPlunder = 0
+                      ),
+                      cavebot = updatedState.cavebot.copy(
+                        stateHunting = "loot or fight or free",
+                      )
                     )
                 }
             }
@@ -570,7 +639,16 @@ object AutoLoot {
       case Some(_) | None =>
         // If items field is not in the expected format or missing, log an error
         logs = logs :+ Log(f"[ERROR] Failed to parse items in the container $lastContainerIndex.")
-        updatedState = updatedState.copy(stateLooting = "free", stateLootPlunder = "free", stateHunting = "loot or fight or free")
+
+        updatedState = updatedState.copy(
+          autoloot = updatedState.autoloot.copy(
+            stateLooting = "free",
+            stateLootPlunder = "free",
+          ),
+          cavebot = updatedState.cavebot.copy(
+            stateHunting = "loot or fight or free"
+          )
+        )
     }
 
     ProcessResult(actions, logs, updatedState)
@@ -582,10 +660,10 @@ object AutoLoot {
     var updatedState = currentState
     val currentTime = System.currentTimeMillis()
 
-    println(s"carsassToLootImmediately: ${updatedState.carsassToLootImmediately}")
-    println(s"carsassToLootAfterFight: ${updatedState.carsassToLootAfterFight}")
+    println(s"carsassToLootImmediately: ${updatedState.autoloot.carsassToLootImmediately}")
+    println(s"carsassToLootAfterFight: ${updatedState.autoloot.carsassToLootAfterFight}")
     // Calculate time since the last auto-loot action
-    val timeSinceLastAction = currentTime - updatedState.lastAutoLootAction
+    val timeSinceLastAction = currentTime - updatedState.autoloot.lastAutoLootAction
 
     if (timeSinceLastAction < 400) {
       logs = logs :+ Log(s"Too soon to move the carcass. Time since last action: $timeSinceLastAction ms.")
@@ -593,11 +671,11 @@ object AutoLoot {
     }
 
     // Convert tiles from carsassToLootImmediately and carsassToLootAfterFight to grid format
-    val excludedTilesGrid = (updatedState.carsassToLootImmediately ++ updatedState.carsassToLootAfterFight)
+    val excludedTilesGrid = (updatedState.autoloot.carsassToLootImmediately ++ updatedState.autoloot.carsassToLootAfterFight)
       .flatMap { case (tileId, _) => convertGameLocationToGrid(json, tileId) }.toSet
 
     // Use lastLootedCarcassTile for the carcass to move
-    val carcassToMoveOpt = updatedState.lastLootedCarcassTile
+    val carcassToMoveOpt = updatedState.autoloot.lastLootedCarcassTile
 
     carcassToMoveOpt match {
       case Some((carcassToMove, _)) => // Extract the tile from the tuple
@@ -627,21 +705,50 @@ object AutoLoot {
 
                 // Log the movement and update the state
                 logs = logs :+ Log(s"Moving carcass from ($itemToMovePosX, $itemToMovePosY) to ($targetX, $targetY), avoiding excluded tiles and the same tile.")
-                updatedState = updatedState.copy(stateLooting = "opening carcass", lastAutoLootAction = currentTime)
+
+                updatedState = updatedState.copy(
+                  autoloot = updatedState.autoloot.copy(
+                    stateLooting = "opening carcass",
+                    lastAutoLootAction = currentTime
+                  )
+                )
 
               case None =>
                 logs = logs :+ Log("No walkable tile found.")
-                updatedState = updatedState.copy(stateLooting = "free", stateHunting = "loot or fight or free")
+
+                updatedState = updatedState.copy(
+                  autoloot = updatedState.autoloot.copy(
+                    stateLooting = "free",
+                  ),
+                  cavebot = updatedState.cavebot.copy(
+                    stateHunting = "loot or fight or free"
+                  )
+                )
             }
 
           case None =>
             logs = logs :+ Log(s"Could not find position for carcass tile $carcassToMove.")
-            updatedState = updatedState.copy(stateLooting = "free", stateHunting = "loot or fight or free")
+
+            updatedState = updatedState.copy(
+              autoloot = updatedState.autoloot.copy(
+                stateLooting = "free",
+              ),
+              cavebot = updatedState.cavebot.copy(
+                stateHunting = "loot or fight or free"
+              )
+            )
         }
 
       case None =>
         logs = logs :+ Log(s"No lastLootedCarcassTile found in updatedState.")
-        updatedState = updatedState.copy(stateLooting = "free", stateHunting = "loot or fight or free")
+        updatedState = updatedState.copy(
+          autoloot = updatedState.autoloot.copy(
+            stateLooting = "free",
+          ),
+          cavebot = updatedState.cavebot.copy(
+            stateHunting = "loot or fight or free"
+          )
+        )
     }
 
     ProcessResult(actions, logs, updatedState)
@@ -666,7 +773,7 @@ object AutoLoot {
     val currentTime = System.currentTimeMillis()
 
     // Calculate time since the last auto-loot action
-    val timeSinceLastAction = currentTime - updatedState.lastAutoLootAction
+    val timeSinceLastAction = currentTime - updatedState.autoloot.lastAutoLootAction
 
     // Skip looting attempt if less than 0.4 seconds have passed since the last action
     if (timeSinceLastAction < 400) {
@@ -675,7 +782,7 @@ object AutoLoot {
     }
 
     // Retrieve the carcass tile to loot
-    val carcassTileToLootOpt = updatedState.carcassTileToLoot
+    val carcassTileToLootOpt = updatedState.autoloot.carcassTileToLoot
 
     carcassTileToLootOpt match {
       case Some((carcassTileToLoot, _)) =>
@@ -728,14 +835,28 @@ object AutoLoot {
               actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
 
               // Update the state to indicate that the carcass is being opened and record the time of the action
-              updatedState = updatedState.copy(stateLooting = "clicking open button", lastAutoLootAction = currentTime)
+
+              updatedState = updatedState.copy(
+                autoloot = updatedState.autoloot.copy(
+                  stateLooting = "clicking open button",
+                  lastAutoLootAction = currentTime
+                )
+              )
 
             case None =>
               // Log the failure to find the carcass
               logs = logs :+ Log(s"[ERROR] Could not find screen coordinates for carcass tile $carcassTileToLoot")
 
               // Reset the state since the carcass could not be opened
-              updatedState = updatedState.copy(stateLooting = "free", stateHunting = "loot or fight or free")
+
+              updatedState = updatedState.copy(
+                autoloot = updatedState.autoloot.copy(
+                  stateLooting = "free",
+                ),
+                cavebot = updatedState.cavebot.copy(
+                  stateHunting = "loot or fight or free"
+                )
+              )
           }
         } else {
           // If the character is too far away, generate waypoints and move closer
@@ -762,13 +883,27 @@ object AutoLoot {
           } else {
             // If no waypoints are found, reset the state
             logs = logs :+ Log(s"[ERROR] No waypoints found to reach the carcass.")
-            updatedState = updatedState.copy(stateLooting = "free", stateHunting = "loot or fight or free")
+            updatedState = updatedState.copy(
+              autoloot = updatedState.autoloot.copy(
+                stateLooting = "free",
+              ),
+              cavebot = updatedState.cavebot.copy(
+                stateHunting = "loot or fight or free"
+              )
+            )
           }
         }
 
       case None =>
         logs = logs :+ Log(s"[ERROR] No carcassTileToLoot found in updatedState.")
-        updatedState = updatedState.copy(stateLooting = "free", stateHunting = "loot or fight or free")
+        updatedState = updatedState.copy(
+          autoloot = updatedState.autoloot.copy(
+            stateLooting = "free",
+          ),
+          cavebot = updatedState.cavebot.copy(
+            stateHunting = "loot or fight or free"
+          )
+        )
     }
 
     ProcessResult(actions, logs, updatedState)
@@ -782,12 +917,20 @@ object AutoLoot {
     val currentTime = System.currentTimeMillis()
 
     // Calculate how much time has passed since the last auto-loot action was initiated
-    val timeSinceLastAction = currentTime - updatedState.lastAutoLootAction
+    val timeSinceLastAction = currentTime - updatedState.autoloot.lastAutoLootAction
     println((json \ "screenInfo" \ "extraWindowLoc").asOpt[JsObject])
     // If more than 1 second has passed since the last action, cancel looting
     if (timeSinceLastAction > 1000) {
       logs = logs :+ Log(s"Failed to open looting window after 1 second. Cancelling looting.")
-      updatedState = updatedState.copy(stateLooting = "free", stateHunting = "loot or fight or free")
+
+      updatedState = updatedState.copy(
+        autoloot = updatedState.autoloot.copy(
+          stateLooting = "free",
+        ),
+        cavebot = updatedState.cavebot.copy(
+          stateHunting = "loot or fight or free"
+        )
+      )
     } else {
       // Attempt to retrieve the position of the "Open" button from the extra window
       val openPosOpt = (json \ "screenInfo" \ "extraWindowLoc").asOpt[JsObject].flatMap { extraWindowLoc =>
@@ -810,7 +953,12 @@ object AutoLoot {
             MouseAction(xPosWindowOpen, yPosWindowOpen, "releaseLeft")
           )
           actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-          updatedState = updatedState.copy(stateLooting = "loot plunder")
+
+          updatedState = updatedState.copy(
+            autoloot = updatedState.autoloot.copy(
+              stateLooting = "loot plunder"
+            )
+          )
 
         case None =>
           logs = logs :+ Log("No Open button detected. Still waiting for opening carcass")
@@ -853,39 +1001,56 @@ object AutoLoot {
     var logs: Seq[Log] = Seq.empty
     var updatedState = currentState
 
-    println(s"carsassToLootImmediately: ${updatedState.carsassToLootImmediately}.")
-    println(s"carsassToLootAfterFight: ${updatedState.carsassToLootAfterFight}.")
+    println(s"carsassToLootImmediately: ${updatedState.autoloot.carsassToLootImmediately}.")
+    println(s"carsassToLootAfterFight: ${updatedState.autoloot.carsassToLootAfterFight}.")
 
     // Check if there is a carcass tile to loot
-    updatedState.carcassTileToLoot match {
+    updatedState.autoloot.carcassTileToLoot match {
       case Some((carcassTile, timeOfDeath)) =>
-        updatedState.lastLootedCarcassTile match {
+        updatedState.autoloot.lastLootedCarcassTile match {
           case Some((lastCarcassTile, lastTimeOfDeath)) =>
             // If the tiles are the same, we need to move the carcass
             if (carcassTile == lastCarcassTile) {
               logs = logs :+ Log(f"Same carcass tile as last looted: $carcassTile. Moving carcass.")
-              updatedState = updatedState.copy(stateLooting = "moving carcass")
+
+              updatedState = updatedState.copy(
+                autoloot = updatedState.autoloot.copy(
+                  stateLooting = "moving carcass"
+                )
+              )
+
             } else {
               // Different carcass, set state to open new carcass
               logs = logs :+ Log(f"New carcass tile detected. Opening new carcass: $carcassTile.")
+
               updatedState = updatedState.copy(
-                stateLooting = "opening carcass",
-                lastLootedCarcassTile = Some((carcassTile, timeOfDeath)) // Update last looted carcass
+                autoloot = updatedState.autoloot.copy(
+                  stateLooting = "opening carcass",
+                  lastLootedCarcassTile = Some((carcassTile, timeOfDeath))
+                )
               )
             }
 
           case None =>
             // No previous carcass, so loot this one
             logs = logs :+ Log(f"No previously looted carcass. Opening carcass: $carcassTile.")
+
             updatedState = updatedState.copy(
-              stateLooting = "opening carcass",
-              lastLootedCarcassTile = Some((carcassTile, timeOfDeath)) // Update last looted carcass
+              autoloot = updatedState.autoloot.copy(
+                stateLooting = "opening carcass",
+                lastLootedCarcassTile = Some((carcassTile, timeOfDeath))
+              )
             )
         }
 
       case None =>
         logs = logs :+ Log(f"No carcass tile to loot.")
-        updatedState = updatedState.copy(stateLooting = "free")
+
+        updatedState = updatedState.copy(
+          autoloot = updatedState.autoloot.copy(
+            stateLooting = "free"
+          )
+        )
     }
 
     // Return the ProcessResult with the updated actions, logs, and state
@@ -903,55 +1068,76 @@ object AutoLoot {
     println(s"battleShootableCreaturesList: $battleShootableCreaturesList")
 
     // Check if carsassToLootImmediately is non-empty and proceed with immediate looting
-    if (updatedState.carsassToLootImmediately.nonEmpty) {
+    if (updatedState.autoloot.carsassToLootImmediately.nonEmpty) {
 
       // Sort carcass by character proximity if there are multiple carcasses
-      if (updatedState.carsassToLootImmediately.length > 1) {
+      if (updatedState.autoloot.carsassToLootImmediately.length > 1) {
+
         updatedState = updatedState.copy(
-          carsassToLootImmediately = sortTileListByCharacterProximity(json, updatedState.carsassToLootImmediately)
+          autoloot = updatedState.autoloot.copy(
+            carsassToLootImmediately = sortTileListByCharacterProximity(json, updatedState.autoloot.carsassToLootImmediately)
+          )
         )
       }
 
       // Get the unique carcass and time from the sorted list
-      val (carcassToLoot, timeOfDeath) = updatedState.carsassToLootImmediately.head
+      val (carcassToLoot, timeOfDeath) = updatedState.autoloot.carsassToLootImmediately.head
 
       logs = logs :+ Log(s"Looting immediately. Carcass to loot: $carcassToLoot, Time: $timeOfDeath")
 
-      // Update the state with the current carcass and remove it from the list
       updatedState = updatedState.copy(
-        stateHunting = "looting in progress",
-        carcassTileToLoot = Some((carcassToLoot, timeOfDeath)),
-        carsassToLootImmediately = updatedState.carsassToLootImmediately.tail // Remove the looted carcass
+        autoloot = updatedState.autoloot.copy(
+          carcassTileToLoot = Some((carcassToLoot, timeOfDeath)),
+          carsassToLootImmediately = updatedState.autoloot.carsassToLootImmediately.tail // Remove the looted carcass
+        ),
+        cavebot = updatedState.cavebot.copy(
+          stateHunting = "looting in progress",
+        )
       )
     }
 
     // Check if carsassToLootAfterFight is non-empty and it is safe to loot
-    else if (updatedState.carsassToLootAfterFight.nonEmpty && battleShootableCreaturesList.isEmpty) {
+    else if (updatedState.autoloot.carsassToLootAfterFight.nonEmpty && battleShootableCreaturesList.isEmpty) {
 
       // Sort carcass by character proximity if there are multiple carcasses
-      if (updatedState.carsassToLootAfterFight.length > 1) {
+      if (updatedState.autoloot.carsassToLootAfterFight.length > 1) {
         updatedState = updatedState.copy(
-          carsassToLootAfterFight = sortTileListByCharacterProximity(json, updatedState.carsassToLootAfterFight)
+
+        )
+
+        updatedState = updatedState.copy(
+          autoloot = updatedState.autoloot.copy(
+            carsassToLootAfterFight = sortTileListByCharacterProximity(json, updatedState.autoloot.carsassToLootAfterFight)
+          )
         )
       }
 
       // Get the unique carcass and time from the sorted list
-      val (carcassToLoot, timeOfDeath) = updatedState.carsassToLootAfterFight.head
+      val (carcassToLoot, timeOfDeath) = updatedState.autoloot.carsassToLootAfterFight.head
 
       logs = logs :+ Log(s"Looting after fight. Carcass to loot: $carcassToLoot, Time: $timeOfDeath")
 
-      // Update the state with the current carcass and remove it from the list
       updatedState = updatedState.copy(
-        stateHunting = "looting in progress",
-        carcassTileToLoot = Some((carcassToLoot, timeOfDeath)),
-        carsassToLootAfterFight = updatedState.carsassToLootAfterFight.tail // Remove the looted carcass
+        autoloot = updatedState.autoloot.copy(
+          carcassTileToLoot = Some((carcassToLoot, timeOfDeath)),
+          carsassToLootAfterFight = updatedState.autoloot.carsassToLootAfterFight.tail // Remove the looted carcass
+        ),
+        cavebot = updatedState.cavebot.copy(
+          stateHunting = "looting in progress",
+        )
       )
     }
 
     // If neither looting list is non-empty or it's not safe to loot, set state to "free"
     else {
       logs = logs :+ Log("No carcass to loot or not safe to loot. Setting state to free.")
-      updatedState = updatedState.copy(stateHunting = "free")
+
+      updatedState = updatedState.copy(
+        cavebot = updatedState.cavebot.copy(
+          stateHunting = "free"
+        )
+      )
+
     }
 
     // Return the ProcessResult with updated actions, logs, and state
@@ -1083,15 +1269,21 @@ object AutoLoot {
             if (creatureSettings.lootMonsterImmediately) {
               // Add the carcass index and time to carsassToLootImmediately
               logs = logs :+ Log(s"$creatureName will be looted immediately at position ($creaturePosX, $creaturePosY, $creaturePosZ).")
+
               updatedState = updatedState.copy(
-                carsassToLootImmediately = updatedState.carsassToLootImmediately :+ carcassEntry
+                autoloot = updatedState.autoloot.copy(
+                  carsassToLootImmediately = updatedState.autoloot.carsassToLootImmediately :+ carcassEntry
+                )
               )
 
             } else if (creatureSettings.lootMonsterAfterFight) {
               // Add the carcass index and time to carsassToLootAfterFight
               logs = logs :+ Log(s"$creatureName will be looted after the fight at position ($creaturePosX, $creaturePosY, $creaturePosZ).")
+
               updatedState = updatedState.copy(
-                carsassToLootAfterFight = updatedState.carsassToLootAfterFight :+ carcassEntry
+                autoloot = updatedState.autoloot.copy(
+                  carsassToLootAfterFight = updatedState.autoloot.carsassToLootAfterFight :+ carcassEntry
+                )
               )
 
             } else {

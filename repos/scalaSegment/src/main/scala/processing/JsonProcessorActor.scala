@@ -62,8 +62,29 @@ case class WaypointInfo(
                          waypointPlacement: String
                        )
 
+
+case class AutoLootState(
+                         stateLooting: String = "free",
+                         stateLootPlunder: String = "free",
+                         carsassToLoot: List[(String, Long)] = List(),
+                         carcassTileToLoot: Option[(String, Long)] = None,
+                         lastLootedCarcassTile: Option[(String, Long)] = None,
+                         carsassToLootImmediately: List[(String, Long)] = List(),
+                         carsassToLootAfterFight: List[(String, Long)] = List(),
+                         lootIdToPlunder: Int = 0,
+                         lootCountToPlunder: Int = 0,
+                         lootScreenPosToPlunder: Vec = Vec(0, 0),
+                         lastAutoLootAction: Long = 0,
+                         lastEatFoodTime: Long = 0
+                       )
+case class CaveBotState(
+                         stateHunting: String = "free",
+                        )
 case class ProcessorState(
                            initialSettingsSet: Boolean = false,
+
+                           autoloot: AutoLootState = AutoLootState(),
+                           cavebot: CaveBotState = CaveBotState(),
                            dangerLevelHealing: String = "low",
                            dangerCreaturesList: Seq[Creature] = Seq.empty,
 
@@ -164,20 +185,20 @@ case class ProcessorState(
                            uhRuneContainerName: String = "not_set",
                            statusOfRuneAutoheal: String = "not_ready",
 
-                           stateHunting: String = "free",
-                           stateLooting: String = "free",
-                           stateLootPlunder: String = "free",
 
-                           carsassToLoot: List[(String, Long)] = List(),
-                           carcassTileToLoot: Option[(String, Long)] = None,
-                           lastLootedCarcassTile: Option[(String, Long)] = None,
-                           carsassToLootImmediately: List[(String, Long)] = List(),
-                           carsassToLootAfterFight: List[(String, Long)] = List(),
-
-                           lootIdToPlunder: Int = 0,
-                           lootCountToPlunder: Int = 0,
-                           lootScreenPosToPlunder: Vec = Vec(0,0),
-                           lastAutoLootAction: Long = 0,
+//                           stateLooting: String = "free",
+//                           stateLootPlunder: String = "free",
+//
+//                           carsassToLoot: List[(String, Long)] = List(),
+//                           carcassTileToLoot: Option[(String, Long)] = None,
+//                           lastLootedCarcassTile: Option[(String, Long)] = None,
+//                           carsassToLootImmediately: List[(String, Long)] = List(),
+//                           carsassToLootAfterFight: List[(String, Long)] = List(),
+//
+//                           lootIdToPlunder: Int = 0,
+//                           lootCountToPlunder: Int = 0,
+//                           lootScreenPosToPlunder: Vec = Vec(0,0),
+//                           lastAutoLootAction: Long = 0,
 
                            stateTargeting: String = "free",
 
@@ -193,7 +214,7 @@ case class ProcessorState(
                            gridBoundsState: (Int, Int, Int, Int) = (0, 0, 0, 0), // Example default value
                            presentCharLocation: Vec = Vec(0, 0),
                            presentCharZLocation: Int = 0,
-                           lastEatFoodTime: Long = 0,
+
 
                            // ammo resuply
                            isUsingAmmo: String = "not_set",

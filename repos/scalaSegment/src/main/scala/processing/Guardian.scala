@@ -41,32 +41,90 @@ object Guardian {
       val ignoredCreatures = parseIgnoredCreatures(settings)
       val currentZLevel = (json \ "characterInfo" \ "PositionZ").as[Int]
 
-      // Iterate over the players in the spyLevelInfoJson
-      spyLevelInfoJson.fields.foreach {
-        case (_, playerInfo) =>
-          val player = playerInfo.as[JsObject]
 
-          // First condition: player on screen and not ignored
-          if (isPlayer(player) && isPlayerOnScreen(player, currentZLevel) && !isIgnoredPlayer(player, ignoredCreatures, playerName)) {
-            val (newActions, newState) = triggerPlayerOnScreenActions(player, settings, currentTime, json, updatedState)
-            actions = actions ++ newActions  // Accumulate actions
-            updatedState = newState  // Update state
-          }
 
-          // Second condition: player detected (on a different level) and not ignored
-          if (isPlayer(player) && isPlayerDetected(player, currentZLevel) && !isIgnoredPlayer(player, ignoredCreatures, playerName)) {
-            val (addAction, newState) = triggerPlayerDetectedActions(player, settings, currentTime, json, updatedState)
-            actions = actions ++ addAction  // Accumulate actions
-            updatedState = newState  // Update state
+      // Check for player on screen
+      AlertLogic.logicPlayerOnScreen(spyLevelInfoJson, currentZLevel, ignoredCreatures, playerName).foreach { detectedPlayerName =>
+        if (AlertLogic.shouldTriggerAlert(updatedState.playerDetectedAlertTime, currentTime, 10000)) {
+          updatedState = updatedState.copy(playerDetectedAlertTime = currentTime)
+
+          val alertSettings = settings.guardianSettings.playerOnScreenSettings.head
+
+          if (alertSettings.playerOnScreenSound)
+            GuardianActionExecutor.executeSoundAlert("Player on screen detected.")
+
+          if (alertSettings.playerOnScreenMessage)
+            actions = actions :+ GuardianActionExecutor.executeInGameMessage(s"Player $detectedPlayerName is on screen!")
+
+          if (alertSettings.playerOnScreenDiscord)
+            GuardianActionExecutor.executeDiscordAlert("Player on screen detected.", json)
+
+          if (alertSettings.playerOnScreenLogout)
+            actions = actions :+ GuardianActionExecutor.executeLogout()
+
+          if (alertSettings.playerOnScreenPz) {
+            val (pzActions, newState) = GuardianActionExecutor.executePzMove(json, settings, updatedState, actions)
+            actions = pzActions
+            updatedState = newState
           }
+        }
       }
 
-      // Third condition: low supplies
-      if (updatedState.suppliesLeftMap.values.exists(_ <= 1)) {
-        val (addAction, newState) = triggerLowSuppliesActions(settings, json, updatedState)
-        actions = actions ++ addAction  // Accumulate actions
-        updatedState = newState  // Update state
+
+      // Check for player detected on different level
+      AlertLogic.logicPlayerDetected(spyLevelInfoJson, currentZLevel, ignoredCreatures, playerName).foreach { detectedPlayerName =>
+        if (AlertLogic.shouldTriggerAlert(updatedState.playerDetectedAlertTime, currentTime, 15000)) {
+          updatedState = updatedState.copy(playerDetectedAlertTime = currentTime)
+
+          val alertSettings = settings.guardianSettings.playerDetectedSettings.head
+
+          if (alertSettings.playerDetectedSound)
+            GuardianActionExecutor.executeSoundAlert("Player detected nearby.")
+
+          if (alertSettings.playerDetectedMessage)
+            actions = actions :+ GuardianActionExecutor.executeInGameMessage(s"Player $detectedPlayerName detected nearby!")
+
+          if (alertSettings.playerDetectedDiscord)
+            GuardianActionExecutor.executeDiscordAlert("Player detected nearby.", json)
+
+          if (alertSettings.playerDetectedLogout)
+            actions = actions :+ GuardianActionExecutor.executeLogout()
+
+          if (alertSettings.playerDetectedPz) {
+            val (pzActions, newState) = GuardianActionExecutor.executePzMove(json, settings, updatedState, actions)
+            actions = pzActions
+            updatedState = newState
+          }
+        }
       }
+
+
+//      // Iterate over the players in the spyLevelInfoJson
+//      spyLevelInfoJson.fields.foreach {
+//        case (_, playerInfo) =>
+//          val player = playerInfo.as[JsObject]
+//
+//          // First condition: player on screen and not ignored
+//          if (isPlayer(player) && isPlayerOnScreen(player, currentZLevel) && !isIgnoredPlayer(player, ignoredCreatures, playerName)) {
+//            val (newActions, newState) = triggerPlayerOnScreenActions(player, settings, currentTime, json, updatedState)
+//            actions = actions ++ newActions  // Accumulate actions
+//            updatedState = newState  // Update state
+//          }
+//
+//          // Second condition: player detected (on a different level) and not ignored
+//          if (isPlayer(player) && isPlayerDetected(player, currentZLevel) && !isIgnoredPlayer(player, ignoredCreatures, playerName)) {
+//            val (addAction, newState) = triggerPlayerDetectedActions(player, settings, currentTime, json, updatedState)
+//            actions = actions ++ addAction  // Accumulate actions
+//            updatedState = newState  // Update state
+//          }
+//      }
+//
+//      // Third condition: low supplies
+//      if (updatedState.suppliesLeftMap.values.exists(_ <= 1)) {
+//        val (addAction, newState) = triggerLowSuppliesActions(settings, json, updatedState)
+//        actions = actions ++ addAction  // Accumulate actions
+//        updatedState = newState  // Update state
+//      }
 
     }
 
@@ -338,6 +396,129 @@ object Guardian {
     }
   }
 
+}
+
+
+
+
+object AlertLogic {
+
+  def shouldTriggerAlert(
+                          lastAlertTime: Long,
+                          currentTime: Long,
+                          cooldownMillis: Long
+                        ): Boolean = {
+    (currentTime - lastAlertTime) >= cooldownMillis
+  }
+
+  def logicPlayerOnScreen(
+                            spyLevelInfoJson: JsObject,
+                            currentZLevel: Int,
+                            ignoredPlayers: List[String],
+                            playerName: String
+                          ): Option[String] = {
+    spyLevelInfoJson.fields.collectFirst {
+      case (_, playerInfo) =>
+        val player = playerInfo.as[JsObject]
+        val name = (player \ "Name").as[String]
+        val isPlayer = (player \ "IsPlayer").asOpt[Boolean].getOrElse(false)
+        val positionZ = (player \ "PositionZ").as[Int]
+        if (isPlayer && positionZ == currentZLevel && !ignoredPlayers.contains(name) && name != playerName)
+          Some(name)
+        else
+          None
+    }.flatten
+  }
+
+  def logicPlayerDetected(
+                            spyLevelInfoJson: JsObject,
+                            currentZLevel: Int,
+                            ignoredPlayers: List[String],
+                            playerName: String
+                          ): Option[String] = {
+    spyLevelInfoJson.fields.collectFirst {
+      case (_, playerInfo) =>
+        val player = playerInfo.as[JsObject]
+        val name = (player \ "Name").as[String]
+        val isPlayer = (player \ "IsPlayer").asOpt[Boolean].getOrElse(false)
+        val positionZ = (player \ "PositionZ").as[Int]
+        if (isPlayer && positionZ != currentZLevel && !ignoredPlayers.contains(name) && name != playerName)
+          Some(name)
+        else
+          None
+    }.flatten
+  }
+
+  def detectLowSupplies(
+                         suppliesLeftMap: Map[String, Int]
+                       ): Boolean = {
+    suppliesLeftMap.values.exists(_ <= 1)
+  }
+
+}
+
+object GuardianActionExecutor {
+
+  def executeSoundAlert(message: String): Unit = {
+    alertSenderActorRef ! SendSoundAlert(message)
+  }
+
+  def executeDiscordAlert(message: String, json: JsValue): Unit = {
+    alertSenderActorRef ! SendDiscordAlert(message, Some(json))
+  }
+
+  def executeInGameMessage(text: String): FakeAction = {
+    FakeAction("typeText", None, Some(KeyboardText(text)))
+  }
+
+  def executeLogout(): FakeAction = {
+    val comboActionDetail = ComboKeyActions("Ctrl", Seq("L"))
+    FakeAction("pressMultipleKeys", None, Some(comboActionDetail))
+  }
+
+  // Implement PZ move action if required
+  def executePzMove(
+                     json: JsValue,
+                     settings: SettingsUtils.UISettings,
+                     currentState: ProcessorState,
+                     initialActions: Seq[FakeAction]
+                   ): (Seq[FakeAction], ProcessorState) = {
+    // Your existing implementation for moving to a safe zone
+    // For demonstration, we'll return the initial actions and state
+    (initialActions, currentState)
+  }
+
+}
+
+
+
+object DataParser {
+
+  def parsePlayer(json: JsValue): Player = {
+    Player(
+      name = (json \ "Name").as[String],
+      isPlayer = (json \ "IsPlayer").asOpt[Boolean].getOrElse(false),
+      positionZ = (json \ "PositionZ").as[Int]
+    )
+  }
+
+  def parsePlayers(json: JsValue): List[Player] = {
+    val spyLevelInfoJson = (json \ "spyLevelInfo").as[JsObject]
+    spyLevelInfoJson.fields.flatMap {
+      case (_, playerInfo) =>
+        val playerJson = playerInfo.as[JsObject]
+        val player = parsePlayer(playerJson)
+        if (player.isPlayer) Some(player) else None
+    }.toList
+  }
+
+  def parseIgnoredCreatures(settings: UISettings): List[String] = {
+    settings.guardianSettings.ignoredCreatures.map { entry =>
+      entry.split(",")(0).split(":")(1).trim
+    }
+  }
+
+  // Additional parsing functions as needed...
 }
 
 

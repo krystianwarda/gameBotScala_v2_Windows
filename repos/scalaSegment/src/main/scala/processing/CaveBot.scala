@@ -34,7 +34,7 @@ object CaveBot {
     var actions: Seq[FakeAction] = Seq.empty
     var logs: Seq[Log] = Seq.empty
     var updatedState = currentState // Initialize updatedState
-    printInColor(ANSI_RED, f"[DEBUG] computeAutoLootActions process started with status:${updatedState.stateHunting}")
+    printInColor(ANSI_RED, f"[DEBUG] computeAutoLootActions process started with status:${updatedState.cavebot.stateHunting}")
     val currentTime = currentTimeMillis()
 
     if (settings.caveBotSettings.enabled) {
@@ -165,13 +165,13 @@ object CaveBot {
             val hasMonsters = battleInfo.exists { case (_, creature) =>
               (creature \ "IsMonster").asOpt[Boolean].getOrElse(false)
             }
-            if (!hasMonsters && updatedState.stateHunting == "free") {
-              printInColor(ANSI_RED, f"[DEBUG] executeWhenNoMonstersOnScreen process started with status:${updatedState.stateHunting}")
+            if (!hasMonsters && updatedState.cavebot.stateHunting == "free") {
+              printInColor(ANSI_RED, f"[DEBUG] executeWhenNoMonstersOnScreen process started with status:${updatedState.cavebot.stateHunting}")
               val result = executeWhenNoMonstersOnScreen(json, settings, updatedState, actions, logs)
               actions = result._1._1
               logs = result._1._2
               updatedState = result._2
-            } else if  (updatedState.stateHunting == "free") {
+            } else if  (updatedState.cavebot.stateHunting == "free") {
               updatedState = updatedState.copy(lastDirection = Option(""))
               val presentCharLocationX = (json \ "characterInfo" \ "PositionX").as[Int]
               val presentCharLocationY = (json \ "characterInfo" \ "PositionY").as[Int]
@@ -207,8 +207,8 @@ object CaveBot {
 
             }
           case JsError(_) =>
-            printInColor(ANSI_RED, f"[DEBUG] case JsError with status:${updatedState.stateHunting}")
-            if (updatedState.stateHunting == "free") {
+            printInColor(ANSI_RED, f"[DEBUG] case JsError with status:${updatedState.cavebot.stateHunting}")
+            if (updatedState.cavebot.stateHunting == "free") {
               val result = executeWhenNoMonstersOnScreen(json, settings, updatedState, actions, logs)
               actions = result._1._1
               logs = result._1._2
