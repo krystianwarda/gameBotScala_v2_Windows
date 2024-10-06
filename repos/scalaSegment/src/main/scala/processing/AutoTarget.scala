@@ -50,7 +50,7 @@ object AutoTarget {
     var updatedState = currentState // Initialize updatedState
     val presentCharLocationZ = (json \ "characterInfo" \ "PositionZ").as[Int]
     val currentTime = System.currentTimeMillis()
-    printInColor(ANSI_RED, f"[DEBUG] computeAutoTargetActions process started with status:${updatedState.stateHunting}")
+    printInColor(ANSI_RED, f"[DEBUG] computeAutoTargetActions process started with status:${updatedState.cavebot.stateHunting}")
 //    println(s"Begin suppliesLeftMap: ${updatedState.suppliesLeftMap}")
 //    println(s"teamMembersList: ${settings.teamHuntSettings.teamMembersList}")
 
@@ -63,7 +63,11 @@ object AutoTarget {
     // Safely attempt to extract the attacked creature's target ID
     (json \ "attackInfo" \ "Id").asOpt[Int] match {
       case Some(attackedCreatureTarget) =>
-        updatedState = updatedState.copy(stateHunting = "attacking")
+        updatedState = updatedState.copy(
+          cavebot = updatedState.cavebot.copy(
+            stateHunting = "attacking"
+          )
+        )
         println(s"attackInfo is not null, target Id: $attackedCreatureTarget")
         val targetName = (json \ "attackInfo" \ "Name").asOpt[String].getOrElse("Unknown")
 
@@ -83,7 +87,7 @@ object AutoTarget {
       case None => // nothing
     }
 
-    if (settings.autoTargetSettings.enabled && updatedState.stateHunting == "free" && !updatedState.gmDetected) {
+    if (settings.autoTargetSettings.enabled && updatedState.cavebot.stateHunting == "free" && !updatedState.gmDetected) {
 
 
 

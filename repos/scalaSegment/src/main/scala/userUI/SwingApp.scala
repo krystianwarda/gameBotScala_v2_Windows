@@ -30,7 +30,7 @@ class SwingApp(playerClassList: List[Player],
                thirdProcessActor: ActorRef,
                mainActorRef: ActorRef) extends MainFrame {
 
-  title = "TibiaYBB - Younger Brother Bot"
+  title = "TibiaYBB"
   preferredSize = new Dimension(600, 300)
   var runningBot = false
 

@@ -53,8 +53,6 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
   val creatureScrollPane = new JScrollPane(creatureList)
   val creaturePriorityList: ListBuffer[String] = ListBuffer.empty
 
-
-
   val addCreatureLabel = new Label("Creature name:")
   val creatureNameTextField = new TextField(20)
 

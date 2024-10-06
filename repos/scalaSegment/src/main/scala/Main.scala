@@ -6,7 +6,7 @@ import akka.actor.{Actor, ActorRef, ActorSystem, Cancellable, Props}
 import akka.util.ByteString
 import play.api.libs.json.Json.JsValueWrapper
 import player.Player
-import mouse.{ActionStateManager, Mouse, MouseMovementActor}
+import mouse.{ActionMouseManager, Mouse, MouseMovementActor}
 import keyboard.{ActionKeyboardManager, AutoResponderManager, KeyboardActor}
 import play.api.libs.json._
 import processing.JsonProcessorActor
@@ -97,7 +97,7 @@ object MainApp extends App {
 
 
   val keyboardActorRef: ActorRef = system.actorOf(Props[KeyboardActor], "keyboardActor")
-  val actionStateManagerRef: ActorRef = system.actorOf(Props[ActionStateManager], "actionStateManager")
+  val actionStateManagerRef: ActorRef = system.actorOf(Props[ActionMouseManager], "actionStateManager")
   val actionKeyboardManagerRef: ActorRef = system.actorOf(Props(new ActionKeyboardManager(keyboardActorRef)), "actionKeyboardManager")
   val alertSenderActorRef: ActorRef = system.actorOf(Props[AlertSenderActor], "alertSender")
 

@@ -111,7 +111,7 @@ object AutoHeal {
       }
 
 
-      if (updatedState.dangerLevelHealing == "high") {
+      if (updatedState.autotarget.dangerLevelHealing == "high") {
 
         // Extract characterInfo
         val characterInfo = (json \ "characterInfo").asOpt[JsObject].getOrElse(Json.obj())
@@ -126,13 +126,13 @@ object AutoHeal {
         }.groupBy(_._1).view.mapValues(_.size).toMap
 
         println(s"battleCreatures: $battleCreatures")
-        println(s"updatedState.dangerCreaturesList: ${updatedState.dangerCreaturesList}")
+        println(s"updatedState.dangerCreaturesList: ${updatedState.autotarget.dangerCreaturesList}")
 
         // Flag to track if any danger condition is still met
         var dangerConditionStillMet = false
 
         // Iterate over dangerCreaturesList
-        updatedState.dangerCreaturesList.foreach { creature =>
+        updatedState.autotarget.dangerCreaturesList.foreach { creature =>
           val creatureName = creature.name
           val dangerCount = creature.count
           val creatureDanger = creature.danger

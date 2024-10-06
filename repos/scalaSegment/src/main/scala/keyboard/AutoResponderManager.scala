@@ -119,7 +119,7 @@ object Gpt3ApiClient {
 
     for {
       response <- Http().singleRequest(request)
-//      _ = println(s"Response: $response")
+      //      _ = println(s"Response: $response")
       entity <- response.status match {
         case StatusCodes.OK => Unmarshal(response.entity).to[String]
         case statusCode =>
@@ -135,7 +135,7 @@ object Gpt3ApiClient {
 }
 
 class AutoResponderManager(keyboardActorRef: ActorRef, jsonProcessorActorRef: ActorRef) extends Actor {
-//  import context.dispatcher
+  //  import context.dispatcher
   import ApplicationSetup._
   var settings: Option[UISettings] = None  // Start with None and update when settings are received
 
@@ -160,4 +160,3 @@ object AutoResponderManager {
   def props(keyboardActorRef: ActorRef, jsonProcessorActorRef: ActorRef): Props =
     Props(new AutoResponderManager(keyboardActorRef, jsonProcessorActorRef))
 }
-

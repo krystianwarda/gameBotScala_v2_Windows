@@ -222,7 +222,7 @@ object SettingsUtils {
   case class AutoTargetSettings(
                                  enabled: Boolean = false,
                                  creatureList: Seq[String] = Seq.empty,
-                                 creatureSettingsList: Seq[AutoTargetCreaturesSettings] = Seq.empty,
+//                                 creatureSettingsList: Seq[AutoTargetCreaturesSettings] = Seq.empty,
                                )
 
 

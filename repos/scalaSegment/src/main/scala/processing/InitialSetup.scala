@@ -36,12 +36,13 @@ object InitialSetup {
       updatedState = updatedState.copy(initialSettingsSet=true)
     }
 
-
-    // Sort the carsassToLootImmediately and carsassToLootAfterFight lists
     updatedState = updatedState.copy(
-      carsassToLootImmediately = sortCarcassesByDistanceAndTime(json, updatedState.carsassToLootImmediately, updatedState),
-      carsassToLootAfterFight = sortCarcassesByDistanceAndTime(json, updatedState.carsassToLootAfterFight, updatedState)
+      autoloot = updatedState.autoloot.copy(
+        carsassToLootImmediately = sortCarcassesByDistanceAndTime(json, updatedState.autoloot.carsassToLootImmediately, updatedState),
+        carsassToLootAfterFight = sortCarcassesByDistanceAndTime(json, updatedState.autoloot.carsassToLootAfterFight, updatedState)
+      ),
     )
+
 
     val endTime = System.nanoTime()
     val duration = (endTime - startTime) / 1e9d
@@ -146,9 +147,13 @@ object InitialSetup {
 
     // If there are any dangerous creatures, update the state
     if (dangerCreatures.nonEmpty) {
+
+
       updatedState = updatedState.copy(
-        dangerLevelHealing = "high",
-        dangerCreaturesList = dangerCreatures
+        autotarget = updatedState.autotarget.copy(
+          dangerLevelHealing = "high",
+          dangerCreaturesList = dangerCreatures
+        ),
       )
     }
 

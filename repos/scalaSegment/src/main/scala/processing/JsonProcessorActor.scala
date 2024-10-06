@@ -80,13 +80,32 @@ case class AutoLootState(
 case class CaveBotState(
                          stateHunting: String = "free",
                         )
+
+case class AutoTargetState(
+                         dangerLevelHealing: String = "low",
+                         dangerCreaturesList: Seq[Creature] = Seq.empty,
+                       )
+
+case class GuardianState(
+                          playerDetectedAlertTime: Long = 0,
+                          lastGuardianAction: Long = 0,
+                       )
+
+case class AutoHealState(
+                             stateHealingWithRune: String = "free",
+                             healingCrosshairActive: Boolean = false,
+                             healingRestryStatus: Int = 0,
+                             healingRetryAttempts: Int = 1,
+                             healingSpellCooldown: Long = 1200,
+                       )
+
 case class ProcessorState(
                            initialSettingsSet: Boolean = false,
-
                            autoloot: AutoLootState = AutoLootState(),
                            cavebot: CaveBotState = CaveBotState(),
-                           dangerLevelHealing: String = "low",
-                           dangerCreaturesList: Seq[Creature] = Seq.empty,
+                           autotarget: AutoTargetState = AutoTargetState(),
+                           autoheal: AutoHealState = AutoHealState(),
+                           guardian: GuardianState = GuardianState(),
 
                            gmDetected: Boolean = false,
                            gmDetectedTime: Long = 0,
@@ -100,10 +119,6 @@ case class ProcessorState(
                            respondedMessages: mutable.Set[String] = mutable.Set.empty,
                            pendingMessages: mutable.Queue[(JsValue, Long)] = mutable.Queue.empty,
                            characterLastRotationTime: Long = 0,
-
-                           //alerts
-                           playerDetectedAlertTime: Long = 0,
-                           lastGuardianAction: Long = 0,
 
                            // chat reader
                            chatReaderStatus: String = "not_ready",
@@ -119,8 +134,9 @@ case class ProcessorState(
                            healingCrosshairActive: Boolean = false,
                            healingRestryStatus: Int = 0,
                            healingRetryAttempts: Int = 1,
-                           currentTime: Long = 0,
                            healingSpellCooldown: Long = 1200,
+
+                           currentTime: Long = 0,
                            chasingBlockerLevelChangeTime: Long = 0,
                            shortTimeLimit: Long = 1000,
                            normalTimeLimit: Long = 2000,
@@ -397,29 +413,26 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
   }
 
   private def handleOkStatus(json: JsValue, initialState: ProcessorState): ProcessorState = {
-    // Sequentially apply action handlers, each updating the state based on its own logic
-    val updatedState = initialState.copy(currentTime = Instant.now().toEpochMilli())
+    val updatedState = initialState
 
     val afterInitialSetupState = performInitialSetup(json, updatedState)
-
     val afterGMDetectorState = performGMDetector(json, afterInitialSetupState)
-
     val afterGuardianState = performGuardian(json, afterGMDetectorState)
+    val afterHealingState = performAutoHealing(json, afterGuardianState)
 
-    val afterFishingState = performFishing(json, afterGuardianState)
-
-    val afterHealingState = performAutoHealing(json, afterFishingState)
-    val afterRuneMakingState = performRuneMaking(json, afterHealingState)
-    val afterTrainingState = performTraining(json, afterRuneMakingState)
-    val afterAutoResponderState = performAutoResponder(json, afterTrainingState)
-    val afterAutoLootState = performAutoLoot(json, afterAutoResponderState)
-
-    val afterAutoTargetState = performAutoTarget(json, afterAutoLootState)
+    val afterAutoTargetState = performAutoTarget(json, afterHealingState)
     val afterCaveBotState = performCaveBot(json, afterAutoTargetState)
     val afterTeamHuntState = performTeamHunt(json, afterCaveBotState)
-    val afterChatReader = performChatReader(json, afterTeamHuntState)
-    // The final state after all updates
-    afterChatReader
+    val afterAutoLootState = performAutoLoot(json, afterTeamHuntState)
+
+    val afterChatReader = performChatReader(json, afterAutoLootState)
+    val afterAutoResponderState = performAutoResponder(json, afterChatReader)
+    val afterRuneMakingState = performRuneMaking(json, afterAutoResponderState)
+    val afterFishingState = performFishing(json, afterRuneMakingState)
+    val afterTrainingState = performTraining(json, afterFishingState)
+
+    val endState  = afterTrainingState
+    endState
   }
 
 
