@@ -22,49 +22,52 @@ object AutoLoot {
     var updatedState = currentState // Initialize updatedState
     val currentTime = System.currentTimeMillis()
 
+
+    if (updatedState.staticContainersList.isEmpty) {
+      // Assuming `json` is already defined as JsValue containing the overall data
+      val containersInfo = (json \ "containersInfo").as[JsObject]
+
+      // Extracting keys as a list of container names, but only include those which have "bag", "backpack", or "ring" in their names
+      val containerKeys = containersInfo.keys.toList.filter { key =>
+        val name = (containersInfo \ key \ "name").asOpt[String].getOrElse("")
+        name.contains("bag") || name.contains("backpack") || name.contains("ring")
+      }
+      printInColor(ANSI_RED, f"[DEBUG] Static containers loaded: $containerKeys")
+      updatedState = updatedState.copy(staticContainersList = containerKeys)
+    }
+
+    // Extracting and using the position
+    extractOkButtonPosition(json) match {
+      case Some((posX, posY)) =>
+        // Now use this stored current time for all time checks
+        val timeExtraWindowLoot = updatedState.currentTime - updatedState.lastExtraWindowLoot
+        if (timeExtraWindowLoot >= updatedState.longTimeLimit) {
+          val actionsSeq = Seq(
+            MouseAction(posX, posY, "move"),
+            MouseAction(posX, posY, "pressLeft"),
+            MouseAction(posX, posY, "releaseLeft")
+          )
+          printInColor(ANSI_RED, "[DEBUG] Closing object movement window.")
+
+          actions = actions :+ addMouseAction("useMouse", None, updatedState, actionsSeq)
+          //            actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+
+          // Update the extraWidowLootStatus with the current time to mark this execution
+          updatedState = updatedState.copy(lastExtraWindowLoot = updatedState.currentTime)
+        } else {
+          printInColor(ANSI_RED, f"[DEBUG] Closing object movement window. Not enough time has passed since the last execution: ${updatedState.lastExtraWindowLoot}ms ago.")
+        }
+
+      case None => // Do nothing
+    }
+
 //    printInColor(ANSI_RED, f"[DEBUG] autoLoot: ${settings.autoTargetSettings.enabled}, autoLoot: ${settings.autoLootSettings.enabled}")
     if (settings.autoTargetSettings.enabled && settings.autoLootSettings.enabled) {
       printInColor(ANSI_RED, f"[DEBUG] computeAutoLootActions process started with status:${updatedState.cavebot.stateHunting}")
 
 
-      if (updatedState.staticContainersList.isEmpty) {
-        // Assuming `json` is already defined as JsValue containing the overall data
-        val containersInfo = (json \ "containersInfo").as[JsObject]
-
-        // Extracting keys as a list of container names, but only include those which have "bag", "backpack", or "ring" in their names
-        val containerKeys = containersInfo.keys.toList.filter { key =>
-          val name = (containersInfo \ key \ "name").asOpt[String].getOrElse("")
-          name.contains("bag") || name.contains("backpack") || name.contains("ring")
-        }
-        printInColor(ANSI_RED, f"[DEBUG] Static containers loaded: $containerKeys")
-        updatedState = updatedState.copy(staticContainersList = containerKeys)
-      }
 
 
-      // Extracting and using the position
-      extractOkButtonPosition(json) match {
-        case Some((posX, posY)) =>
-          // Now use this stored current time for all time checks
-          val timeExtraWindowLoot = updatedState.currentTime - updatedState.lastExtraWindowLoot
-          if (timeExtraWindowLoot >= updatedState.longTimeLimit) {
-            val actionsSeq = Seq(
-              MouseAction(posX, posY, "move"),
-              MouseAction(posX, posY, "pressLeft"),
-              MouseAction(posX, posY, "releaseLeft")
-            )
-            printInColor(ANSI_RED, "[DEBUG] Closing object movement window.")
-
-            actions = actions :+ addMouseAction("useMouse", None, updatedState, actionsSeq)
-            //            actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-
-            // Update the extraWidowLootStatus with the current time to mark this execution
-            updatedState = updatedState.copy(lastExtraWindowLoot = updatedState.currentTime)
-          } else {
-            printInColor(ANSI_RED, f"[DEBUG] Closing object movement window. Not enough time has passed since the last execution: ${updatedState.lastExtraWindowLoot}ms ago.")
-          }
-
-        case None => // Do nothing
-      }
 
       val processResultDetectDeadCreatures = detectDeadCreatures(json, settings, updatedState)
       actions ++= processResultDetectDeadCreatures.actions
@@ -81,6 +84,22 @@ object AutoLoot {
       println(s"After stateLooting: ${updatedState.autoloot.stateLooting},stateLootPlunder: ${updatedState.autoloot.stateLootPlunder}.")
 
 
+    } else if (settings.autoTargetSettings.enabled) {
+      println("settings.autoTargetSettings.enabled autoloot")
+      val lastAttackedCreatureInfo = (json \ "lastAttackedCreatureInfo").asOpt[JsObject].getOrElse(Json.obj())
+      val lastAttackedId = (lastAttackedCreatureInfo \ "LastAttackedId").asOpt[Int].getOrElse(0)
+      val isLastAttackedCreatureDead = (lastAttackedCreatureInfo \ "IsDead").asOpt[Boolean].getOrElse(false)
+
+      if (isLastAttackedCreatureDead) {
+        logs = logs :+ Log(f"[DEBUG] Creature $lastAttackedId  is dead.")
+
+        updatedState = updatedState.copy(
+          cavebot = updatedState.cavebot.copy(
+            stateHunting = "free"
+          )
+        )
+
+      }
     }
     val endTime = System.nanoTime()
     val duration = (endTime - startTime) / 1e9d

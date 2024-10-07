@@ -85,6 +85,7 @@ object AutoTarget {
         )
         println(s"lastTargetName set to ${updatedState.lastTargetName}")
       case None => // nothing
+
     }
 
     if (settings.autoTargetSettings.enabled && updatedState.cavebot.stateHunting == "free" && !updatedState.gmDetected) {
@@ -248,7 +249,7 @@ object AutoTarget {
             settings.teamHuntSettings.followBlocker &&
             updatedState.lastBlockerPosZ == presentCharLocationZ)
       ) {
-//        println("Start autotarget")
+        println("Start autotarget")
 
 //        // Process the hunting state
 //        val processResultStateHunting = processStateTargeting(json, settings, updatedState)
