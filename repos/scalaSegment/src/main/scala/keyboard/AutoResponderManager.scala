@@ -8,6 +8,7 @@ import userUI.SettingsUtils
 import userUI.SettingsUtils.UISettings
 import userUI.UpdateSettings
 import processing.ResponseGenerated
+import utils.Credentials.gptCredentials
 
 import scala.collection.mutable
 import scala.concurrent.{Await, ExecutionContext, Future}

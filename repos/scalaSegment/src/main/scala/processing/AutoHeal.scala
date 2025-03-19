@@ -93,7 +93,6 @@ object AutoHeal {
 
 
       if (updatedState.uhRuneContainerName != "not_set" && updatedState.statusOfRuneAutoheal == "ready") {
-        logs = logs :+ Log(s"UH Rune container set to ${updatedState.uhRuneContainerName}. Checking for free space and parent...")
         (json \ "containersInfo" \ updatedState.uhRuneContainerName).asOpt[JsObject].foreach { containerInfo =>
           val freeSpace = (containerInfo \ "freeSpace").asOpt[Int]
           val hasParent = (containerInfo \ "hasParent").asOpt[Boolean]
@@ -189,13 +188,29 @@ object AutoHeal {
         }
       }
 
+      println(settings.healingSettings.spellsHealSettings.head.lightHealSpell.length)
+      println(settings.healingSettings.spellsHealSettings.head.lightHealHealthPercent)
+      println(settings.healingSettings.spellsHealSettings.head.lightHealMana)
+      println(currentTime)
+      println(updatedState.lastHealingTime)
+      println(updatedState.currentTime - updatedState.lastHealingTime)
+      println(updatedState.healingSpellCooldown)
+      println(updatedState.stateHealingWithRune)
+      println(updatedState.statusOfRuneAutoheal)
 
-      if (((currentState.currentTime - currentState.lastHealingTime) >= updatedState.healingSpellCooldown) && (updatedState.statusOfRuneAutoheal == "ready") && (updatedState.stateHealingWithRune == "free")) {
-
+      if (((currentTime - updatedState.lastHealingTime) >= updatedState.healingSpellCooldown) && (updatedState.statusOfRuneAutoheal == "ready") && (updatedState.stateHealingWithRune == "free")) {
+//
         val healthPercent = (json \ "characterInfo" \ "HealthPercent").as[Int]
         val mana = (json \ "characterInfo" \ "Mana").as[Int]
         val manaMax = (json \ "characterInfo" \ "ManaMax").as[Int]
         val manaPercent = (mana.toDouble / manaMax.toDouble * 100).toInt
+
+        println(settings.healingSettings.spellsHealSettings.head.lightHealSpell.length)
+        println(settings.healingSettings.spellsHealSettings.head.lightHealHealthPercent)
+        println(healthPercent)
+        println(settings.healingSettings.spellsHealSettings.head.lightHealHealthPercent)
+        println(mana)
+        println(settings.healingSettings.spellsHealSettings.head.lightHealMana)
 
         val friend1HealthPercentage = if (
           settings.healingSettings.friendsHealSettings.head.friend1HealSpell.length > 1 &&
@@ -232,9 +247,6 @@ object AutoHeal {
         } else {
           100
         }
-
-
-
 
         // UH RUNE 3160
         if (settings.healingSettings.uhHealHealthPercent > 0 && healthPercent <= settings.healingSettings.uhHealHealthPercent && mana >= settings.healingSettings.uhHealMana) {
@@ -277,9 +289,9 @@ object AutoHeal {
               }
 
               // Update the last healing time right after scheduling the action
-
+              println("healing state updated")
               // Update the last healing time right after scheduling the action
-              updatedState = updatedState.copy(lastHealingTime = currentState.currentTime, stateHealingWithRune = "healing")
+              updatedState = updatedState.copy(lastHealingTime = updatedState.currentTime, stateHealingWithRune = "healing")
 
               // Now actionsSeq should contain the correct sequence of actions
 

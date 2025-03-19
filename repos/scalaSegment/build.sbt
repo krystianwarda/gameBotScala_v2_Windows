@@ -23,7 +23,10 @@ libraryDependencies ++= Seq(
   "com.softwaremill.sttp.client3" %% "async-http-client-backend-future" % "3.9.7",
   "org.asynchttpclient" % "async-http-client" % "2.12.3",
   "net.sf.sociaal" % "freetts" % "1.2.2",
-//  "de.dfki.mary" % "marytts" % "5.2",
+  "org.typelevel" %% "cats-effect" % "3.5.2",
+  "co.fs2" %% "fs2-core" % "3.9.2",
+  "co.fs2" %% "fs2-io" % "3.9.2",
+  "com.github.kwhat" % "jnativehook" % "2.2.2",
 
 )
 

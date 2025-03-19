@@ -1,42 +1,21 @@
 package main.scala
 
-//import MainApp.periodicFunctionActor
-import akka.actor.TypedActor.context
 import akka.actor.{Actor, ActorRef, ActorSystem, Cancellable, Props}
 import akka.util.ByteString
-import play.api.libs.json.Json.JsValueWrapper
+import cats.effect.{IO, IOApp}
+import cats.effect.unsafe.implicits.global
+import com.github.kwhat.jnativehook.GlobalScreen
 import player.Player
 import mouse.{ActionMouseManager, Mouse, MouseMovementActor}
 import keyboard.{ActionKeyboardManager, AutoResponderManager, KeyboardActor}
 import play.api.libs.json._
 import processing.JsonProcessorActor
 import userUI.UIAppActor
-import utils.{AlertSenderActor, FunctionExecutorActor, InitialJsonProcessorActor, InitialRunActor, MainActor, PeriodicFunctionActor}
+import utils.{AlertSenderActor, EscapeKeyHandler, EscapeKeyListener, FunctionExecutorActor, InitialJsonProcessorActor, InitialRunActor, MainActor, MouseJiggler, PeriodicFunctionActor}
 
-import java.awt.Robot
-import java.io.EOFException
-import java.net.{ServerSocket, SocketException, SocketTimeoutException}
-import java.nio.{ByteBuffer, ByteOrder}
-import java.util.concurrent.TimeUnit
-import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.io.BufferedSource
-import scala.util.{Random, Try}
-import scala.collection.immutable.Seq
-import scala.concurrent.ExecutionContext.Implicits.global  // Import global ExecutionContext
-// Other imports remain the same
+import scala.io.StdIn
 
-// Define the new PeriodicFunctionActor
-import akka.actor.Actor
-import java.net.{Socket, InetAddress}
-import java.io.{DataOutputStream, DataInputStream, IOException}
-import play.api.libs.json._
-import scala.concurrent.duration._
-import akka.actor.Actor
-import java.net.{Socket, InetAddress}
-import java.io.{DataOutputStream, DataInputStream, IOException}
-import play.api.libs.json._
-import scala.concurrent.duration._
 
 
 case class FunctionCall(functionName: String, arg1: Option[String] = None, arg2: Option[String] = None)
@@ -50,24 +29,21 @@ case class SendJsonCommand(json: JsValue)
 import userUI.SettingsUtils.UISettings
 
 class ThirdProcessActor extends Actor {
-  import context.dispatcher // Import the execution context for scheduling
+  import context.dispatcher
 
   override def receive: Receive = {
     case MainApp.StartActors(settings) =>
       println("ThirdProcessActor received StartActors message.")
-      // Improved scheduling logic to avoid multiple schedules
       context.system.scheduler.scheduleWithFixedDelay(
         initialDelay = 1.second,
         delay = 5.seconds,
         receiver = self,
         message = "Initiate"
       )
-
     case "Initiate" =>
       initiateFunction()
   }
 
-  // Define the function that will be called periodically
   def initiateFunction(): Unit = {
     println("TEMP PRINT")
     // Additional logic
@@ -84,8 +60,14 @@ class ThirdProcessActor extends Actor {
   }
 }
 
+import cats.effect.unsafe.implicits.global
+
 object MainApp extends App {
   val system = ActorSystem("MySystem")
+
+
+  MouseJiggler.start()
+
 
   // Define case classes and objects as before
   val playerClassList: List[Player] = List(new Player("Player1"))
@@ -105,7 +87,8 @@ object MainApp extends App {
   val autoResponderManagerRef: ActorRef = system.actorOf(AutoResponderManager.props(keyboardActorRef, jsonProcessorActorRef), "autoResponderManager")
   lazy val jsonProcessorActorRef: ActorRef = system.actorOf(Props(new JsonProcessorActor(mouseMovementActorRef, actionStateManagerRef, actionKeyboardManagerRef)), "jsonProcessor")
 
-//  val keyListenerActorRef: ActorRef = system.actorOf(Props(new KeyListenerActor(jsonProcessorActorRef)), "keyListenerActor")
+  val keyListenerActorRef: ActorRef = system.actorOf(Props[EscapeKeyListener], "EscapeKeyListener")
+
   val functionExecutorActorRef: ActorRef = system.actorOf(Props[FunctionExecutorActor], "functionExecutorActor")
   val initialJsonProcessorActorRef: ActorRef = system.actorOf(Props[InitialJsonProcessorActor], "initialJsonProcessor")
   val initialRunActorRef: ActorRef = system.actorOf(Props(new InitialRunActor(initialJsonProcessorActorRef)), "initialRunActor")
@@ -114,11 +97,17 @@ object MainApp extends App {
   val thirdProcessActorRef: ActorRef = system.actorOf(Props[ThirdProcessActor], "thirdProcess")
   val uiAppActorRef: ActorRef = system.actorOf(Props(new UIAppActor(playerClassList, jsonProcessorActorRef, periodicFunctionActorRef, thirdProcessActorRef, mainActorRef)), "uiAppActor")
 
+
+  // Register global key listener
+  GlobalScreen.registerNativeHook()
+  GlobalScreen.addNativeKeyListener(new EscapeKeyHandler(keyListenerActorRef))
+
   println("Press ENTER to exit...")
   scala.io.StdIn.readLine()
 
   system.terminate()
 }
+
 
 
 //object MainApp extends App {

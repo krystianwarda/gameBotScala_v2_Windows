@@ -17,7 +17,7 @@ import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import keyboard.ApplicationSetup.system
 import keyboard.Gpt3ApiClient.{alertStory, storiesMap}
 import keyboard.KeyboardActionTypes.TypeText
-import keyboard.{AutoResponderCommand, gptCredentials}
+import keyboard.{AutoResponderCommand}
 import main.scala.MainApp.{actionKeyboardManagerRef, autoResponderManagerRef}
 import play.api.libs.json.{JsValue, Json}
 import processing.Process.loadSpellsFromFile
