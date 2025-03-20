@@ -139,7 +139,7 @@ object MouseJiggler {
   // **Move Mouse Periodically (Uses Functional Movement)**
   def moveMouse(): Unit = {
     while (true) {
-      if (mouseStatus.get() == "idle") {
+      if (mouseStatus.get() == "idle2") {
         val (targetX, targetY) = determineTarget()
         moveMouseTo(targetX, targetY) // **Now defined correctly**
       }

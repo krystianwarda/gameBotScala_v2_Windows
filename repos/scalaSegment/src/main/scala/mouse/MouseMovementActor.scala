@@ -2,7 +2,6 @@ package mouse
 
 import akka.actor.{Actor, ActorRef, Cancellable}
 import play.api.libs.json.{JsValue, Json, Writes}
-import mouse.ActionTypes
 import processing.{ActionDetail, HealingComplete, JsonActionDetails, KeyboardText, MouseAction, MouseActions}
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -106,34 +105,6 @@ class MouseMovementActor(actionStateManager: ActorRef, jsonProcessorActor: Actor
   }
 
 
-  // This method simulates typing a string using the Robot class.
-//  def performMouseAction(mouseAction: MouseAction): Unit = {
-//    //    println(s"Performing mouse action: ${mouseAction.action} at (${mouseAction.x}, ${mouseAction.y})")
-//    mouseAction.action match {
-//      case "move" =>
-//        //        println(s"Moving mouse to (${mouseAction.x}, ${mouseAction.y})")
-//        Mouse.mouseMoveSmooth(robotInstance, Some((mouseAction.x, mouseAction.y)), simulateHumanBehavior = true)
-//      case "pressLeft" =>
-//        //        println("Pressing left mouse button")
-//        robotInstance.mousePress(InputEvent.BUTTON1_DOWN_MASK)
-//      case "releaseLeft" =>
-//        //        println("Releasing left mouse button")
-//        robotInstance.mouseRelease(InputEvent.BUTTON1_DOWN_MASK)
-//      case "pressRight" =>
-//        //        println("Pressing right mouse button")
-//        robotInstance.mousePress(InputEvent.BUTTON3_DOWN_MASK)
-//      case "releaseRight" =>
-//        robotInstance.mouseRelease(InputEvent.BUTTON3_DOWN_MASK)
-//      case "pressCtrl" =>
-//        robotInstance.keyPress(KeyEvent.VK_CONTROL)
-//      case "releaseCtrl" =>
-//        robotInstance.keyRelease(KeyEvent.VK_CONTROL)
-//      case _ =>
-//        println(s"Invalid mouse action: ${mouseAction.action}")
-//    }
-//    actionStateManager ! ActionCompleted(ActionTypes.Move) // Adjust ActionTypes.Move as necessary
-//  }
-
 def performMouseAction(mouseAction: MouseAction, actions: Seq[MouseAction], source: Option[String]): Unit = {
     println(s"Performing mouse action: ${mouseAction.action} at (${mouseAction.x}, ${mouseAction.y})")
     mouseAction.action match {
@@ -156,14 +127,6 @@ def performMouseAction(mouseAction: MouseAction, actions: Seq[MouseAction], sour
 
 
   override def receive: Receive = {
-
-//    case MouseMoveCommand(actions, movementsEnabled, actionType) =>
-//      println(s"Received MouseMoveCommand with actionType: $actionType and actions: $actions")
-//      stopIdleMovement() // Stop idle movements when a new command is received
-//      activeTaskCount += actions.length
-//      actions.foreach(performMouseAction)
-//      activeTaskCount -= actions.length
-//      startIdleMovement() // Restart idle movements if still appropriate
 
 
     case MouseMoveCommand(actions, movementsEnabled, source) =>

@@ -69,6 +69,9 @@ object MainApp extends App {
   MouseJiggler.start()
 
 
+
+
+
   // Define case classes and objects as before
   val playerClassList: List[Player] = List(new Player("Player1"))
   case class StartActors(settings: UISettings)

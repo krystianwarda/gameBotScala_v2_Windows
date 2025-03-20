@@ -188,29 +188,12 @@ object AutoHeal {
         }
       }
 
-      println(settings.healingSettings.spellsHealSettings.head.lightHealSpell.length)
-      println(settings.healingSettings.spellsHealSettings.head.lightHealHealthPercent)
-      println(settings.healingSettings.spellsHealSettings.head.lightHealMana)
-      println(currentTime)
-      println(updatedState.lastHealingTime)
-      println(updatedState.currentTime - updatedState.lastHealingTime)
-      println(updatedState.healingSpellCooldown)
-      println(updatedState.stateHealingWithRune)
-      println(updatedState.statusOfRuneAutoheal)
-
       if (((currentTime - updatedState.lastHealingTime) >= updatedState.healingSpellCooldown) && (updatedState.statusOfRuneAutoheal == "ready") && (updatedState.stateHealingWithRune == "free")) {
 //
         val healthPercent = (json \ "characterInfo" \ "HealthPercent").as[Int]
         val mana = (json \ "characterInfo" \ "Mana").as[Int]
         val manaMax = (json \ "characterInfo" \ "ManaMax").as[Int]
         val manaPercent = (mana.toDouble / manaMax.toDouble * 100).toInt
-
-        println(settings.healingSettings.spellsHealSettings.head.lightHealSpell.length)
-        println(settings.healingSettings.spellsHealSettings.head.lightHealHealthPercent)
-        println(healthPercent)
-        println(settings.healingSettings.spellsHealSettings.head.lightHealHealthPercent)
-        println(mana)
-        println(settings.healingSettings.spellsHealSettings.head.lightHealMana)
 
         val friend1HealthPercentage = if (
           settings.healingSettings.friendsHealSettings.head.friend1HealSpell.length > 1 &&

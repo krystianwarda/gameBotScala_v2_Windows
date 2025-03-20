@@ -3,7 +3,6 @@ import akka.actor.{Actor, ActorRef, Props}
 import main.scala.MainApp.mouseMovementActorRef
 
 import scala.collection.mutable
-import mouse.{ActionCompleted, MouseMoveCommand}
 import processing.MouseAction
 // Define action types and their priorities
 // Within your mouse package or an appropriate location
@@ -60,14 +59,6 @@ class ActionMouseManager extends Actor {
       actionStates(actionType) = ("free", currentTime, None)
     //      println(s"Action $actionType is now free")
   }
-
-//  def extractActionType(actions: Seq[MouseAction]): ActionTypes.Value = {
-//    // Example logic to determine action type
-//    // This is highly simplified and should be replaced with your actual logic
-//    if (actions.exists(_.action == "heal")) ActionTypes.Heal
-//    else if (actions.exists(_.action == "attack")) ActionTypes.AttackMonster
-//    else ActionTypes.Move // Default to Move as a simple example
-//  }
 
   def handleActionCompleted(actionType: ActionTypes.Value): Unit = {
     val currentTime = System.currentTimeMillis()

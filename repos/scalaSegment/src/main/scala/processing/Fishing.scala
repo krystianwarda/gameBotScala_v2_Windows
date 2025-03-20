@@ -1,6 +1,6 @@
 package processing
 
-import mouse.{FakeAction, ItemInfo}
+import mouse._
 import play.api.libs.json.{JsDefined, JsNumber, JsObject, JsValue, Json}
 import processing.Process.{extractOkButtonPosition, handleRetryStatus, performMouseActionSequance, timeToRetry, updateRetryStatusBasedOnTime}
 import userUI.SettingsUtils
@@ -328,18 +328,31 @@ object Fishing {
             println(s"Random Tile ID: $randomTileId, targetTileScreenX: $targetTileScreenX, targetTileScreenY: $targetTileScreenY, arrowsX: $arrowsX, arrowsY: $arrowsY")
             println(s"retryFishingStatus: ${updatedState.retryFishingStatus}")
 
-            val actionsSeq = Seq(
-              MouseAction(arrowsX, arrowsY, "move"),
-              MouseAction(arrowsX, arrowsY, "pressRight"),
-              MouseAction(arrowsX, arrowsY, "releaseRight"),
-              MouseAction(targetTileScreenX, targetTileScreenY, "move"),
-              MouseAction(targetTileScreenX, targetTileScreenY, "pressLeft"),
-              MouseAction(targetTileScreenX, targetTileScreenY, "releaseLeft")
-            )
+
+            println("FISHING TEST")
+
+            GlobalMouseManager.instance.foreach { manager =>
+              manager.enqueue(MoveMouse(arrowsX, arrowsY))
+              manager.enqueue(RightButtonPress(arrowsX, arrowsY)) // Click to loot
+              manager.enqueue(RightButtonRelease(arrowsX, arrowsY)) // Click to loot
+              manager.enqueue(MoveMouse(arrowsX, arrowsY))
+              manager.enqueue(LeftButtonRelease(arrowsX, arrowsY)) // Click to loot
+              manager.enqueue(LeftButtonPress(arrowsX, arrowsY)) // Click to loot
+            }
+
+            println("FISHING TEST2")
+//            val actionsSeq = Seq(
+//              MouseAction(arrowsX, arrowsY, "move"),
+//              MouseAction(arrowsX, arrowsY, "pressRight"),
+//              MouseAction(arrowsX, arrowsY, "releaseRight"),
+//              MouseAction(targetTileScreenX, targetTileScreenY, "move"),
+//              MouseAction(targetTileScreenX, targetTileScreenY, "pressLeft"),
+//              MouseAction(targetTileScreenX, targetTileScreenY, "releaseLeft")
+//            )
 
             // Check and update retry status based on current value and threshold
             if (updatedState.retryFishingStatus == 0) {
-              actions = actions ++ performMouseActionSequance(actionsSeq)  // Use ++ to concatenate sequences
+//              actions = actions ++ performMouseActionSequance(actionsSeq)  // Use ++ to concatenate sequences
               logs = logs :+ Log(s"Fishing")
               updatedState = updatedState.copy(retryFishingStatus = updatedState.retryFishingStatus + 1)
             } else {
