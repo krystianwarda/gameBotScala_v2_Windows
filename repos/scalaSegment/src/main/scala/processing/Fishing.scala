@@ -1,5 +1,6 @@
 package processing
 
+import cats.effect.unsafe.implicits.global
 import mouse._
 import play.api.libs.json.{JsDefined, JsNumber, JsObject, JsValue, Json}
 import processing.Process.{extractOkButtonPosition, handleRetryStatus, performMouseActionSequance, timeToRetry, updateRetryStatusBasedOnTime}
@@ -332,23 +333,21 @@ object Fishing {
             println("FISHING TEST")
 
             GlobalMouseManager.instance.foreach { manager =>
-              manager.enqueue(MoveMouse(arrowsX, arrowsY))
-              manager.enqueue(RightButtonPress(arrowsX, arrowsY)) // Click to loot
-              manager.enqueue(RightButtonRelease(arrowsX, arrowsY)) // Click to loot
-              manager.enqueue(MoveMouse(arrowsX, arrowsY))
-              manager.enqueue(LeftButtonRelease(arrowsX, arrowsY)) // Click to loot
-              manager.enqueue(LeftButtonPress(arrowsX, arrowsY)) // Click to loot
+              manager.enqueueTask(
+                List(
+                  MoveMouse(arrowsX, arrowsY),
+                  RightButtonPress(arrowsX, arrowsY),
+                  RightButtonRelease(arrowsX, arrowsY),
+                  MoveMouse(targetTileScreenX, targetTileScreenY),
+                  LeftButtonPress(targetTileScreenX, targetTileScreenY),
+                  LeftButtonRelease(targetTileScreenX, targetTileScreenY)
+                )
+              ).unsafeRunAndForget()
             }
 
+
             println("FISHING TEST2")
-//            val actionsSeq = Seq(
-//              MouseAction(arrowsX, arrowsY, "move"),
-//              MouseAction(arrowsX, arrowsY, "pressRight"),
-//              MouseAction(arrowsX, arrowsY, "releaseRight"),
-//              MouseAction(targetTileScreenX, targetTileScreenY, "move"),
-//              MouseAction(targetTileScreenX, targetTileScreenY, "pressLeft"),
-//              MouseAction(targetTileScreenX, targetTileScreenY, "releaseLeft")
-//            )
+
 
             // Check and update retry status based on current value and threshold
             if (updatedState.retryFishingStatus == 0) {

@@ -2,17 +2,19 @@ package main.scala
 
 import akka.actor.{Actor, ActorRef, ActorSystem, Cancellable, Props}
 import akka.util.ByteString
+import cats.effect.kernel.Ref
 import cats.effect.{IO, IOApp}
 import cats.effect.unsafe.implicits.global
 import com.github.kwhat.jnativehook.GlobalScreen
 import player.Player
-import mouse.{ActionMouseManager, Mouse, MouseMovementActor}
+import mouse.{ActionMouseManager, GlobalMouseManager, Mouse, MouseAction, MouseActionManager, MouseManagerApp, MouseMovementActor}
 import keyboard.{ActionKeyboardManager, AutoResponderManager, KeyboardActor}
 import play.api.libs.json._
 import processing.JsonProcessorActor
 import userUI.UIAppActor
 import utils.{AlertSenderActor, EscapeKeyHandler, EscapeKeyListener, FunctionExecutorActor, InitialJsonProcessorActor, InitialRunActor, MainActor, MouseJiggler, PeriodicFunctionActor}
 
+import java.awt.Robot
 import scala.concurrent.duration._
 import scala.io.StdIn
 
@@ -68,7 +70,7 @@ object MainApp extends App {
 
   MouseJiggler.start()
 
-
+  MouseManagerApp.start() // ✅ Now all logic is handled separately
 
 
 
