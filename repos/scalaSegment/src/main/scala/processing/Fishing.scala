@@ -1,5 +1,6 @@
 package processing
 
+import cats.effect.unsafe.implicits.global
 import mouse._
 import play.api.libs.json.{JsDefined, JsNumber, JsObject, JsValue, Json}
 import processing.Process.{extractOkButtonPosition, handleRetryStatus, performMouseActionSequance, timeToRetry, updateRetryStatusBasedOnTime}
@@ -332,12 +333,12 @@ object Fishing {
             println("FISHING TEST")
 
             GlobalMouseManager.instance.foreach { manager =>
-              manager.enqueue(MoveMouse(arrowsX, arrowsY))
-              manager.enqueue(RightButtonPress(arrowsX, arrowsY)) // Click to loot
-              manager.enqueue(RightButtonRelease(arrowsX, arrowsY)) // Click to loot
-              manager.enqueue(MoveMouse(arrowsX, arrowsY))
-              manager.enqueue(LeftButtonRelease(arrowsX, arrowsY)) // Click to loot
-              manager.enqueue(LeftButtonPress(arrowsX, arrowsY)) // Click to loot
+              manager.enqueue(MoveMouse(arrowsX, arrowsY)).unsafeRunAndForget()
+              manager.enqueue(RightButtonPress(arrowsX, arrowsY)).unsafeRunAndForget()// Click to loot
+              manager.enqueue(RightButtonRelease(arrowsX, arrowsY)).unsafeRunAndForget() // Click to loot
+              manager.enqueue(MoveMouse(targetTileScreenX, targetTileScreenY)).unsafeRunAndForget()
+              manager.enqueue(LeftButtonPress(targetTileScreenX, targetTileScreenY)).unsafeRunAndForget() // Click to loot
+              manager.enqueue(LeftButtonRelease(targetTileScreenX, targetTileScreenY)).unsafeRunAndForget() // Click to loot
             }
 
             println("FISHING TEST2")
