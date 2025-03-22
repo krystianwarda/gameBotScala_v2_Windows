@@ -70,7 +70,7 @@ object MainApp extends App {
 
   MouseJiggler.start()
 
-  MouseManagerApp.start() // ✅ Now all logic is handled separately
+  MouseManagerApp.start()
 
 
 

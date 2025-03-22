@@ -37,7 +37,6 @@ class MouseActionManager(
                           robot: Robot,
                           queueRef: Ref[IO, List[MouseAction]],
                           statusRef: Ref[IO, String],
-                          posRef: Ref[IO, (Int, Int)],
                           taskInProgressRef: Ref[IO, Boolean]
                         ) {
 
@@ -93,33 +92,112 @@ class MouseActionManager(
       }
     } yield ()
   }
+  def generateIntermediatePoints(startX: Int, startY: Int, endX: Int, endY: Int): List[(Int, Int)] = {
+    val numPoints = 4 + Random.nextInt(3) // 4–6 breakpoints
+
+    val dx = endX - startX
+    val dy = endY - startY
+
+    val perpX = -dy
+    val perpY = dx
+    val length = math.sqrt(perpX * perpX + perpY * perpY)
+    val normX = perpX / length
+    val normY = perpY / length
+
+    val arcDirection = if (Random.nextBoolean()) 1 else -1
+
+    (1 to numPoints).map { i =>
+      val t = i.toDouble / (numPoints + 1)
+      val baseX = startX + (dx * t).toInt
+      val baseY = startY + (dy * t).toInt
+
+      val baseOffset = 5 + Random.nextInt(10)        // original 5–14 px
+      val multiplier = 1.0 + Random.nextDouble() * 0.5 // 1.0–1.5
+      val offset = (baseOffset * multiplier).toInt   // 5–21 px approx.
+
+      val offsetX = (normX * offset * arcDirection).toInt
+      val offsetY = (normY * offset * arcDirection).toInt
+
+      (baseX + offsetX, baseY + offsetY)
+    }.toList
+  }
 
 
-  private def moveMouse(targetX: Int, targetY: Int): IO[Unit] = {
-    val steps = 100
+  def moveSegment(startX: Int, startY: Int, targetX: Int, targetY: Int): IO[Unit] = {
+    val steps = 60
+    val deltaX = targetX - startX
+    val deltaY = targetY - startY
 
-    posRef.get.flatMap { case (startX, startY) =>
-      val deltaX = targetX - startX
-      val deltaY = targetY - startY
+    def easing(progress: Double): Double = 1 - math.pow(1 - progress, 4)
 
-      def easing(progress: Double): Double =
-        1 - Math.pow(1 - progress, 4)
+    (1 to steps).toList.traverse_ { i =>
+      val progress = i.toDouble / steps
+      val eased = easing(progress)
 
-      def moveStep(step: Int): IO[Unit] = {
-        val progress = step.toDouble / steps
-        val eased = easing(progress)
+      val newX = startX + (deltaX * eased).toInt
+      val newY = startY + (deltaY * eased).toInt
 
-        val newX = startX + (deltaX * eased).toInt
-        val newY = startY + (deltaY * eased).toInt
-
-        IO(robot.mouseMove(newX, newY)) *>
-          posRef.set((newX, newY)) *>
-          IO.sleep(5.millis)
-      }
-
-      (1 to steps).toList.traverse_(moveStep)
+      IO.blocking {
+        val current = MouseInfo.getPointerInfo.getLocation
+        val correctedX = (current.getX + newX) / 2
+        val correctedY = (current.getY + newY) / 2
+        robot.mouseMove(correctedX.toInt, correctedY.toInt)
+      } *> IO.sleep(2.millis) // More fluid6
     }
   }
+
+  def moveMouse(targetX: Int, targetY: Int): IO[Unit] = {
+    IO.blocking(MouseInfo.getPointerInfo.getLocation).flatMap { pos =>
+      val startX = pos.getX.toInt
+      val startY = pos.getY.toInt
+
+      val intermediatePoints = generateIntermediatePoints(startX, startY, targetX, targetY)
+      var path = List((startX, startY)) ++ intermediatePoints
+
+      // 30% chance to overshoot
+      if (Random.nextDouble() < 0.3) {
+        val overshootLength = 20 + Random.nextInt(30) // 20–50 px
+
+
+        val dx = targetX - startX
+        val dy = targetY - startY
+        val length = math.sqrt(dx * dx + dy * dy)
+        val overshootX = targetX + ((dx / length) * overshootLength).toInt
+        val overshootY = targetY + ((dy / length) * overshootLength).toInt
+
+        path :+= (overshootX, overshootY) // go slightly past target
+      }
+
+      path :+= (targetX, targetY) // always end at the actual target
+
+      val totalSteps = 20 // Faster movement
+
+      val interpolatedPath = (1 to totalSteps).map { i =>
+        val t = i.toDouble / totalSteps
+
+        // Slow down only at the final 10%
+        val easedT =
+          if (t < 0.9) t * 1.15
+          else 0.9 + 0.1 * (1 - math.pow(1 - ((t - 0.9) / 0.1), 2))
+
+        val segment = (easedT * (path.length - 1)).toInt
+        val localT = (easedT * (path.length - 1)) % 1
+
+        val (fromX, fromY) = path(segment)
+        val (toX, toY) = path(math.min(segment + 1, path.length - 1))
+
+        val x = fromX + ((toX - fromX) * localT).toInt
+        val y = fromY + ((toY - fromY) * localT).toInt
+        (x, y)
+      }
+
+      interpolatedPath.toList.traverse_ { case (x, y) =>
+        IO(robot.mouseMove(x, y)) *> IO.sleep(15.millis)
+      }
+    }
+  }
+
+
 
   def startProcessing: Stream[IO, Unit] = {
     Stream.awakeEvery[IO](10.millis).evalMap { _ =>
@@ -151,13 +229,10 @@ object MouseManagerApp {
     val queueRef = Ref.unsafe[IO, List[MouseAction]](List.empty)
     val statusRef = Ref.unsafe[IO, String]("idle")
 
-    // Start pos from real cursor
-    val pos = MouseInfo.getPointerInfo.getLocation
-    val posRef = Ref.unsafe[IO, (Int, Int)]((pos.getX.toInt, pos.getY.toInt))
 
     val taskInProgressRef = Ref.unsafe[IO, Boolean](false)
 
-    val manager = new MouseActionManager(robot, queueRef, statusRef, posRef, taskInProgressRef)
+    val manager = new MouseActionManager(robot, queueRef, statusRef, taskInProgressRef)
 
     GlobalMouseManager.instance = Some(manager)
 
