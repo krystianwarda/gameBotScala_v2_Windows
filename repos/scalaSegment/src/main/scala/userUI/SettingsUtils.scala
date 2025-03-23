@@ -280,7 +280,6 @@ object SettingsUtils {
                        )
 
 
-
 /*  def saveSettingsToFile(settings: UISettings, filePath: String): Unit = {
     val explicitWrites = Json.writes[UISettings] // Or any other specific Format[Writes] instance
     val jsonString = Json.toJson(settings)(explicitWrites).toString()

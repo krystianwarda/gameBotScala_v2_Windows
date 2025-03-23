@@ -15,15 +15,21 @@ import scala.concurrent.duration.Duration
 import scala.util.control.NonFatal
 import scala.util.{Random, Try}
 import play.api.libs.json._
+import processing.FunctionalJsonConsumer
+
 //import utils.GlobalKeyListener.startListeningForKeys
 
 import java.io.IOException
 import java.nio.charset.StandardCharsets
 import scala.collection.mutable
+import cats.effect.unsafe.implicits.global
 
 case class StartSpecificPeriodicFunction(functionName: String)
 
-class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
+class PeriodicFunctionActor(
+                             jsonProcessorActor: ActorRef,
+                             jsonConsumer: FunctionalJsonConsumer
+                           ) extends Actor {
   import context.dispatcher
   private var reconnecting = false
   val serverAddress = InetAddress.getByName("127.0.0.1")
@@ -45,6 +51,7 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
     case json: JsValue =>
       jsonProcessorActor ! MainApp.JsonData(json)
       latestJson = Some(json)
+      jsonConsumer.process(json).unsafeRunAndForget()
 
     case "fetchLatestJson" =>
       latestJson.foreach(sender() ! _)
@@ -64,11 +71,6 @@ class PeriodicFunctionActor(jsonProcessorActor: ActorRef) extends Actor {
 
   }
 
-//  case jsonStr: String =>
-//  // Assuming jsonStr is a JSON string, parse it to JsValue before forwarding
-//  val json: JsValue = Json.parse(jsonStr)
-//  println("json send to jsonProcessorActor.")
-//  jsonProcessorActor ! MainApp.JsonData(json)
 
 
   def connectToServer(): Unit = {

@@ -1,15 +1,16 @@
 package userUI
 
 import akka.actor.ActorRef
+import cats.effect.{IO, Ref}
 import play.api.libs.json.{Format, Json}
 import player.Player
+import userUI.SettingsUtils.UISettings
 
 import javax.swing._
 import java.awt._
 import java.awt.event._
 import scala.swing.MenuBar.NoMenuBar.reactions
 import scala.swing._
-
 import scala.swing.event.{ButtonClicked, SelectionChanged}
 
 
@@ -25,7 +26,7 @@ object RectangleSettings {
 }
 
 
-class FishingBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: ActorRef) {
+class FishingBot(uiAppActor: ActorRef, jsonProcessorActor: ActorRef, settingsRef: Ref[IO, UISettings]) {
   var selectedRectangles: Seq[String] = Seq.empty // Change to store strings directly
   var fishThrowoutRectangles : Seq[String] = Seq.empty
   var currentMode: String = "Selected"  // Default mode
@@ -158,32 +159,27 @@ class FishingBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Actor
 
     val closeButton = new JButton("Close")
     closeButton.addActionListener(_ => {
-      // Directly use the button text, assuming it's in the format you want (e.g., '8x6')
       val markedRectangleIds: Seq[String] = panel.getComponents
         .filter(_.isInstanceOf[JButton])
         .map(_.asInstanceOf[JButton])
         .filter(button => Option(button.getClientProperty("selected")).getOrElse(false).asInstanceOf[Boolean])
-        .map(_.getText) // Directly use the button text as the identifier
+        .map(_.getText)
 
-
-
-      // Update the correct list based on the current mode
       if (currentMode == "Selected") {
         selectedRectangles = markedRectangleIds
-        markedRectangleIds.foreach(println)
         println("Selected tiles in Selected Mode:")
       } else {
         fishThrowoutRectangles = markedRectangleIds
-        markedRectangleIds.foreach(println)
         println("Selected tiles in Throwout Mode:")
       }
 
-//      // Update the selectedRectangles variable to hold these identifiers
-//      this.selectedRectangles = markedRectangleIds
-//      // Print selected tiles
-//      println("Selected tiles:")
-//      markedRectangleIds.foreach(println)
-//      // Dispose of the frames after updating
+      // ✅ Update shared UISettings
+      import cats.effect.unsafe.implicits.global
+      settingsRef.update { old =>
+        val updatedFishing = old.fishingSettings.copy(selectedRectangles = selectedRectangles)
+        old.copy(fishingSettings = updatedFishing)
+      }.unsafeRunSync()
+
       gridFrame.dispose()
       closeButtonFrame.dispose()
     })

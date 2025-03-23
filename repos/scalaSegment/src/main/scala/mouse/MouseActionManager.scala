@@ -10,6 +10,7 @@ import java.awt.event.InputEvent
 import scala.concurrent.duration._
 import scala.util.Random
 import cats.syntax.all._
+import processing.MouseAction
 
 import scala.math.{pow, sqrt}
 
@@ -37,11 +38,14 @@ class MouseActionManager(
                           robot: Robot,
                           queueRef: Ref[IO, List[MouseAction]],
                           statusRef: Ref[IO, String],
-                          taskInProgressRef: Ref[IO, Boolean]
+                          taskInProgressRef: Ref[IO, Boolean],
+                          wasInProgressRef: Ref[IO, Boolean]   // <-- add this
                         ) {
 
   private def sortQueue(queue: List[MouseAction]): List[MouseAction] =
     queue.sortBy(_.priority)
+
+
 
   def enqueue(action: MouseAction): IO[Unit] =
     for {
@@ -54,12 +58,10 @@ class MouseActionManager(
 
     _ <- action match {
       case MoveMouse(x, y) =>
-        moveMouse(x, y) *> IO.sleep(40.millis) *>
-          queueRef.get.map(_.isEmpty).flatMap { isEmpty =>
-            if (isEmpty) {
-              IO(println("✅ Task completed.")) *> taskInProgressRef.set(false)
-            } else IO.unit
-          }
+        IO(println(s"🔧 Actually calling robot.mouseMove($x, $y)")) *>
+          moveMouse(x, y) *> IO.sleep(40.millis)
+
+
 
       case LeftButtonPress(_, _) =>
         IO(robot.mousePress(InputEvent.BUTTON1_DOWN_MASK)) *> IO.sleep(10.millis)
@@ -85,13 +87,13 @@ class MouseActionManager(
   def enqueueTask(actions: List[MouseAction], allowOverlap: Boolean = false): IO[Unit] = {
     for {
       inProgress <- taskInProgressRef.get
-      _ <- if (inProgress && !allowOverlap) IO(println("🟡 Task already in progress, skipping..."))
-      else {
-        taskInProgressRef.set(true) *>
-          actions.traverse_(enqueue)
-      }
+      _ <- if (inProgress && !allowOverlap)
+        IO(println("🟡 Task already in progress, skipping..."))
+      else actions.traverse_(enqueue)
     } yield ()
   }
+
+
   def generateIntermediatePoints(startX: Int, startY: Int, endX: Int, endY: Int): List[(Int, Int)] = {
     val numPoints = 4 + Random.nextInt(3) // 4–6 breakpoints
 
@@ -112,7 +114,7 @@ class MouseActionManager(
       val baseY = startY + (dy * t).toInt
 
       val baseOffset = 5 + Random.nextInt(10)        // original 5–14 px
-      val multiplier = 1.0 + Random.nextDouble() * 0.5 // 1.0–1.5
+      val multiplier = 1.0 + Random.nextDouble() * 0.8 // 1.0–1.5
       val offset = (baseOffset * multiplier).toInt   // 5–21 px approx.
 
       val offsetX = (normX * offset * arcDirection).toInt
@@ -197,9 +199,8 @@ class MouseActionManager(
     }
   }
 
-
-
   def startProcessing: Stream[IO, Unit] = {
+    println("💥 Stream started!")
     Stream.awakeEvery[IO](10.millis).evalMap { _ =>
       queueRef.modify {
         case head :: tail => (tail, Some(head))
@@ -207,40 +208,59 @@ class MouseActionManager(
       }.flatMap {
         case Some(action) =>
           for {
+            _ <- IO(println(s"[EXECUTE] $action"))
+            _ <- IO(println(s"🎯 Executing: $action"))
+            _ <- wasInProgressRef.set(true)
+            _ <- taskInProgressRef.set(true)
             _ <- executeAction(action)
             _ <- IO.sleep(10.millis)
             remaining <- queueRef.get
             _ <- if (remaining.isEmpty) {
-              IO(println("✅ Task completed.")) *> taskInProgressRef.set(false)
+              IO(println("✅ Queue empty. Resetting taskInProgress.")) *>
+                taskInProgressRef.set(false)
             } else IO.unit
           } yield ()
+
         case None =>
-          IO.unit
+          for {
+            wasInProgress <- wasInProgressRef.get
+            _ <- if (wasInProgress) {
+              IO(println("🔵 Queue empty, resetting taskInProgress")) *>
+                taskInProgressRef.set(false) *>
+                wasInProgressRef.set(false)
+            } else IO.unit
+          } yield ()
       }
     }
   }
 
 }
 
-
 object MouseManagerApp {
   def start(): Unit = {
     val robot = new Robot()
     val queueRef = Ref.unsafe[IO, List[MouseAction]](List.empty)
     val statusRef = Ref.unsafe[IO, String]("idle")
-
-
     val taskInProgressRef = Ref.unsafe[IO, Boolean](false)
+    val wasInProgressRef = Ref.unsafe[IO, Boolean](false)
 
-    val manager = new MouseActionManager(robot, queueRef, statusRef, taskInProgressRef)
+    val manager = new MouseActionManager(
+      robot,
+      queueRef,
+      statusRef,
+      taskInProgressRef,
+      wasInProgressRef
+    )
 
-    GlobalMouseManager.instance = Some(manager)
+    GlobalMouseManager.instance = Some(manager) // ✅ Set the instance first
 
-    manager.startProcessing.compile.drain.unsafeRunAndForget()
+    println("✅ MouseActionManager instance set")
 
+    manager.startProcessing.compile.drain.unsafeRunAndForget() // ✅ Only this one
     println("✅ MouseActionManager started")
   }
 }
+
 
 
 // ✅ Updated: MainApp now correctly starts MouseManagerApp and enqueues actions

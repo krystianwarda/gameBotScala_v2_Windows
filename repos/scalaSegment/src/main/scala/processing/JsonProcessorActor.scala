@@ -428,8 +428,8 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
     val afterChatReader = performChatReader(json, afterAutoLootState)
     val afterAutoResponderState = performAutoResponder(json, afterChatReader)
     val afterRuneMakingState = performRuneMaking(json, afterAutoResponderState)
-    val afterFishingState = performFishing(json, afterRuneMakingState)
-    val afterTrainingState = performTraining(json, afterFishingState)
+//    val afterFishingState = performFishing(json, afterRuneMakingState)
+    val afterTrainingState = performTraining(json, afterRuneMakingState)
 
     val endState  = afterTrainingState
     endState

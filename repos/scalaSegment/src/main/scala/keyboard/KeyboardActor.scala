@@ -194,24 +194,6 @@ class KeyboardActor extends Actor {
   }
 
 
-//  private def isValidKeyCode(keyCode: Int): Boolean = {
-//    keyCode >= KeyEvent.VK_0 && keyCode <= KeyEvent.VK_Z || // For alphanumeric keys
-//      keyCode >= KeyEvent.VK_NUMPAD0 && keyCode <= KeyEvent.VK_NUMPAD9 || // For numpad keys
-//      keyCode >= KeyEvent.VK_F1 && keyCode <= KeyEvent.VK_F12 || // For function keys
-//      keyCode >= KeyEvent.VK_LEFT && keyCode <= KeyEvent.VK_DOWN || // For arrow keys
-//      keyCode == KeyEvent.VK_CONTROL || keyCode == KeyEvent.VK_ALT || keyCode == KeyEvent.VK_SHIFT || // Modifier keys
-//      keyCode == KeyEvent.VK_TAB || keyCode == KeyEvent.VK_ENTER || keyCode == KeyEvent.VK_SPACE || keyCode == KeyEvent.VK_ESCAPE // Special keys
-//  }
-
-//  private def isValidKeyCode(keyCode: Int): Boolean = {
-//    keyCode >= KeyEvent.VK_0 && keyCode <= KeyEvent.VK_Z || // For alphanumeric keys
-//      keyCode >= KeyEvent.VK_NUMPAD0 && keyCode <= KeyEvent.VK_NUMPAD9 || // For numpad keys
-//      keyCode >= KeyEvent.VK_F1 && keyCode <= KeyEvent.VK_F12 || // For function keys
-//      keyCode >= KeyEvent.VK_LEFT && keyCode <= KeyEvent.VK_DOWN || // For arrow keys
-//      keyCode == KeyEvent.VK_CONTROL || keyCode == KeyEvent.VK_ALT || keyCode == KeyEvent.VK_SHIFT || // Modifier keys
-//      keyCode == KeyEvent.VK_TAB || keyCode == KeyEvent.VK_ENTER || keyCode == KeyEvent.VK_SPACE || keyCode == KeyEvent.VK_ESCAPE // Other special keys
-//  }
-
 
   private def scheduleKeyRelease(keyCode: Int, delay: FiniteDuration = 400.milliseconds): Unit = {
     keyReleaseTasks.get(keyCode).foreach(task => {
@@ -227,17 +209,6 @@ class KeyboardActor extends Actor {
     println(s"[DEBUG] Key release for $keyCode scheduled with a delay of $delay.")
   }
 
-
-  //  private def scheduleKeyRelease(keyCode: Int, delay: FiniteDuration = 400.milliseconds): Unit = {
-//    keyReleaseTasks.get(keyCode).foreach(_.cancel())
-//    val task = context.system.scheduler.scheduleOnce(delay) {
-//      robot.keyRelease(keyCode)
-//      keyReleaseTasks -= keyCode
-//      println(s"KeyboardActor: Key $keyCode released after delay.")
-//    }
-//    keyReleaseTasks += (keyCode -> task)
-//    println(s"KeyboardActor: Release for key $keyCode scheduled.")
-//  }
 
   private def pressKeyUsingRobot(keyCode: Int, immediateRelease: Boolean): Unit = {
     robot.keyPress(keyCode)
@@ -348,117 +319,3 @@ object KeyboardActor {
 
 
 }
-
-
-
-//import akka.actor.{Actor, Cancellable, Props}
-//
-//import java.awt.{Robot, Toolkit}
-//import java.awt.event.KeyEvent
-//import scala.concurrent.duration._
-//
-//
-//class KeyboardActor extends Actor {
-//  import context.dispatcher
-//
-//  val robot = new Robot()
-//  var keyReleaseTasks: Map[Int, Cancellable] = Map()
-//
-//  // Cancel any existing release task and press the key
-//  private def pressKey(keyCode: Int, immediateRelease: Boolean = false): Unit = {
-//    robot.keyPress(keyCode)
-//    keyReleaseTasks.get(keyCode).foreach(_.cancel())
-//    keyReleaseTasks -= keyCode
-//    println(s"KeyboardActor: Key $keyCode pressed.")
-//    if (immediateRelease) {
-//      robot.keyRelease(keyCode)
-//      println(s"KeyboardActor: Key $keyCode released immediately.")
-//    }
-//  }
-//
-//  // Schedule a key release with a delay
-//  private def scheduleKeyRelease(keyCode: Int, delay: FiniteDuration = 400.milliseconds): Unit = {
-//    keyReleaseTasks.get(keyCode).foreach(_.cancel())
-//    val task = context.system.scheduler.scheduleOnce(delay) {
-//      robot.keyRelease(keyCode)
-//      keyReleaseTasks -= keyCode
-//      println(s"KeyboardActor: Key $keyCode released after delay.")
-//    }
-//    keyReleaseTasks += (keyCode -> task)
-//    println(s"KeyboardActor: Release for key $keyCode scheduled.")
-//  }
-//
-//  private def setNumLock(desiredState: Boolean): Unit = {
-//    val currentState = Toolkit.getDefaultToolkit.getLockingKeyState(KeyEvent.VK_NUM_LOCK)
-//    if (currentState != desiredState) {
-//      robot.keyPress(KeyEvent.VK_NUM_LOCK)
-//      robot.keyRelease(KeyEvent.VK_NUM_LOCK)
-//      println(s"NumLock set to $desiredState")
-//    }
-//  }
-//
-//  override def receive: Receive = {
-//    case PressArrowKey(direction) =>
-//
-//      // Check if NumLock is on
-//      val numLockOn = Toolkit.getDefaultToolkit.getLockingKeyState(KeyEvent.VK_NUM_LOCK)
-//
-//      val (keyCode, immediateRelease) = direction match {
-//        case "MoveDownLeft" => if (numLockOn) (KeyEvent.VK_END, false) else (KeyEvent.VK_END, false) // Numeric 1: End
-//        case "MoveDownRight" => if (numLockOn) (KeyEvent.VK_PAGE_DOWN, false) else (KeyEvent.VK_PAGE_DOWN, false) // Numeric 3: Page Down
-//        case "MoveUpLeft" => if (numLockOn) (KeyEvent.VK_HOME, false) else (KeyEvent.VK_HOME, false) // Numeric 7: Home
-//        case "MoveUpRight" => if (numLockOn) (KeyEvent.VK_PAGE_UP, false) else (KeyEvent.VK_PAGE_UP, false) // Numeric 9: Page Up
-//
-//
-//        case "MoveDown" => (KeyEvent.VK_DOWN, false) // Numeric 2: Down (down)
-//        case "MoveLeft" => (KeyEvent.VK_LEFT, false) // Numeric 4: Left (left)
-//        case "MoveUp" => (KeyEvent.VK_UP, false) // Numeric 8: Up (up)
-//        case "MoveRight" => (KeyEvent.VK_RIGHT, false) // Numeric 6: Right (right)
-//
-//
-//        // Adding single movements for diagonal directions
-//        case "MoveUpLeftSingle" => (KeyEvent.VK_HOME, true) // Home key with immediate release
-//        case "MoveUpRightSingle" => (KeyEvent.VK_PAGE_UP, true) // Page Up key with immediate release
-//        case "MoveDownLeftSingle" => (KeyEvent.VK_END, true) // End key with immediate release
-//        case "MoveDownRightSingle" => (KeyEvent.VK_PAGE_DOWN, true) // Page Down key with immediate release
-//
-//
-//        case "F1" => (KeyEvent.VK_F1, true)
-//        case "F2" => (KeyEvent.VK_F2, true)
-//        case "F3" => (KeyEvent.VK_F3, true)
-//        case "F4" => (KeyEvent.VK_F4, true)
-//        case "F5" => (KeyEvent.VK_F5, true)
-//        case "F6" => (KeyEvent.VK_F6, true)
-//        case "F7" => (KeyEvent.VK_F7, true)
-//        case "F8" => (KeyEvent.VK_F8, true)
-//        case "F9" => (KeyEvent.VK_F9, true)
-//        case "F10" => (KeyEvent.VK_F10, true)
-//        case "F11" => (KeyEvent.VK_F11, true)
-//        case "F12" => (KeyEvent.VK_F12, true)
-//        case _ =>
-//          println("KeyboardActor: Invalid direction received.")
-//          (-1, false)
-//      }
-//
-//      println(s"Attempting to press key: $keyCode for direction: $direction with immediate release: $immediateRelease")
-//      if (keyCode != -1) {
-//        pressKey(keyCode, immediateRelease)
-//        if (!immediateRelease) {
-//          scheduleKeyRelease(keyCode)
-//        }
-//        println(s"Key pressed and processed for $direction")
-//      } else {
-//        println(s"Failed to find key mapping for $direction")
-//      }
-//      sender() ! KeyboardActionCompleted(KeyboardActionTypes.PressKey)
-//  }
-//}
-//
-//object KeyboardActor {
-//  def props: Props = Props[KeyboardActor]
-//  case class PressArrowKey(direction: String)
-//  case object KeyboardActionCompleted
-//  object KeyboardActionTypes {
-//    val PressKey = "PressKey"
-//  }
-//}

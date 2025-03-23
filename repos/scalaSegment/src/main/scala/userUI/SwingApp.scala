@@ -1,4 +1,6 @@
 package userUI
+import cats.effect.{IO, Ref}
+
 import java.awt.GridBagLayout
 import java.awt.GridBagConstraints
 import processing.{ConnectToServer, InitializeProcessor}
@@ -28,7 +30,8 @@ class SwingApp(playerClassList: List[Player],
                jsonProcessorActor: ActorRef,
                periodicFunctionActor: ActorRef,
                thirdProcessActor: ActorRef,
-               mainActorRef: ActorRef) extends MainFrame {
+               mainActorRef: ActorRef,
+               settingsRef: Ref[IO, UISettings]) extends MainFrame {
 
   title = "TibiaYBB"
   preferredSize = new Dimension(600, 300)
@@ -42,7 +45,8 @@ class SwingApp(playerClassList: List[Player],
   val autoTargetBot = new AutoTargetBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val autoLootBot = new AutoLootBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val runeMakerBot = new RuneMakerBot(currentPlayer, uiAppActor, jsonProcessorActor)
-  val fishingBot = new FishingBot(currentPlayer, uiAppActor, jsonProcessorActor)
+  val fishingBot = new FishingBot(uiAppActor, jsonProcessorActor, settingsRef)
+
   val guardianBot = new GuardianBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val trainingBot = new TrainingBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val autoResponderBot = new AutoResponderBot(currentPlayer, uiAppActor, jsonProcessorActor)

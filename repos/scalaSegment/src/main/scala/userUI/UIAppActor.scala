@@ -3,6 +3,7 @@ package userUI
 //package src.main.scala.userUI/*/
 //import actors.JsonProcessorActor
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
+import cats.effect.{IO, Ref}
 import main.scala.MainApp
 import play.api.libs.json.Json
 
@@ -12,6 +13,7 @@ import java.awt.event._
 import player.Player
 import processing.InitializeProcessor
 import main.scala.MainApp.jsonProcessorActorRef
+import userUI.SettingsUtils.UISettings
 import utils.StartMouseMovementActor
 
 import java.awt.Dimension
@@ -28,7 +30,8 @@ class UIAppActor(playerClassList: List[Player],
                  jsonProcessorActorRef: ActorRef,
                  periodicFunctionActorRef: ActorRef,
                  thirdProcessActorRef: ActorRef,
-                 mainActorRef: ActorRef) extends Actor {
+                 mainActorRef: ActorRef,
+                 settingsRef: Ref[IO, UISettings]) extends Actor {
 
   override def preStart(): Unit = {
     initializeUI() // Call initialization when actor starts
@@ -48,7 +51,8 @@ class UIAppActor(playerClassList: List[Player],
         jsonProcessorActorRef,
         periodicFunctionActorRef,
         thirdProcessActorRef,
-        mainActorRef // add the MainActor reference here
+        mainActorRef,
+        settingsRef
       ).visible = true
     }
     println("UIAppActor UI initialized.")

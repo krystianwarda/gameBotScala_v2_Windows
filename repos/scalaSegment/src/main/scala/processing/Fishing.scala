@@ -23,7 +23,7 @@ object Fishing {
     var fishStackFound = false
     var updatedState = currentState // Initialize updatedState
     val currentTime = System.currentTimeMillis()
-
+    println("Inside old computeFishingActions")
 
     if (settings.fishingSettings.enabled) {
       logs = logs :+ Log("I want a fish!")
