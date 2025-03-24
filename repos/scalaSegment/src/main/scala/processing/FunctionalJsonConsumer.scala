@@ -39,15 +39,6 @@ case class FishingSettings(
                             fishThrowoutRectangles: List[String] = List("8x5")
                           )
 
-case class AutoHealSettings(
-                             enabled: Boolean = false,
-                             healthThreshold: Int = 50,
-                             spellHotkey: String = "F1"
-                           )
-
-
-case class MouseBotAction(id: String, actions: List[MouseAction]) extends BotAction
-case class KeyboardBotAction(id: String, actions: List[KeyboardAction]) extends BotAction
 
 class FunctionalJsonConsumer(
                               stateRef: Ref[IO, GameState],
@@ -55,27 +46,22 @@ class FunctionalJsonConsumer(
                               mouseManager: MouseActionManager
                             ) {
 
+
   def runPipeline(
                    json: JsValue,
-                   state: GameState,
-                   settings: UISettings
-                 ): IO[(List[MouseAction], GameState)] = IO {
-    val ((mouseActions, _logs), newState) =
-      FishingFeature.computeFishingFeature(json, settings, state)
-    (mouseActions, newState)
-  }
+                 ): IO[List[MouseAction]] =
+    for {
+      fishingActions <- FishingFeature.computeFishingFeature(json, settingsRef, `stateRef`)
+//       healActions <- AutoHealFeature.computeHealingFeature(json, settingsRef, stateRef)
+       combinedActions = fishingActions
+    } yield combinedActions
 
   def executeMouseActions(actions: List[MouseAction]): IO[Unit] =
     mouseManager.enqueueTask(actions)
 
   def process(json: JsValue): IO[Unit] =
     for {
-      settings <- settingsRef.get
-      state <- stateRef.get
-      result <- runPipeline(json, state, settings)
-      (mouseActions, newState) = result
-      _ <- stateRef.set(newState)
+      mouseActions <- runPipeline(json)
       _ <- executeMouseActions(mouseActions)
     } yield ()
-
 }

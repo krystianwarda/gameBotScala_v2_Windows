@@ -200,7 +200,6 @@ object MainApp extends IOApp.Simple {
 
 
 
-
       keyboardActorRef = system.actorOf(Props[KeyboardActor], "keyboardActor")
       actionStateManagerRef = system.actorOf(Props[ActionMouseManager], "actionStateManager")
       actionKeyboardManagerRef = system.actorOf(Props(new ActionKeyboardManager(keyboardActorRef)), "actionKeyboardManager")
@@ -220,6 +219,11 @@ object MainApp extends IOApp.Simple {
       thirdProcessActorRef = system.actorOf(Props[ThirdProcessActor], "thirdProcess")
       uiAppActorRef = system.actorOf(Props(new UIAppActor(playerClassList, jsonProcessorActorRef, periodicFunctionActorRef, thirdProcessActorRef, mainActorRef, settingsRef)), "uiAppActor")
 
+
+      // ✅ Now it's safe to register the key listener
+      GlobalScreen.registerNativeHook()
+      GlobalScreen.addNativeKeyListener(new EscapeKeyHandler(keyListenerActorRef))
+      
       // whatever else...
       println("Press ENTER to exit...")
       scala.io.StdIn.readLine()

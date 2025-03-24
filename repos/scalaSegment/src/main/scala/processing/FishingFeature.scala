@@ -1,106 +1,106 @@
 package processing
 
+import cats.effect.{IO, Ref}
 import play.api.libs.json.{JsObject, JsValue}
 import userUI.SettingsUtils.UISettings
 import mouse._
 import keyboard._
 import cats.syntax.all._
-
 import processing.Process.{extractOkButtonPosition, handleRetryStatus, performMouseActionSequance, timeToRetry}
 import utils.consoleColorPrint.{ANSI_GREEN, printInColor}
-
 object FishingFeature {
 
-  // Minimal version: cast rod and click tile
   def computeFishingFeature(
                              json: JsValue,
-                             settings: UISettings,
-                             state: GameState
-                           ): ((List[MouseAction], List[String]), GameState) = {
-    println("Inside computeFishingFeature")
-    if (settings.fishingSettings.enabled) {
-      println("No Action in computeFishingFeature")
-      return ((List.empty, List("Fishing disabled")), state)
-    } else {
+                             settingsRef: Ref[IO, UISettings],
+                             stateRef: Ref[IO, GameState]
+                           ): IO[List[MouseAction]] = {
 
-      val startTime = System.nanoTime()
+    for {
+      settings <- settingsRef.get
+      result <- {
+        if (!settings.fishingSettings.enabled) {
+          IO {
+            println("Fishing disabled in computeFishingFeature")
+            List.empty[MouseAction]
+          }
+        } else {
 
-      println("Selected tiles: " + settings.fishingSettings.selectedRectangles.mkString(", "))
-      println(settings.fishingSettings.selectedRectangles.nonEmpty)
+          stateRef.modify { state =>
+            val now = System.currentTimeMillis()
+
+            extractOkButtonPosition(json) match {
+              case Some((posX, posY)) =>
+                val retryDelay = state.timestamps.getOrElse("retryMergeFishDelay", 0L)
+                val retryMidDelay = 3000
+
+                if (retryDelay == 0 || timeToRetry(retryDelay, retryMidDelay)) {
+                  val actions = List(
+                    MoveMouse(posX, posY),
+                    LeftButtonPress(posX, posY),
+                    LeftButtonRelease(posX, posY)
+                  )
+                  val updatedState = state.copy(
+                    timestamps = state.timestamps.updated("retryMergeFishDelay", now),
+                    lastAction = Some("mergeFishOk")
+                  )
+                  // ✅ Early exit by returning state + actions, everything else skipped
+                  (updatedState, actions)
+                } else {
+                  println(s"Waiting to retry merging fishes. Time left: ${(retryMidDelay - (now - retryDelay)) / 1000}s left")
+                  (state, List.empty)
+                }
+
+              case None =>
+
+                // Continue with normal fishing logic
+                val retryTime = state.timestamps.getOrElse("mergeFish", 0L)
+                val delay = 3000
+
+                val maybeRodXY = for {
+                  x <- (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "slot10" \ "x").asOpt[Int]
+                  y <- (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "slot10" \ "y").asOpt[Int]
+                } yield (x, y)
+
+                val maybeTileXY = settings.fishingSettings.selectedRectangles.headOption.flatMap { tileId =>
+                  for {
+                    x <- (json \ "screenInfo" \ "mapPanelLoc" \ tileId \ "x").asOpt[Int]
+                    y <- (json \ "screenInfo" \ "mapPanelLoc" \ tileId \ "y").asOpt[Int]
+                  } yield (x, y)
+                }
+
+                val (updatedState, actions) = (maybeRodXY, maybeTileXY) match {
+                  case (Some((rodX, rodY)), Some((tileX, tileY))) if (now - retryTime) > delay =>
+                    val castActions = List(
+                      MoveMouse(rodX, rodY),
+                      RightButtonPress(rodX, rodY),
+                      RightButtonRelease(rodX, rodY),
+                      MoveMouse(tileX, tileY),
+                      LeftButtonPress(tileX, tileY),
+                      LeftButtonRelease(tileX, tileY)
+                    )
+                    val newState = state.copy(
+                      timestamps = state.timestamps.updated("mergeFish", now),
+                      lastAction = Some("fishingCast")
+                    )
+                    (newState, castActions)
+
+                  case (Some(_), Some(_)) =>
+                    println(s"[Fishing] Waiting to retry: ${(delay - (now - retryTime)) / 1000}s left")
+                    (state, List.empty)
+
+                  case _ =>
+                    println("[Fishing] Rod or tile missing")
+                    (state, List.empty)
+                }
+
+                (updatedState, actions)
+            }
+          }
 
 
-      val maybeRodXY = for {
-        x <- (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "slot10" \ "x").asOpt[Int]
-        y <- (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "slot10" \ "y").asOpt[Int]
-      } yield (x, y)
-
-      println("TEST USERSETTINGS")
-      println(settings.fishingSettings.selectedRectangles.headOption)
-
-      val maybeTileXY = settings.fishingSettings.selectedRectangles.headOption.flatMap { tileId =>
-        for {
-          x <- (json \ "screenInfo" \ "mapPanelLoc" \ tileId \ "x").asOpt[Int]
-          y <- (json \ "screenInfo" \ "mapPanelLoc" \ tileId \ "y").asOpt[Int]
-        } yield (x, y)
+        }
       }
-
-      println("TEST ON")
-      println(maybeRodXY)
-      println(maybeTileXY)
-      println("TEST END")
-
-      val mouseActions = (maybeRodXY, maybeTileXY) match {
-        case (Some((rodX, rodY)), Some((tileX, tileY))) =>
-          List(
-            MoveMouse(rodX, rodY),
-            RightButtonPress(rodX, rodY),
-            RightButtonRelease(rodX, rodY),
-            MoveMouse(tileX, tileY),
-            LeftButtonPress(tileX, tileY),
-            LeftButtonRelease(tileX, tileY)
-          )
-        case _ =>
-          println("[Fishing] Missing positions for rod or tile")
-          List.empty
-      }
-
-      val logs = if (mouseActions.nonEmpty)
-        List("[Fishing] Basic fishing executed.")
-      else
-        List("[Fishing] No actions executed.")
-
-
-      val endTime = System.nanoTime()
-      val duration = (endTime - startTime) / 1e9d
-      printInColor(ANSI_GREEN, f"[INFO] Processing computeFishingActions took $duration%.6f seconds")
-
-      println("Finished action in fishing feature")
-      println(mouseActions)
-      println("END fishing")
-      ((mouseActions, logs), state)
-    }
-
-
+    } yield result
   }
-
-  // Dummy function to simulate stack size extraction. Replace with actual logic.
-  def extractStackSize(slot: String): Int = {
-    // Assume slot naming convention contains numbers which imply stack size, e.g., "slot1" implies 1 item.
-    // This is purely illustrative. Adjust to match your actual data.
-    val size = slot.filter(_.isDigit)
-    if (size.isEmpty) 1 else size.toInt
-  }
-
-  // Function to dynamically determine the full key name based on substring and extract the necessary JSON object
-  def extractItemInfoOpt(json: JsValue, containerNameSubstring: String, contentsPanel: String, itemSlot: String): Option[JsObject] = {
-    // Retrieve all keys from "inventoryPanelLoc" and filter them to find the full key containing the substring
-    val inventoryPanelLoc = (json \ "screenInfo" \ "inventoryPanelLoc").as[JsObject]
-    val fullContainerNameOpt = inventoryPanelLoc.keys.find(_.contains(containerNameSubstring))
-
-    // Using the full container name to navigate further if available
-    fullContainerNameOpt.flatMap { fullContainerName =>
-      (json \ "screenInfo" \ "inventoryPanelLoc" \ fullContainerName \ contentsPanel \ itemSlot).asOpt[JsObject]
-    }
-  }
-
 }

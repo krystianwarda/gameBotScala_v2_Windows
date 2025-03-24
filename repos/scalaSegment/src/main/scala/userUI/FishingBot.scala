@@ -165,24 +165,30 @@ class FishingBot(uiAppActor: ActorRef, jsonProcessorActor: ActorRef, settingsRef
         .filter(button => Option(button.getClientProperty("selected")).getOrElse(false).asInstanceOf[Boolean])
         .map(_.getText)
 
-      if (currentMode == "Selected") {
-        selectedRectangles = markedRectangleIds
-        println("Selected tiles in Selected Mode:")
-      } else {
-        fishThrowoutRectangles = markedRectangleIds
-        println("Selected tiles in Throwout Mode:")
-      }
+      println(s"Selected rectangles for mode [$currentMode]: $markedRectangleIds")
 
-      // ✅ Update shared UISettings
+      // ✅ Update shared UISettings directly with current selection
       import cats.effect.unsafe.implicits.global
       settingsRef.update { old =>
-        val updatedFishing = old.fishingSettings.copy(selectedRectangles = selectedRectangles)
+        val updatedFishing = currentMode match {
+          case "Selected" =>
+            old.fishingSettings.copy(
+              selectedRectangles = markedRectangleIds.toList,
+              enabled = true // ✅ turn on fishing when selected tiles are updated
+            )
+          case "Throwout" =>
+            old.fishingSettings.copy(
+              fishThrowoutRectangles = markedRectangleIds.toList
+            )
+        }
         old.copy(fishingSettings = updatedFishing)
       }.unsafeRunSync()
+
 
       gridFrame.dispose()
       closeButtonFrame.dispose()
     })
+
 
 
     closeButtonFrame.add(closeButton)

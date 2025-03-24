@@ -21,7 +21,7 @@ object Fishing {
     val fishId = 3578
     var singleFishCount = 0
     var fishStackFound = false
-    var updatedState = currentState // Initialize updatedState
+    var updatedState = currentState
     val currentTime = System.currentTimeMillis()
     println("Inside old computeFishingActions")
 
