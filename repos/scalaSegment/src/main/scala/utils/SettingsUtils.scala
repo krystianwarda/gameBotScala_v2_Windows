@@ -1,21 +1,11 @@
-package userUI
+package utils
 
-import play.api.libs.functional.syntax.toFunctionalBuilderOps
-import play.api.libs.json.{JsPath, Reads, Writes}
 import play.api.libs.json._
 
 import javax.swing.{DefaultListModel, JList}
-import scala.Function.unlift
-import play.api.libs.json._
-import play.api.libs.functional.syntax._
-import play.api.libs.json.Format.GenericFormat
-import play.api.libs.json.OFormat.oFormatFromReadsAndOWrites
-
-import javax.swing.{DefaultListModel, JList}
-import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
-import scala.util.{Failure, Success, Try}
+import scala.util.Try
 
 // Helper methods to convert between JList and Seq
 
@@ -190,11 +180,18 @@ object SettingsUtils {
                                lowSuppliesSettings: List[GuardianLowSuppliesSettings] = List.empty,
                              )
 
+//  case class FishingSettings(
+//                              enabled: Boolean = false,
+//                              selectedRectangles: Seq[String] = Seq.empty,
+//                              fishThrowoutRectangles: Seq[String] = Seq.empty
+//                            )
+
   case class FishingSettings(
                               enabled: Boolean = false,
-                              selectedRectangles: Seq[String] = Seq.empty,
-                              fishThrowoutRectangles: Seq[String] = Seq.empty
+                              selectedRectangles: Seq[String] = Seq("8x6", "9x6", "10x6"),
+                              fishThrowoutRectangles: Seq[String] = Seq("8x5")
                             )
+
 
   case class CaveBotSettings(
                               enabled: Boolean = false,

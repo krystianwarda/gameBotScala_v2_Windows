@@ -3,8 +3,9 @@ package processing
 import mouse.FakeAction
 import play.api.libs.json.{JsObject, JsValue, Json}
 import processing.Process.{extractOkButtonPosition, findBackpackPosition, findBackpackSlotForBlank}
-import userUI.SettingsUtils
-import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, Mouse, MouseMoveCommand, MouseMovementSettings}
+import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, MouseUtils, MouseMoveCommand, MouseMovementSettings}
+import utils.SettingsUtils
+
 object RuneMaker {
 
   def computeRuneMakingActions(json: JsValue, settings: SettingsUtils.UISettings): (Seq[FakeAction], Seq[Log]) = {

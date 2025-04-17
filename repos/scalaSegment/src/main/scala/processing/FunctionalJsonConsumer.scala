@@ -1,16 +1,15 @@
 package processing
 
-import cats.effect.IO
 import cats.syntax.all._
 import cats.effect.{IO, Ref}
-import cats.syntax.all._
-import cats.effect.unsafe.implicits.global
-import keyboard._
+import keyboard.{KeyboardAction, KeyboardActionManager}
 import mouse._
-import play.api.libs.json.JsValue
-import userUI.SettingsUtils.UISettings
-//import userUI.SettingsUtils._
+import utils.SettingsUtils.UISettings
 import mouse.MouseActionManager
+import utils.GameState
+import cats.effect.IO
+import cats.implicits._
+import play.api.libs.json.JsValue
 import cats.syntax.all._
 
 sealed trait BotAction {
@@ -18,50 +17,42 @@ sealed trait BotAction {
 }
 
 
-
-case class GameState(
-                           retryCounters: Map[String, Int] = Map.empty,
-                           timestamps: Map[String, Long] = Map.empty,
-                           flags: Map[String, Boolean] = Map.empty,
-                           lastMousePos: Option[(Int, Int)] = None,
-                           lastAction: Option[String] = None,
-                           temporaryData: Map[String, String] = Map.empty
-                         )
-//case class UserSettings(
-//                       fishingSettings: FishingSettings = FishingSettings(),
-//                       autoHealSettings: AutoHealSettings = AutoHealSettings(),
-//                       mouseEnabled: Boolean = true
-//                     )
-
-case class FishingSettings(
-                            enabled: Boolean = false,
-                            selectedRectangles: List[String] = List("8x6", "9x6", "10x6"),
-                            fishThrowoutRectangles: List[String] = List("8x5")
-                          )
-
-
 class FunctionalJsonConsumer(
                               stateRef: Ref[IO, GameState],
                               settingsRef: Ref[IO, UISettings],
-                              mouseManager: MouseActionManager
+                              mouseManager: MouseActionManager,
+                              keyboardManager: KeyboardActionManager
                             ) {
 
-
-  def runPipeline(
-                   json: JsValue,
-                 ): IO[List[MouseAction]] =
+  def runPipeline(json: JsValue): IO[(List[MouseAction], List[KeyboardAction])] =
     for {
-      fishingActions <- FishingFeature.computeFishingFeature(json, settingsRef, `stateRef`)
-//       healActions <- AutoHealFeature.computeHealingFeature(json, settingsRef, stateRef)
-       combinedActions = fishingActions
-    } yield combinedActions
+      fishingRes <- FishingFeature.computeFishingFeature(json, settingsRef, stateRef)
+      healingRes <- HealingFeature.computeHealingFeature(json, settingsRef, stateRef)
+
+      // now destructure in pure definitions
+      (fishingMouse, fishingKeyboard) = fishingRes
+      (healingMouse,  healingKeyboard)  = healingRes
+    } yield (
+      fishingMouse  ++ healingMouse,
+      fishingKeyboard ++ healingKeyboard
+    )
+
+
+
+  def process(json: JsValue): IO[Unit] =
+    for {
+      result <- runPipeline(json)
+      (mouseActions, keyboardActions) = result
+      _ <- executeMouseActions(mouseActions)
+      _ <- executeKeyboardActions(keyboardActions)
+    } yield ()
+
+
+
+  def executeKeyboardActions(actions: List[KeyboardAction]): IO[Unit] =
+    keyboardManager.enqueueTask(actions)
 
   def executeMouseActions(actions: List[MouseAction]): IO[Unit] =
     mouseManager.enqueueTask(actions)
 
-  def process(json: JsValue): IO[Unit] =
-    for {
-      mouseActions <- runPipeline(json)
-      _ <- executeMouseActions(mouseActions)
-    } yield ()
 }

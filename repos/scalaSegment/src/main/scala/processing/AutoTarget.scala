@@ -8,7 +8,8 @@ import processing.AutoHeal.{noRunesInBpGoUp, openNewBackpack, removeEmptyBackpac
 import processing.CaveBot.{Vec, aStarSearch, calculateDirection, createBooleanGrid, executeWhenNoMonstersOnScreen, printGrid}
 import processing.Process.{extractOkButtonPosition, generateRandomDelay, performMouseActionSequance, timeToRetry}
 import processing.TeamHunt.followTeamMember
-import userUI.SettingsUtils.UISettings
+import utils.ProcessorState
+import utils.SettingsUtils.UISettings
 import utils.consoleColorPrint.{ANSI_GREEN, ANSI_RED, printInColor}
 import utils.consoleColorPrint._
 

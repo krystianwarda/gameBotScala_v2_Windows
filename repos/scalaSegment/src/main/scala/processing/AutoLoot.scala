@@ -1,13 +1,13 @@
 package processing
 
 import mouse.FakeAction
-import play.api.libs.json.{JsError, JsObject, JsValue, _}
-import userUI.SettingsUtils.UISettings
+import play.api.libs.json._
+import utils.SettingsUtils.UISettings
 import processing.AutoTarget.{parseCreature, transformToJSON}
 import processing.CaveBot.{Vec, calculateDirection}
 import processing.Process.{addMouseAction, extractOkButtonPosition}
 import processing.TeamHunt.generateSubwaypointsToGamePosition
-import utils.StaticGameInfo
+import utils.{ProcessorState, StaticGameInfo}
 import utils.consoleColorPrint.{ANSI_GREEN, ANSI_RED, printInColor}
 
 import scala.util.Random

@@ -3,7 +3,7 @@ package processing
 import mouse.FakeAction
 import play.api.libs.json.{JsObject, JsValue, Json}
 import processing.Process.{findBackpackPosition, isJsonNotEmpty}
-import userUI.SettingsUtils
+import utils.SettingsUtils
 
 
 object Training {

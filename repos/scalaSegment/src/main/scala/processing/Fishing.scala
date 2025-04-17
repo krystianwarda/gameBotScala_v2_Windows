@@ -4,7 +4,7 @@ import cats.effect.unsafe.implicits.global
 import mouse._
 import play.api.libs.json.{JsDefined, JsNumber, JsObject, JsValue, Json}
 import processing.Process.{extractOkButtonPosition, handleRetryStatus, performMouseActionSequance, timeToRetry, updateRetryStatusBasedOnTime}
-import userUI.SettingsUtils
+import utils.{ProcessorState, SettingsUtils}
 import utils.consoleColorPrint.{ANSI_GREEN, ANSI_RED, printInColor}
 
 import java.time.Instant

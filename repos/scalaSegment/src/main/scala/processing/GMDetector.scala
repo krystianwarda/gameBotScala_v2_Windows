@@ -3,7 +3,7 @@ package processing
 import main.scala.MainApp.autoResponderManagerRef
 import mouse.FakeAction
 import play.api.libs.json.JsValue
-import userUI.SettingsUtils.UISettings
+import utils.SettingsUtils.UISettings
 import utils.consoleColorPrint.{ANSI_GREEN, ANSI_RED, printInColor}
 import processing.CaveBot.Vec
 import keyboard.{CancelAlert, KeyAction, UpdateAlertStory}
@@ -17,6 +17,7 @@ import scala.util.Random
 import java.text.SimpleDateFormat
 import java.util.Date
 import keyboard.ComboKeyAction
+import utils.ProcessorState
 
 import scala.collection.mutable
 

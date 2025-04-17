@@ -6,13 +6,13 @@ import cats.effect.{IO, IOApp, Ref}
 import cats.effect.unsafe.implicits.global
 import com.github.kwhat.jnativehook.GlobalScreen
 import player.Player
-import mouse.{ActionMouseManager, GlobalMouseManager, Mouse, MouseAction, MouseActionManager, MouseManagerApp, MouseMovementActor}
-import keyboard.{ActionKeyboardManager, AutoResponderManager, KeyboardActor}
+import mouse.{ActionMouseManager, GlobalMouseManager, MouseAction, MouseActionManager, MouseManagerApp, MouseMovementActor, MouseUtils}
+import keyboard.{ActionKeyboardManager, AutoResponderManager, KeyboardAction, KeyboardActionManager, KeyboardActor}
 import play.api.libs.json._
-import processing.{FunctionalJsonConsumer, GameState, JsonProcessorActor}
-import userUI.SettingsUtils._
-import userUI.{FishingBot, UIAppActor}
-import utils.{AlertSenderActor, EscapeKeyHandler, EscapeKeyListener, FunctionExecutorActor, InitialJsonProcessorActor, InitialRunActor, MainActor, MouseJiggler, PeriodicFunctionActor}
+import processing.{FunctionalJsonConsumer, JsonProcessorActor}
+import utils.SettingsUtils._
+import userUI.{AutoHealBot, FishingBot, UIAppActor}
+import utils.{AlertSenderActor, EscapeKeyHandler, EscapeKeyListener, FunctionExecutorActor, GameState, InitialJsonProcessorActor, InitialRunActor, MainActor, MouseJiggler, PeriodicFunctionActor}
 
 import java.awt.Robot
 import scala.concurrent.duration._
@@ -28,7 +28,7 @@ case class SendJsonCommand(json: JsValue)
 
 
 
-import userUI.SettingsUtils.UISettings
+import utils.SettingsUtils.UISettings
 //
 class ThirdProcessActor extends Actor {
   import context.dispatcher
@@ -61,69 +61,6 @@ class ThirdProcessActor extends Actor {
     )
   }
 }
-
-import cats.effect.unsafe.implicits.global
-//
-//object MainApp extends App {
-//  val system = ActorSystem("MySystem")
-//
-//
-//  MouseJiggler.start()
-//
-//  MouseManagerApp.start()
-//
-//  // Default values
-//  val defaultState = GameState()
-//  val defaultSettings = UserSettings()
-//
-//  // Program setup
-//  val jsonConsumerIO: IO[FunctionalJsonConsumer] = for {
-//    stateRef <- Ref.of[IO, GameState](defaultState)
-//    settingsRef <- Ref.of[IO, UserSettings](defaultSettings)
-//    mouseManager = new MouseActionManager(new java.awt.Robot(), MouseManagerApp.queueRef, MouseManagerApp.statusRef, MouseManagerApp.taskInProgressRef)
-//    consumer = new FunctionalJsonConsumer(stateRef, settingsRef, mouseManager)
-//  } yield consumer
-//
-//  // Define case classes and objects as before
-//  val playerClassList: List[Player] = List(new Player("Player1"))
-//  case class StartActors(settings: UISettings)
-//  case class UpdateSettings(settings: UISettings)
-//  case class UpdatePauseStatus(isPaused: Boolean)
-//  case class JsonData(json: JsValue)
-//  case class BinaryData(data: ByteString)
-//
-//
-//  val keyboardActorRef: ActorRef = system.actorOf(Props[KeyboardActor], "keyboardActor")
-//  val actionStateManagerRef: ActorRef = system.actorOf(Props[ActionMouseManager], "actionStateManager")
-//  val actionKeyboardManagerRef: ActorRef = system.actorOf(Props(new ActionKeyboardManager(keyboardActorRef)), "actionKeyboardManager")
-//  val alertSenderActorRef: ActorRef = system.actorOf(Props[AlertSenderActor], "alertSender")
-//
-//  lazy val mouseMovementActorRef: ActorRef = system.actorOf(Props(new MouseMovementActor(actionStateManagerRef, jsonProcessorActorRef)), "mouseMovementActor")
-//  val autoResponderManagerRef: ActorRef = system.actorOf(AutoResponderManager.props(keyboardActorRef, jsonProcessorActorRef), "autoResponderManager")
-//  lazy val jsonProcessorActorRef: ActorRef = system.actorOf(Props(new JsonProcessorActor(mouseMovementActorRef, actionStateManagerRef, actionKeyboardManagerRef)), "jsonProcessor")
-//
-//  val keyListenerActorRef: ActorRef = system.actorOf(Props[EscapeKeyListener], "EscapeKeyListener")
-//
-//  val functionExecutorActorRef: ActorRef = system.actorOf(Props[FunctionExecutorActor], "functionExecutorActor")
-//  val initialJsonProcessorActorRef: ActorRef = system.actorOf(Props[InitialJsonProcessorActor], "initialJsonProcessor")
-//  val initialRunActorRef: ActorRef = system.actorOf(Props(new InitialRunActor(initialJsonProcessorActorRef)), "initialRunActor")
-//  val mainActorRef: ActorRef = system.actorOf(Props[MainActor], "mainActor")
-//  val periodicFunctionActorRef: ActorRef = system.actorOf(Props(classOf[PeriodicFunctionActor], jsonProcessorActorRef), "periodicFunctionActor")
-//  val thirdProcessActorRef: ActorRef = system.actorOf(Props[ThirdProcessActor], "thirdProcess")
-//  val uiAppActorRef: ActorRef = system.actorOf(Props(new UIAppActor(playerClassList, jsonProcessorActorRef, periodicFunctionActorRef, thirdProcessActorRef, mainActorRef)), "uiAppActor")
-//
-//
-//  // Register global key listener
-//  GlobalScreen.registerNativeHook()
-//  GlobalScreen.addNativeKeyListener(new EscapeKeyHandler(keyListenerActorRef))
-//
-//  println("Press ENTER to exit...")
-//  scala.io.StdIn.readLine()
-//
-//  system.terminate()
-//}
-
-
 
 
 object MainApp extends IOApp.Simple {
@@ -161,14 +98,27 @@ object MainApp extends IOApp.Simple {
     wasInProgressRef <- Ref.of[IO, Boolean](false) // <-- Add this
   } yield new MouseActionManager(robot, queueRef, statusRef, taskInProgressRef, wasInProgressRef)
 
+  def createKeyboardActionManager(robot: Robot): IO[KeyboardActionManager] =
+    for {
+      queueRef          <- Ref.of[IO, List[KeyboardAction]](List.empty)
+      statusRef         <- Ref.of[IO, String]("idle")
+      taskInProgressRef <- Ref.of[IO, Boolean](false)
+    } yield new KeyboardActionManager(
+      robot,
+      queueRef,
+      statusRef,
+      taskInProgressRef
+    )
+
 
   override def run: IO[Unit] = for {
     _ <- IO(MouseJiggler.start())
 
     robot <- IO(new Robot()) // ✅ valid
     mouseManager <- createMouseActionManager(robot)
+    keyboardManager <- createKeyboardActionManager(robot)
     stateRef <- Ref.of[IO, GameState](GameState())
-    val defaultSettings = UISettings(
+    defaultSettings = UISettings(
       healingSettings = HealingSettings(),
       runeMakingSettings = RuneMakingSettings(),
       hotkeysSettings = HotkeysSettings(),
@@ -183,16 +133,32 @@ object MainApp extends IOApp.Simple {
       teamHuntSettings = TeamHuntSettings()
     )
     settingsRef <- Ref.of[IO, UISettings](defaultSettings)
-    val fishingBot = new FishingBot(uiAppActorRef, jsonProcessorActorRef, settingsRef)
 
-    jsonConsumer = new FunctionalJsonConsumer(stateRef, settingsRef, mouseManager)
+
+    _ <- IO(new FishingBot(uiAppActorRef, jsonProcessorActorRef, settingsRef))
+    _ <- IO(new AutoHealBot(uiAppActorRef, jsonProcessorActorRef, settingsRef))
+
+    jsonConsumer = new FunctionalJsonConsumer(
+      stateRef,
+      settingsRef,
+      mouseManager,
+      keyboardManager
+    )
 
     _ <- IO {
-      GlobalMouseManager.instance = Some(mouseManager)
-      println("✅ MouseActionManager instance set")
-      mouseManager.startProcessing.compile.drain.unsafeRunAndForget()
-      println("✅ MouseActionManager started")
+    GlobalMouseManager.instance = Some(mouseManager)
+    println("✅ MouseActionManager instance set")
+    mouseManager.startProcessing.compile.drain.unsafeRunAndForget()
+    println("✅ MouseActionManager started")
     }
+
+//
+//    new FishingBot(uiAppActorRef, jsonProcessorActorRef, settingsRef)
+//    new AutoHealBot(uiAppActorRef, jsonProcessorActorRef, settingsRef)
+//
+//
+//    jsonConsumer = new FunctionalJsonConsumer(stateRef, settingsRef, mouseManager)
+
 
     // pass jsonConsumer to actor here
     _ <- IO {
@@ -223,7 +189,7 @@ object MainApp extends IOApp.Simple {
       // ✅ Now it's safe to register the key listener
       GlobalScreen.registerNativeHook()
       GlobalScreen.addNativeKeyListener(new EscapeKeyHandler(keyListenerActorRef))
-      
+
       // whatever else...
       println("Press ENTER to exit...")
       scala.io.StdIn.readLine()

@@ -5,8 +5,8 @@ import play.api.libs.json.{JsValue, _}
 import utils.consoleColorPrint.{ANSI_RED, printInColor}
 import processing.CaveBot.{Vec, aStarSearch, adjustGoalWithinBounds, calculateDirection, createBooleanGrid, generateSubwaypoints, printGrid}
 import play.api.libs.json._
-import userUI.SettingsUtils.UISettings
-import utils.StaticGameInfo
+import utils.SettingsUtils.UISettings
+import utils.{ProcessorState, StaticGameInfo}
 
 import java.lang.System.currentTimeMillis
 import utils.consoleColorPrint._

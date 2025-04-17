@@ -1,10 +1,10 @@
 package processing
 
 import mouse.FakeAction
-import play.api.libs.json.{JsArray, JsValue, Json, JsObject, JsSuccess}
+import play.api.libs.json.{JsArray, JsObject, JsSuccess, JsValue, Json}
 import processing.AutoTarget.{CreatureSettings, parseCreature, transformToJSON}
-import userUI.SettingsUtils
-import userUI.SettingsUtils.UISettings
+import utils.SettingsUtils.UISettings
+import utils.{ProcessorState, SettingsUtils}
 import utils.consoleColorPrint.{ANSI_GREEN, printInColor}
 
 case class Creature(

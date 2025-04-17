@@ -6,10 +6,11 @@ import java.awt.GridBagConstraints
 import processing.{ConnectToServer, InitializeProcessor}
 import main.scala.MainApp.{autoResponderManagerRef, jsonProcessorActorRef, periodicFunctionActorRef, uiAppActorRef}
 import play.api.libs.json.{Format, Json}
+import utils.SettingsUtils
 
 import javax.swing.{DefaultComboBoxModel, DefaultListModel, JComboBox, JList}
 //import userUI.SettingsUtils.{HealingSettings, ProtectionZoneSettings, RuneMakingSettings, UISettings, saveSettingsToFile}
-import userUI.SettingsUtils._
+import utils.SettingsUtils._
 import scala.swing.{Component, Dialog, FileChooser, Insets}
 import akka.actor.ActorRef
 import main.scala.MainApp
@@ -39,7 +40,7 @@ class SwingApp(playerClassList: List[Player],
 
   // Initialize AutoHeal class
 //  val mainBot = new MainBot(currentPlayer, uiAppActor, jsonProcessorActor)
-  val autoHealBot = new AutoHealBot(currentPlayer, uiAppActor, jsonProcessorActor)
+  val autoHealBot = new AutoHealBot(uiAppActor, jsonProcessorActor, settingsRef)
   val hotkeysBot = new HotkeysBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val caveBotBot = new CaveBotBot(currentPlayer, uiAppActor, jsonProcessorActor)
   val autoTargetBot = new AutoTargetBot(currentPlayer, uiAppActor, jsonProcessorActor)

@@ -17,13 +17,22 @@ case class PressKey(keyCode: Int) extends KeyboardAction {
   val priority = 1
 }
 
+object PressKey {
+  def fromKeyString(key: String): PressKey = {
+    val keyCode = KeyboardUtils.getKeyCodeForKey(key)
+    PressKey(keyCode)
+  }
+}
+
 case class TextType(text: String) extends KeyboardAction {
   val priority = 2
 }
 
+
 class KeyboardActionManager(
                              robot: Robot,
                              queueRef: Ref[IO, List[KeyboardAction]],
+                             statusRef: Ref[IO, String],
                              taskInProgressRef: Ref[IO, Boolean]
                            ) {
 
@@ -56,13 +65,15 @@ class KeyboardActionManager(
       else pressAndReleaseKey(keyCode)
     }.sequence_ *> pressAndReleaseKey(KeyEvent.VK_ENTER)
 
-  private def executeAction(action: KeyboardAction): IO[Unit] =
-    action match {
-      case PressKey(code) =>
-        pressAndReleaseKey(code) *> IO.sleep(50.millis)
-      case TextType(text) =>
-        typeString(text)
-    }
+  private def executeAction(action: KeyboardAction): IO[Unit] = action match {
+    case PressKey(code) =>
+      // direct execution using internal helpers
+      pressAndReleaseKey(code) *> IO.sleep(50.millis)
+
+    case TextType(text) =>
+      typeString(text)
+  }
+
 
   def startProcessing: Stream[IO, Unit] = {
     Stream.awakeEvery[IO](10.millis).evalMap { _ =>
@@ -87,13 +98,13 @@ class KeyboardActionManager(
   }
 
 }
-
-object KeyboardManagerApp {
-  def start(): IO[KeyboardActionManager] = for {
-    robot <- IO(new Robot())
-    queueRef <- Ref.of[IO, List[KeyboardAction]](List.empty)
-    taskInProgressRef <- Ref.of[IO, Boolean](false)
-    manager = new KeyboardActionManager(robot, queueRef, taskInProgressRef)
-    _ <- manager.startProcessing.compile.drain.start
-  } yield manager
-}
+//
+//object KeyboardManagerApp {
+//  def start(): IO[KeyboardActionManager] = for {
+//    robot <- IO(new Robot())
+//    queueRef <- Ref.of[IO, List[KeyboardAction]](List.empty)
+//    taskInProgressRef <- Ref.of[IO, Boolean](false)
+//    manager = new KeyboardActionManager(robot, queueRef, taskInProgressRef)
+//    _ <- manager.startProcessing.compile.drain.start
+//  } yield manager
+//}

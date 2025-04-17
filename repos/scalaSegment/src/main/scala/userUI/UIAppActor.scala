@@ -13,7 +13,7 @@ import java.awt.event._
 import player.Player
 import processing.InitializeProcessor
 import main.scala.MainApp.jsonProcessorActorRef
-import userUI.SettingsUtils.UISettings
+import utils.SettingsUtils.UISettings
 import utils.StartMouseMovementActor
 
 import java.awt.Dimension

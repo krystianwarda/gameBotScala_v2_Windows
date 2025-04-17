@@ -4,11 +4,11 @@ import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import keyboard.Gpt3ApiClient.{alertStory, storiesMap}
 import main.scala.MainApp.{actionKeyboardManagerRef, jsonProcessorActorRef}
 import play.api.libs.json.{JsValue, Json}
-import userUI.SettingsUtils
-import userUI.SettingsUtils.UISettings
+import utils.SettingsUtils.UISettings
 import userUI.UpdateSettings
 import processing.ResponseGenerated
 import utils.Credentials.gptCredentials
+import utils.SettingsUtils
 
 import scala.collection.mutable
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -34,7 +34,7 @@ import akka.http.scaladsl.model.headers.GenericHttpCredentials
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.Materializer
 import play.api.libs.json._
-import scala.concurrent.{Future}
+import scala.concurrent.Future
 
 object ApplicationSetup {
   // Move these implicits inside an object or class

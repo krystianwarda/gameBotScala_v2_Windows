@@ -4,7 +4,7 @@ import akka.actor.ActorRef
 import cats.effect.{IO, Ref}
 import play.api.libs.json.{Format, Json}
 import player.Player
-import userUI.SettingsUtils.UISettings
+import utils.SettingsUtils.UISettings
 
 import javax.swing._
 import java.awt._

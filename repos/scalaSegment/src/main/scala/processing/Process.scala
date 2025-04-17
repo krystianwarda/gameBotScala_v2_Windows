@@ -2,7 +2,7 @@ package processing
 
 import keyboard.KeyAction
 import play.api.libs.json.JsObject
-import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, Mouse, MouseMoveCommand, MouseMovementSettings}
+import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, MouseUtils, MouseMoveCommand, MouseMovementSettings}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
 import processing.CaveBot.{Vec, aStarSearch, createBooleanGrid, printGrid}
 
@@ -14,6 +14,7 @@ import scala.io.Source
 import java.awt.Toolkit
 import com.sun.speech.freetts.Voice
 import com.sun.speech.freetts.VoiceManager
+import utils.ProcessorState
 import utils.consoleColorPrint.{ANSI_BLUE, printInColor}
 
 import java.awt.Robot

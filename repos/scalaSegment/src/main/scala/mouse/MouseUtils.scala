@@ -7,7 +7,7 @@ import java.awt.event.KeyEvent
 import scala.math.random
 import scala.util.Random
 
-object Mouse {
+object MouseUtils {
   val random = new Random()
 
   def mousePress(robot: Robot, buttons: Int): Unit = {
@@ -23,8 +23,6 @@ object Mouse {
     val (x, y) = loc.get
     robotInstance.mouseMove(x, y)
   }
-
-
 
 
 

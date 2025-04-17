@@ -7,7 +7,7 @@ import main.scala.MainApp.{functionExecutorActorRef, periodicFunctionActorRef}
 import play.api.libs.json.JsValue
 import player.Player
 import play.api.libs.json._
-import userUI.SettingsUtils.CaveBotSettings
+import utils.SettingsUtils.CaveBotSettings
 
 import scala.util.{Failure, Success}
 import java.awt.{Color, Dimension, GridBagConstraints, GridBagLayout, GridLayout, Insets}

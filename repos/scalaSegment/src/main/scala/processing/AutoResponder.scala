@@ -7,8 +7,7 @@ import akka.http.scaladsl.unmarshalling.Unmarshal
 import keyboard.Gpt3ApiClient.{alertStory, apiKey, endpoint, initialStory, storiesMap}
 import mouse.FakeAction
 import play.api.libs.json.{JsObject, JsValue, Json}
-import userUI.SettingsUtils
-import userUI.SettingsUtils.UISettings
+import utils.SettingsUtils.UISettings
 import keyboard.RequestAnswer
 
 import scala.collection.mutable
@@ -17,13 +16,13 @@ import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import keyboard.ApplicationSetup.system
 import keyboard.Gpt3ApiClient.{alertStory, storiesMap}
 import keyboard.KeyboardActionTypes.TypeText
-import keyboard.{AutoResponderCommand}
+import keyboard.AutoResponderCommand
 import main.scala.MainApp.{actionKeyboardManagerRef, autoResponderManagerRef}
 import play.api.libs.json.{JsValue, Json}
 import processing.Process.loadSpellsFromFile
-import userUI.SettingsUtils
-import userUI.SettingsUtils.UISettings
+import utils.SettingsUtils.UISettings
 import userUI.UpdateSettings
+import utils.{ProcessorState, SettingsUtils}
 
 import scala.collection.mutable
 import scala.concurrent.{Await, ExecutionContext, Future}

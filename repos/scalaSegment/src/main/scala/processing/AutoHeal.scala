@@ -2,11 +2,11 @@ package processing
 
 
 import play.api.libs.json.{JsValue, Json}
-import userUI.SettingsUtils
-import userUI.SettingsUtils.UISettings
-import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, Mouse, MouseMoveCommand, MouseMovementSettings}
+import utils.SettingsUtils.UISettings
+import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, MouseUtils, MouseMoveCommand, MouseMovementSettings}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
 import processing.Process.{findItemInContainerSlot14, generateRandomDelay}
+import utils.{ProcessorState, SettingsUtils}
 import utils.consoleColorPrint._
 
 import scala.collection.immutable.Seq

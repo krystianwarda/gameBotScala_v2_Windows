@@ -4,7 +4,7 @@ import mouse.FakeAction
 import play.api.libs.json.{JsObject, JsValue, Json}
 import processing.CaveBot.Vec
 import processing.Process.performMouseActionSequance
-import userUI.SettingsUtils
+import utils.{ProcessorState, SettingsUtils}
 
 import scala.collection.immutable.Seq
 import scala.collection.mutable

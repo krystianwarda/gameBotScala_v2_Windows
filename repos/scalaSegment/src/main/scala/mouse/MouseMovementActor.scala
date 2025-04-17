@@ -108,7 +108,7 @@ class MouseMovementActor(actionStateManager: ActorRef, jsonProcessorActor: Actor
 def performMouseAction(mouseAction: MouseAction, actions: Seq[MouseAction], source: Option[String]): Unit = {
     println(s"Performing mouse action: ${mouseAction.action} at (${mouseAction.x}, ${mouseAction.y})")
     mouseAction.action match {
-      case "move" => Mouse.mouseMoveSmooth(robotInstance, Some((mouseAction.x, mouseAction.y)), simulateHumanBehavior = true)
+      case "move" => MouseUtils.mouseMoveSmooth(robotInstance, Some((mouseAction.x, mouseAction.y)), simulateHumanBehavior = true)
       case "pressLeft" => robotInstance.mousePress(InputEvent.BUTTON1_DOWN_MASK)
       case "releaseLeft" => robotInstance.mouseRelease(InputEvent.BUTTON1_DOWN_MASK)
       case "pressRight" => robotInstance.mousePress(InputEvent.BUTTON3_DOWN_MASK)

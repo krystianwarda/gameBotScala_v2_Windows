@@ -3,12 +3,12 @@ package processing
 import main.scala.MainApp.alertSenderActorRef
 import mouse.FakeAction
 import play.api.libs.json.{JsObject, JsValue}
-import userUI.SettingsUtils
 
 import scala.collection.immutable.Seq
 import play.api.libs.json._
 import processing.CaveBot.Vec
 import processing.Process.captureScreen
+import utils.{ProcessorState, SettingsUtils}
 
 import java.lang.System.currentTimeMillis
 //import processing.Process.{captureScreen, generateNoise}

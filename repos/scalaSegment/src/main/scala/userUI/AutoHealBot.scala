@@ -2,9 +2,11 @@ package userUI
 
 
 import akka.actor.ActorRef
+import cats.effect.{IO, Ref}
 import player.Player
-import scala.swing.event.ButtonClicked
+import utils.SettingsUtils.UISettings
 
+import scala.swing.event.ButtonClicked
 import scala.swing._
 import scala.swing.event._
 import scala.swing._
@@ -12,7 +14,7 @@ import java.awt.{Dimension, GridBagConstraints, GridBagLayout, Insets}
 import javax.swing.{DefaultComboBoxModel, JComboBox, JLabel, JPanel, JScrollPane}
 
 
-class AutoHealBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: ActorRef) {
+class AutoHealBot(uiAppActor: ActorRef, jsonProcessorActor: ActorRef, settingsRef: Ref[IO, UISettings])  {
   // UI components specific to AutoHeal
   val lightHealSpellField = new TextField()
   val lightHealHealthField = new TextField()

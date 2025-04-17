@@ -4,15 +4,13 @@ import akka.pattern.ask
 import akka.util.Timeout
 import mouse.FakeAction
 import play.api.libs.json.JsValue
-import userUI.SettingsUtils
 import play.api.libs.json._
-import userUI.SettingsUtils.UISettings
+import utils.SettingsUtils.UISettings
 import play.api.libs.json.{JsValue, Json}
-import userUI.SettingsUtils
-import userUI.SettingsUtils.UISettings
-import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, Mouse, MouseMoveCommand, MouseMovementSettings}
+import utils.SettingsUtils.UISettings
+import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, MouseUtils, MouseMoveCommand, MouseMovementSettings}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
-import utils.StaticGameInfo
+import utils.{ProcessorState, SettingsUtils, StaticGameInfo}
 
 import scala.util.Try
 import System.currentTimeMillis
