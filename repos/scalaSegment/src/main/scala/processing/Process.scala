@@ -2,7 +2,7 @@ package processing
 
 import keyboard.KeyAction
 import play.api.libs.json.JsObject
-import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, MouseUtils, MouseMoveCommand, MouseMovementSettings}
+import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, MouseMoveCommand, MouseMovementSettings, MouseUtils}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
 import processing.CaveBot.{Vec, aStarSearch, createBooleanGrid, printGrid}
 
@@ -14,7 +14,7 @@ import scala.io.Source
 import java.awt.Toolkit
 import com.sun.speech.freetts.Voice
 import com.sun.speech.freetts.VoiceManager
-import utils.ProcessorState
+import utils.{GameState, ProcessorState}
 import utils.consoleColorPrint.{ANSI_BLUE, printInColor}
 
 import java.awt.Robot
@@ -71,14 +71,14 @@ object Process {
 //    }
 //  }
 
-  def findItemInContainerSlot14(json: JsValue, updatedState: ProcessorState, itemId: Int, itemSubType: Int): Option[JsObject] = {
+  def findItemInContainerSlot14(json: JsValue, updatedState: GameState, itemId: Int, itemSubType: Int): Option[JsObject] = {
     // Access the specific container information using updatedState
-    val containerInfo = (json \ "containersInfo" \ updatedState.uhRuneContainerName).as[JsObject]
+    val containerInfo = (json \ "containersInfo" \ updatedState.autoHeal.healingRuneContainerName).as[JsObject]
     println(s"Container Info: $containerInfo") // Log the container information for debugging
 
 //    val screenInfoPath = (json \ "screenInfo" \ "inventoryPanelLoc" \ updatedState.uhRuneContainerName \ "contentsPanel").as[JsObject]
     val inventoryPanelLoc = (json \ "screenInfo" \ "inventoryPanelLoc").as[JsObject]
-    val containerKey = inventoryPanelLoc.keys.find(_.contains(updatedState.uhRuneContainerName)).getOrElse("")
+    val containerKey = inventoryPanelLoc.keys.find(_.contains(updatedState.autoHeal.healingRuneContainerName)).getOrElse("")
     val containerScreenInfo = (inventoryPanelLoc \ containerKey \ "contentsPanel").as[JsObject]
 
 
@@ -214,6 +214,23 @@ object Process {
       currentRetryStatus + 1  // Increment the retry status if it hasn't reached the maximum yet
     }
   }
+
+  def handleRetryStatusOption(
+                         currentRetryStatusOpt: Option[Int],
+                         retryAttemptsMid:      Int
+                       ): Int =
+    currentRetryStatusOpt.fold {
+      // no previous status ⇒ this is our first retry
+      1
+    } { current =>
+      if (current >= retryAttemptsMid) {
+        println("Resetting retry status.")
+        0
+      } else {
+        current + 1
+      }
+    }
+
 
   def timeToRetry(lastAttemptTime: Long, retryMidDelay: Long): Boolean = {
     val currentTime = System.currentTimeMillis()

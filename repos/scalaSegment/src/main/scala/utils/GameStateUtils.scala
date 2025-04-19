@@ -18,11 +18,24 @@ case class GameState(
                       fishing: FishingState = FishingState()
                     )
 
-case class FishingState(
-                         retryThroughoutFishesStatus: Option[Int] = None,
-                         retryAttemptsLong: Option[Long] = None,
-                         lastFishingCommandSent: Long = 0,
-                       )
+case class AutoHealState(
+                          lastHealUseTime: Long = 0,
+                          stateHealingWithRune: String = "free",
+                          statusOfAutoheal:String = "",
+                          healingRuneContainerName:String = "",
+                          healingCrosshairActive: Boolean = false,
+                          healingRestryStatus: Int = 0,
+                          healingRetryAttempts: Int = 1,
+                          healingSpellCooldown: Long = 1200,
+                          lightHeal: LightHealState = LightHealState(),
+                          strongHeal: StrongHealState = StrongHealState(),
+
+                          healUseRandomness: Long = 0,
+                          healingUseCooldown: Long = 1000,
+                          runeUseCooldown: Long = 2000,
+                          runeUseRandomness: Long = 0,
+                          runeUseTimeRange: (Int, Int) = (500, 1000)
+                        )
 
 case class GeneralState(
                          retryCounters: Map[String, Int] = Map.empty,
@@ -36,21 +49,16 @@ case class GeneralState(
                          retryAttemptsLong: Option[Long] = None
                        )
 
-case class AutoHealState(
-                          stateHealingWithRune: String = "free",
-                          healingCrosshairActive: Boolean = false,
-                          healingRestryStatus: Int = 0,
-                          healingRetryAttempts: Int = 1,
-                          healingSpellCooldown: Long = 1200,
-                          lightHeal: LightHealState = LightHealState(),
-                          strongHeal: StrongHealState = StrongHealState(),
-                          lastHealUseTime: Long = 0,
-                          healUseRandomness: Long = 0,
-                          healingUseCooldown: Long = 1000,
-                          runeUseCooldown: Long = 2000,
-                          runeUseRandomness: Long = 0,
-                          runeUseTimeRange: (Int, Int) = (500, 1000)
-                        )
+
+
+case class FishingState(
+                         retryThroughoutFishesStatus: Option[Int] = None,
+                         retryAttemptsLong: Option[Long] = None,
+                         lastFishingCommandSent: Long = 0,
+                         retryFishingStatus: Int = 0,
+                         fishingRetryAttempts: Int = 4,
+                         retryMergeFishStatus: Int = 0,
+                       )
 
 case class LightHealState(
                            lightHealDelayTime: Long = 0,
