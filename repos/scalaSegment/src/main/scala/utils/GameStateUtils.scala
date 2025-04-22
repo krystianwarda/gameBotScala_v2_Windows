@@ -46,7 +46,7 @@ case class GeneralState(
                          lastActionTimestamp: Option[Long] = None,
                          temporaryData: Map[String, String] = Map.empty,
                          retryThroughoutFishesStatus: Option[Int] = None,
-                         retryAttemptsLong: Option[Long] = None
+//                         retryAttemptsLong: Option[Long] = None
                        )
 
 
@@ -54,6 +54,7 @@ case class GeneralState(
 case class FishingState(
                          retryThroughoutFishesStatus: Option[Int] = None,
                          retryAttemptsLong: Option[Long] = None,
+                         retryAttempts:  Int = 0,
                          lastFishingCommandSent: Long = 0,
                          retryFishingStatus: Int = 0,
                          fishingRetryAttempts: Int = 4,

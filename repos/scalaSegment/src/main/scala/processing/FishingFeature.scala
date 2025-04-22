@@ -6,7 +6,7 @@ import utils.SettingsUtils.UISettings
 import mouse._
 import keyboard._
 import processing.Fishing.{extractItemInfoOpt, extractStackSize}
-import processing.Process.{extractOkButtonPosition, handleRetryStatusOption, timeToRetry}
+import processing.Process.{extractOkButtonPosition, timeToRetry}
 import utils.GameState
 import cats.syntax.all._
 import processing.HealingFeature.{DangerLevelHealing, HandleBackpacks, SelfHealing, SetUpSupplies, Steps, TeamHealing}
@@ -103,45 +103,43 @@ object FishingFeature {
              json:     JsValue,
              settings: UISettings
            ): Option[(GameState, MKActions)] = {
-      val fishId  = 3578
-      val fishing = state.fishing
-      val now     = System.currentTimeMillis()
+      import scala.util.Random
 
-      // helper to find one item slot
+      val fishId = 3578
+
+      // helper to find one item slot's screen coordinates
       def findOneItem(container: String, slot: String) =
-        extractItemInfoOpt(json, container, "contentsPanel", slot.replace("slot","item"))
+        extractItemInfoOpt(json, container, "contentsPanel", slot.replace("slot", "item"))
 
-      // 1) THROW OUT BIG STACKS (itemCount > 10)
-      val throwOpt: Option[(GameState, MKActions)] = for {
-        ci            <- (json \ "containersInfo").asOpt[JsObject]
-        (cname, cd)   <- ci.fields.toSeq
-        items         <- (cd \ "items").asOpt[JsObject]
-        (slot, it)    <- items.fields
-        id            <- (it \ "itemId").asOpt[Int]    if id == fishId
-        count         <- (it \ "itemCount").asOpt[Int] if count > 10
-        info          <- findOneItem(cname, slot)
-        x             =  (info \ "x").as[Int]
-        y             =  (info \ "y").as[Int]
-        // pick a drop target
-        target        <- {
+      val throwOpt: Option[(GameState, MKActions)] = (for {
+        // each of these is now a Seq[_]
+        ci        <- (json \ "containersInfo").asOpt[JsObject].toSeq
+        (cname, cd) <- ci.fields.toSeq
+        items     <- (cd \ "items").asOpt[JsObject].toSeq
+        (slot, it) <- items.fields.toSeq
+        id        <- (it \ "itemId").asOpt[Int].toSeq        if id == fishId
+        cnt       <- (it \ "itemCount").asOpt[Int].toSeq     if cnt > 10
+        info      <- findOneItem(cname, slot).toSeq
+        x = (info \ "x").as[Int]
+        y = (info \ "y").as[Int]
+
+        // build your target Seq[(Int,Int)] similarly
+        target    <- {
           val rects = settings.fishingSettings.fishThrowoutRectangles.toList
           if (rects.nonEmpty) {
             val rnd = scala.util.Random.shuffle(rects).head
             for {
-              tx <- (json \ "screenInfo" \ "mapPanelLoc" \ rnd \ "x").asOpt[Int]
-              ty <- (json \ "screenInfo" \ "mapPanelLoc" \ rnd \ "y").asOpt[Int]
+              tx <- (json \ "screenInfo" \ "mapPanelLoc" \ rnd \ "x").asOpt[Int].toSeq
+              ty <- (json \ "screenInfo" \ "mapPanelLoc" \ rnd \ "y").asOpt[Int].toSeq
             } yield (tx, ty)
           } else {
             for {
-              mp <- (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").asOpt[JsObject]
-              tx <- (mp   \ "x").asOpt[Int]
-              ty <- (mp   \ "y").asOpt[Int]
+              mp <- (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").asOpt[JsObject].toSeq
+              tx <- (mp   \ "x").asOpt[Int].toSeq
+              ty <- (mp   \ "y").asOpt[Int].toSeq
             } yield (tx, ty)
           }
         }
-        // check retry
-        if fishing.retryThroughoutFishesStatus == 0 ||
-          handleRetryStatusOption(fishing.retryThroughoutFishesStatus, fishing.retryAttemptsLong) == 0
       } yield {
         val (tx, ty) = target
         val seq = List(
@@ -152,31 +150,28 @@ object FishingFeature {
           LeftButtonPress(tx, ty),
           LeftButtonRelease(tx, ty)
         )
-        val newRetry = if (fishing.retryThroughoutFishesStatus == 0) 1
-        else handleRetryStatusOption(fishing.retryThroughoutFishesStatus, fishing.retryAttemptsLong)
-        val newFishing = fishing.copy(retryThroughoutFishesStatus = newRetry)
-        (state.copy(fishing = newFishing), MKActions(seq, Nil))
-      }
+        (state, MKActions(seq, Nil))
+      }).headOption
 
-      // helper to collect slots by predicate
-      def collectSlots(pred: JsObject => Boolean): List[(String,String)] =
+      // helper: collect slots by predicate
+      def collectSlots(pred: JsObject => Boolean): List[(String, String)] =
         (json \ "containersInfo").asOpt[JsObject].toList
           .flatMap(_.fields.toList)
           .flatMap { case (cname, cd) =>
             (cd \ "items").asOpt[JsObject].toList
               .flatMap(_.fields.collect {
-                case (slot, it) if pred(it.as[JsObject]) => (cname, slot)
+                case (slot, itObj: JsObject) if pred(itObj) => (cname, slot)
               })
           }
 
-      // 2) MERGE SINGLE FISHES (two slots with count==1)
+      // 2) MERGE TWO SINGLES (count == 1)
       val mergeSinglesOpt: Option[(GameState, MKActions)] = {
-        val singles = collectSlots(it =>
+        val singles = collectSlots { it =>
           (it \ "itemId").asOpt[Int].contains(fishId) &&
             (it \ "itemCount").asOpt[Int].contains(1)
-        )
+        }
         if (singles.size >= 2) {
-          val List((c1,s1),(c2,s2)) = singles.sortBy(_._2).take(2)
+          val List((c1, s1), (c2, s2)) = singles.sortBy(_._2).take(2)
           for {
             i1 <- findOneItem(c1, s1)
             i2 <- findOneItem(c2, s2)
@@ -189,27 +184,24 @@ object FishingFeature {
               MoveMouse(x2, y2),
               LeftButtonRelease(x2, y2)
             )
-            val newRetry = if (fishing.retryMergeFishStatus == 0) 1
-            else handleRetryStatus(fishing.retryMergeFishStatus, fishing.retryAttemptsLong)
-            val newFishing = fishing.copy(retryMergeFishStatus = newRetry)
-            (state.copy(fishing = newFishing), MKActions(seq, Nil))
+            (state, MKActions(seq, Nil))
           }
         } else None
       }
 
       // 3) MERGE SINGLE ONTO STACK
       val mergeOntoStackOpt: Option[(GameState, MKActions)] = {
-        val singles = collectSlots(it =>
+        val singles = collectSlots { it =>
           (it \ "itemId").asOpt[Int].contains(fishId) &&
             (it \ "itemCount").asOpt[Int].contains(1)
-        )
-        val stacks  = collectSlots(it =>
+        }
+        val stacks = collectSlots { it =>
           (it \ "itemId").asOpt[Int].contains(fishId) &&
-            (it \ "itemCount").asOpt[Int].exists(cnt => cnt > 1 && cnt < 100)
-        )
+            (it \ "itemCount").asOpt[Int].exists(c => c > 1 && c < 100)
+        }
         if (singles.size == 1 && stacks.nonEmpty) {
-          val (c1,s1) = singles.head
-          val (c2,s2) = stacks.head
+          val (c1, s1) = singles.head
+          val (c2, s2) = stacks.head
           for {
             i1 <- findOneItem(c1, s1)
             i2 <- findOneItem(c2, s2)
@@ -222,23 +214,19 @@ object FishingFeature {
               MoveMouse(x2, y2),
               LeftButtonRelease(x2, y2)
             )
-            val newRetry = if (fishing.retryMergeFishStatus == 0) 1
-            else handleRetryStatus(fishing.retryMergeFishStatus, fishing.retryAttemptsLong)
-            val newFishing = fishing.copy(retryMergeFishStatus = newRetry)
-            (state.copy(fishing = newFishing), MKActions(seq, Nil))
+            (state, MKActions(seq, Nil))
           }
         } else None
       }
 
       // 4) MERGE TWO STACKS
       val mergeStacksOpt: Option[(GameState, MKActions)] = {
-        val stacks = collectSlots(it =>
+        val stacks = collectSlots { it =>
           (it \ "itemId").asOpt[Int].contains(fishId) &&
-            (it \ "itemCount").asOpt[Int].exists(cnt => cnt > 1 && cnt < 100)
-        )
+            (it \ "itemCount").asOpt[Int].exists(c => c > 1 && c < 100)
+        }
         if (stacks.size >= 2) {
-          val List((c1,s1),(c2,s2)) =
-            stacks.sortBy { case (_, slot) => extractStackSize(slot) }.take(2)
+          val List((c1, s1), (c2, s2)) = stacks.sortBy(_._2).take(2)
           for {
             i1 <- findOneItem(c1, s1)
             i2 <- findOneItem(c2, s2)
@@ -251,21 +239,20 @@ object FishingFeature {
               MoveMouse(x2, y2),
               LeftButtonRelease(x2, y2)
             )
-            val newRetry = if (fishing.retryMergeFishStatus == 0) 1
-            else handleRetryStatus(fishing.retryMergeFishStatus, fishing.retryAttemptsLong)
-            val newFishing = fishing.copy(retryMergeFishStatus = newRetry)
-            (state.copy(fishing = newFishing), MKActions(seq, Nil))
+            (state, MKActions(seq, Nil))
           }
         } else None
       }
 
-      // chain in priority order
+      // stop at the first non‑empty
       throwOpt
         .orElse(mergeSinglesOpt)
         .orElse(mergeOntoStackOpt)
         .orElse(mergeStacksOpt)
     }
   }
+
+
 
 
   private object UseFishingRod extends Step {
@@ -289,245 +276,24 @@ object FishingFeature {
         val arrowsX = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "slot10" \ "x").asOpt[Int].getOrElse(0)
         val arrowsY = (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "slot10" \ "y").asOpt[Int].getOrElse(0)
 
-        val fishingState = state.fishing
+        // Always emit the same fishing‐rod sequence
+        val seq = List(
+          MoveMouse(arrowsX, arrowsY),
+          RightButtonPress(arrowsX, arrowsY),
+          RightButtonRelease(arrowsX, arrowsY),
+          MoveMouse(targetX,  targetY),
+          LeftButtonPress(targetX,  targetY),
+          LeftButtonRelease(targetX,  targetY)
+        )
 
-        // decide whether to cast or just update retry status
-        val (newRetryStatus, actions) =
-          if (fishingState.retryFishingStatus == 0) {
-            // first attempt → cast
-            val seq = List(
-              MoveMouse(arrowsX, arrowsY),
-              RightButtonPress(arrowsX, arrowsY),
-              RightButtonRelease(arrowsX, arrowsY),
-              MoveMouse(targetX,  targetY),
-              LeftButtonPress(targetX,  targetY),
-              LeftButtonRelease(targetX,  targetY)
-            )
-            (fishingState.retryFishingStatus + 1, seq)
-          } else {
-            // not first attempt → compute next status, no actions
-            val next = handleRetryStatus(
-              fishingState.retryFishingStatus,
-              fishingState.fishingRetryAttempts
-            )
-            (next, Nil)
-          }
-
-        // build new GameState with updated fishing substate
-        val newFishing = fishingState.copy(retryFishingStatus = newRetryStatus)
-        val newState   = state.copy(fishing = newFishing)
-
-        Some((newState, MKActions(actions, Nil)))
+        // State is unchanged; let your MouseActionManager queue or drop duplicates
+        Some((state, MKActions(seq, Nil)))
       } else {
-        // no tiles selected → skip
+        // no tiles selected → skip this step
         None
       }
     }
   }
 
 
-//
-//  def computeFishingFeature(
-//                             json: JsValue,
-//                             settingsRef: Ref[IO, UISettings],
-//                             stateRef: Ref[IO, GameState]
-//                           ): IO[(List[MouseAction], List[KeyboardAction])] = {
-//    val fishId = 3578
-//    for {
-//      settings <- settingsRef.get
-//      result <- {
-//        if (!settings.fishingSettings.enabled) {
-//          IO {
-//            println("Fishing disabled in computeFishingFeature")
-//            (List.empty[MouseAction], List.empty[KeyboardAction])
-//          }
-//        } else {
-//          stateRef.modify { state =>
-//            val now = System.currentTimeMillis()
-//
-//            extractOkButtonPosition(json) match {
-//              case Some((posX, posY)) =>
-//                val (updatedState, actions) = executePressOkButton(posX, posY, state, now)
-//                (updatedState, (actions, List.empty[KeyboardAction]))
-//
-//              case None =>
-//                var updatedState = state
-//                var actions: List[MouseAction] = List.empty
-//
-//                // Safely extract containersInfo as a JsObject if present
-//                (json \ "containersInfo").asOpt[JsObject].foreach { containersInfo =>
-//                  println("Iterate over containers to find single fish items")
-//
-//                  containersInfo.fields.foreach { case (containerName, containerDetails) =>
-//                    println(s"Checking container: $containerName")
-//                    (containerDetails \ "items").asOpt[JsObject].foreach { items =>
-//                      items.fields.foreach {
-//                        case (slot, itemDetails) =>
-//                          val itemId = (itemDetails \ "itemId").asOpt[Int]
-//                          val itemCount = (itemDetails \ "itemCount").asOpt[Int]
-//                          println(s"Checking item in slot $slot: itemId=$itemId, itemCount=$itemCount")
-//                          if (itemId.contains(fishId) && itemCount.exists(_ > 10)) {
-//                            val itemSlot = slot.replace("slot", "item")
-//                            extractItemInfoOpt(json, containerName, "contentsPanel", itemSlot).foreach { itemScreenInfo =>
-//                              val result = executeMoveFishToStack(json, settings, updatedState, now, itemScreenInfo)
-//                              updatedState = result._1
-//                              actions = result._2
-//                            }
-//                          }
-//                      }
-//                    }
-//                  }
-//                }
-//
-//                if (actions.nonEmpty)
-//                  (updatedState, (actions, List.empty[KeyboardAction]))
-//                else {
-//                  val fallback = executeFishing(json, settings, state, now)
-//                  (fallback._1, (fallback._2, List.empty[KeyboardAction]))
-//                }
-//            }
-//          }
-//        }
-//      }
-//    } yield result
-//  }
-//
-//  def executePressOkButton(
-//                            posX: Int,
-//                            posY: Int,
-//                            state: GameState,
-//                            now: Long
-//                          ): (GameState, List[MouseAction]) = {
-//    val retryDelay = state.fishing.lastFishingCommandSent
-//    val retryMidDelay = 3000
-//
-//    if (retryDelay == 0 || timeToRetry(retryDelay, retryMidDelay)) {
-//      val actions = List(
-//        MoveMouse(posX, posY),
-//        LeftButtonPress(posX, posY),
-//        LeftButtonRelease(posX, posY)
-//      )
-//
-//      val updatedGeneral = state.general.copy(
-//        lastActionCommand   = Some("pressOKButton"),
-//        lastActionTimestamp = Some(now)
-//      )
-//
-//      val updatedState = state.copy(
-//        general = updatedGeneral,
-//        fishing = state.fishing.copy(lastFishingCommandSent = now)
-//      )
-//
-//      (updatedState, actions)
-//    } else {
-//      println(s"Waiting to retry merging fishes. Time left: ${(retryMidDelay - (now - retryDelay)) / 1000}s left")
-//      (state, List.empty)
-//    }
-//  }
-//
-//  def executeMoveFishToStack(
-//                              json: JsValue,
-//                              settings: UISettings,
-//                              state: GameState,
-//                              now: Long,
-//                              itemScreenInfo: JsObject
-//                            ): (GameState, List[MouseAction]) = {
-//    val retryTime = state.fishing.lastFishingCommandSent
-//    val delay = 3000
-//
-//    if ((now - retryTime) < delay) {
-//      println(s"[MoveFish] Waiting to retry: ${(delay - (now - retryTime)) / 1000}s left")
-//      return (state, List.empty)
-//    }
-//
-//    val itemLocX = (itemScreenInfo \ "x").asOpt[Int].getOrElse(0)
-//    val itemLocY = (itemScreenInfo \ "y").asOpt[Int].getOrElse(0)
-//
-//    val (targetX, targetY) = settings.fishingSettings.fishThrowoutRectangles.headOption.flatMap { tileId =>
-//      for {
-//        tx <- (json \ "screenInfo" \ "mapPanelLoc" \ tileId \ "x").asOpt[Int]
-//        ty <- (json \ "screenInfo" \ "mapPanelLoc" \ tileId \ "y").asOpt[Int]
-//      } yield (tx, ty)
-//    }.getOrElse {
-//      val charLoc = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").head.as[JsObject]
-//      val x = (charLoc \ "x").as[Int]
-//      val y = (charLoc \ "y").as[Int]
-//      (x, y)
-//    }
-//
-//    val actions = List(
-//      MoveMouse(itemLocX, itemLocY),
-//      LeftButtonPress(itemLocX, itemLocY),
-//      MoveMouse(targetX, targetY),
-//      LeftButtonRelease(targetX, targetY)
-//    )
-//
-//    val updatedGeneral = state.general.copy(
-//      lastActionCommand   = Some("moveFishToStack"),
-//      lastActionTimestamp = Some(now)
-//    )
-//
-//
-//    val updatedState = state.copy(
-//      general = updatedGeneral,
-//      fishing = state.fishing.copy(lastFishingCommandSent = now)
-//    )
-//
-//    (updatedState, actions)
-//  }
-//
-//  def executeFishing(
-//                      json: JsValue,
-//                      settings: UISettings,
-//                      state: GameState,
-//                      now: Long
-//                    ): (GameState, List[MouseAction]) = {
-//    val retryTime = state.fishing.lastFishingCommandSent
-//    val delay = 3000
-//
-//    val maybeRodXY = for {
-//      x <- (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "slot10" \ "x").asOpt[Int]
-//      y <- (json \ "screenInfo" \ "inventoryPanelLoc" \ "inventoryWindow" \ "contentsPanel" \ "slot10" \ "y").asOpt[Int]
-//    } yield (x, y)
-//
-//    val maybeTileXY = settings.fishingSettings.selectedRectangles.headOption.flatMap { tileId =>
-//      for {
-//        x <- (json \ "screenInfo" \ "mapPanelLoc" \ tileId \ "x").asOpt[Int]
-//        y <- (json \ "screenInfo" \ "mapPanelLoc" \ tileId \ "y").asOpt[Int]
-//      } yield (x, y)
-//    }
-//
-//    (maybeRodXY, maybeTileXY) match {
-//      case (Some((rodX, rodY)), Some((tileX, tileY))) if (now - retryTime) > delay =>
-//        val castActions = List(
-//          MoveMouse(rodX, rodY),
-//          RightButtonPress(rodX, rodY),
-//          RightButtonRelease(rodX, rodY),
-//          MoveMouse(tileX, tileY),
-//          LeftButtonPress(tileX, tileY),
-//          LeftButtonRelease(tileX, tileY)
-//        )
-//
-//        val updatedGeneral = state.general.copy(
-//          lastActionCommand   = Some("fishingCast"),
-//          lastActionTimestamp = Some(now)
-//        )
-//
-//        val updatedState = state.copy(
-//          general = updatedGeneral,
-//          fishing = state.fishing.copy(lastFishingCommandSent = now)
-//        )
-//
-//        (updatedState, castActions)
-//
-//
-//      case (Some(_), Some(_)) =>
-//        println(s"[Fishing] Waiting to retry: ${(delay - (now - retryTime)) / 1000}s left")
-//        (state, List.empty)
-//
-//      case _ =>
-//        println("[Fishing] Rod or tile missing")
-//        (state, List.empty)
-//    }
-//  }
 }

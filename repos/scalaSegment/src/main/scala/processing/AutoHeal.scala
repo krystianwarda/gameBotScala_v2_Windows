@@ -5,7 +5,7 @@ import play.api.libs.json.{JsValue, Json}
 import utils.SettingsUtils.UISettings
 import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, MouseUtils, MouseMoveCommand, MouseMovementSettings}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
-import processing.Process.{findItemInContainerSlot14, generateRandomDelay}
+import processing.Process.generateRandomDelay
 import utils.{ProcessorState, SettingsUtils}
 import utils.consoleColorPrint._
 
@@ -161,19 +161,19 @@ object AutoHeal {
               val targetX = (mapTarget \ "x").as[Int]
               val targetY = (mapTarget \ "y").as[Int]
 
-              findItemInContainerSlot14(json, updatedState, 3160, 1).headOption.map { runePosition =>
-                val runeX = (runePosition \ "x").as[Int]
-                val runeY = (runePosition \ "y").as[Int]
-
-                var actionsSeq = Seq(
-                  MouseAction(runeX, runeY, "move"),
-                  MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
-                  MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
-                  MouseAction(targetX, targetY, "move") // Move to target position
-                )
-                actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
-                updatedState = updatedState.copy(healingCrosshairActive=true)
-              }
+//              findItemInContainerSlot14Old(json, updatedState, 3160, 1).headOption.map { runePosition =>
+//                val runeX = 0
+//                val runeY = 0
+//
+//                var actionsSeq = Seq(
+//                  MouseAction(runeX, runeY, "move"),
+//                  MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
+//                  MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
+//                  MouseAction(targetX, targetY, "move") // Move to target position
+//                )
+//                actions = actions :+ FakeAction("useMouse", None, Some(MouseActions(actionsSeq)))
+//                updatedState = updatedState.copy(healingCrosshairActive=true)
+//              }
             }
           }
         }
@@ -236,63 +236,63 @@ object AutoHeal {
 
 
           logs = logs :+ Log("use UH with mouse")
-          findItemInContainerSlot14(json, updatedState, 3160, 1).foreach { runePosition =>
-            val runeX = (runePosition \ "x").as[Int]
-            val runeY = (runePosition \ "y").as[Int]
-
-            // Extracting target position from the mapPanelLoc in the JSON
-            val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
-            val targetX = (mapTarget \ "x").as[Int]
-            val targetY = (mapTarget \ "y").as[Int]
-
-            if (currentTime - updatedState.lastHealUseTime  > (updatedState.healingUseCooldown + updatedState.healUseRandomness)) {
-              printInColor(ANSI_RED, f"[DEBUG] HEAL")
-
-
-
-              var actionsSeq = Seq.empty[MouseAction] // Initialize the outer actionsSeq variable
-
-              if (updatedState.healingCrosshairActive) {
-                println("healing with single click. crosshair active")
-                actionsSeq = Seq( // Remove 'var' to update the outer actionsSeq
-                  MouseAction(targetX, targetY, "move"), // Move to target position
-                  MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
-                  MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
-                )
-              } else {
-                println("Crosshair not active. need to find uh in bp")
-                actionsSeq = Seq( // Remove 'var' to update the outer actionsSeq
-                  MouseAction(runeX, runeY, "move"),
-                  MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
-                  MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
-                  MouseAction(targetX, targetY, "move"), // Move to target position
-                  MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
-                  MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
-                )
-              }
-
-              // Update the last healing time right after scheduling the action
-              println("healing state updated")
-              // Update the last healing time right after scheduling the action
-              updatedState = updatedState.copy(lastHealingTime = updatedState.currentTime, stateHealingWithRune = "healing")
-
-              // Now actionsSeq should contain the correct sequence of actions
-
-              actions = actions :+ FakeAction("useMouse", Some(ItemInfo(3160, None)), Some(MouseActions(actionsSeq)))
-
-//                logs = logs :+ Log(s"Using item 3160 at position ($runeX, $runeY) - Actions: $actionsSeq")
-
-
-              val newHealUseRandomness = generateRandomDelay(updatedState.highHealUseTimeRange)
-
-              updatedState = updatedState.copy(
-                lastHealUseTime = currentTime,
-                healUseRandomness = newHealUseRandomness,
-              )
-            } else {
-              println("Healing cannot be useed yet due to cooldown.")
-            }
-          }
+//          findItemInContainerSlot14Old(json, updatedState, 3160, 1).foreach { runePosition =>
+//            val runeX = (runePosition \ "x").as[Int]
+//            val runeY = (runePosition \ "y").as[Int]
+//
+//            // Extracting target position from the mapPanelLoc in the JSON
+//            val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
+//            val targetX = (mapTarget \ "x").as[Int]
+//            val targetY = (mapTarget \ "y").as[Int]
+//
+//            if (currentTime - updatedState.lastHealUseTime  > (updatedState.healingUseCooldown + updatedState.healUseRandomness)) {
+//              printInColor(ANSI_RED, f"[DEBUG] HEAL")
+//
+//
+//
+//              var actionsSeq = Seq.empty[MouseAction] // Initialize the outer actionsSeq variable
+//
+//              if (updatedState.healingCrosshairActive) {
+//                println("healing with single click. crosshair active")
+//                actionsSeq = Seq( // Remove 'var' to update the outer actionsSeq
+//                  MouseAction(targetX, targetY, "move"), // Move to target position
+//                  MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
+//                  MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
+//                )
+//              } else {
+//                println("Crosshair not active. need to find uh in bp")
+//                actionsSeq = Seq( // Remove 'var' to update the outer actionsSeq
+//                  MouseAction(runeX, runeY, "move"),
+//                  MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
+//                  MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
+//                  MouseAction(targetX, targetY, "move"), // Move to target position
+//                  MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
+//                  MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
+//                )
+//              }
+//
+//              // Update the last healing time right after scheduling the action
+//              println("healing state updated")
+//              // Update the last healing time right after scheduling the action
+//              updatedState = updatedState.copy(lastHealingTime = updatedState.currentTime, stateHealingWithRune = "healing")
+//
+//              // Now actionsSeq should contain the correct sequence of actions
+//
+//              actions = actions :+ FakeAction("useMouse", Some(ItemInfo(3160, None)), Some(MouseActions(actionsSeq)))
+//
+////                logs = logs :+ Log(s"Using item 3160 at position ($runeX, $runeY) - Actions: $actionsSeq")
+//
+//
+//              val newHealUseRandomness = generateRandomDelay(updatedState.highHealUseTimeRange)
+//
+//              updatedState = updatedState.copy(
+//                lastHealUseTime = currentTime,
+//                healUseRandomness = newHealUseRandomness,
+//              )
+//            } else {
+//              println("Healing cannot be useed yet due to cooldown.")
+//            }
+//          }
         }
 
         // IH RUNE 3152
@@ -301,27 +301,27 @@ object AutoHeal {
 //          if (settings.mouseMovements) {
 
           logs = logs :+ Log("use IH with mouse")
-          findItemInContainerSlot14(json, updatedState, 3152, 1).foreach { runePosition =>
-            val runeX = (runePosition \ "x").as[Int]
-            val runeY = (runePosition \ "y").as[Int]
-
-            // Extracting target position from the mapPanelLoc in the JSON
-            val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
-            val targetX = (mapTarget \ "x").as[Int]
-            val targetY = (mapTarget \ "y").as[Int]
-
-            val actionsSeq = Seq(
-              MouseAction(runeX, runeY, "move"),
-              MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
-              MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
-              MouseAction(targetX, targetY, "move"), // Move to target position
-              MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
-              MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
-            )
-            actions = actions :+ FakeAction("useMouse", Some(ItemInfo(3152, None)), Some(MouseActions(actionsSeq)))
-            logs = logs :+ Log(s"Using item 3152 at position ($runeX, $runeY) - Actions: $actionsSeq")
-
-          }
+//          findItemInContainerSlot14Old(json, updatedState, 3152, 1).foreach { runePosition =>
+//            val runeX = (runePosition \ "x").as[Int]
+//            val runeY = (runePosition \ "y").as[Int]
+//
+//            // Extracting target position from the mapPanelLoc in the JSON
+//            val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
+//            val targetX = (mapTarget \ "x").as[Int]
+//            val targetY = (mapTarget \ "y").as[Int]
+//
+//            val actionsSeq = Seq(
+//              MouseAction(runeX, runeY, "move"),
+//              MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
+//              MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
+//              MouseAction(targetX, targetY, "move"), // Move to target position
+//              MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
+//              MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
+//            )
+//            actions = actions :+ FakeAction("useMouse", Some(ItemInfo(3152, None)), Some(MouseActions(actionsSeq)))
+//            logs = logs :+ Log(s"Using item 3152 at position ($runeX, $runeY) - Actions: $actionsSeq")
+//
+//          }
 //          } else {
 //            logs = logs :+ Log("use IH with function")
 //            actions = actions :+ FakeAction("useOnYourselfFunction", Some(ItemInfo(3152, None)), None)
@@ -333,27 +333,27 @@ object AutoHeal {
 //          logs = logs :+ Log("I need to use HP!")
 //          if (settings.mouseMovements) {
           logs = logs :+ Log("use HP with mouse")
-          findItemInContainerSlot14(json, updatedState, 2874, 10).foreach { runePosition =>
-            val runeX = (runePosition \ "x").as[Int]
-            val runeY = (runePosition \ "y").as[Int]
-
-            // Extracting target position from the mapPanelLoc in the JSON
-            val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
-            val targetX = (mapTarget \ "x").as[Int]
-            val targetY = (mapTarget \ "y").as[Int]
-
-            val actionsSeq = Seq(
-              MouseAction(runeX, runeY, "move"),
-              MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
-              MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
-              MouseAction(targetX, targetY, "move"), // Move to target position
-              MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
-              MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
-            )
-            // Assuming ActionDetail can wrap mouse actions
-            actions = actions :+ FakeAction("useMouse", Some(ItemInfo(2874, Option(10))), Some(MouseActions(actionsSeq)))
-            logs = logs :+ Log(s"Using item 2874, Option(10) at position ($runeX, $runeY) - Actions: $actionsSeq")
-          }
+//          findItemInContainerSlot14Old(json, updatedState, 2874, 10).foreach { runePosition =>
+//            val runeX = (runePosition \ "x").as[Int]
+//            val runeY = (runePosition \ "y").as[Int]
+//
+//            // Extracting target position from the mapPanelLoc in the JSON
+//            val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
+//            val targetX = (mapTarget \ "x").as[Int]
+//            val targetY = (mapTarget \ "y").as[Int]
+//
+//            val actionsSeq = Seq(
+//              MouseAction(runeX, runeY, "move"),
+//              MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
+//              MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
+//              MouseAction(targetX, targetY, "move"), // Move to target position
+//              MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
+//              MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
+//            )
+//            // Assuming ActionDetail can wrap mouse actions
+//            actions = actions :+ FakeAction("useMouse", Some(ItemInfo(2874, Option(10))), Some(MouseActions(actionsSeq)))
+//            logs = logs :+ Log(s"Using item 2874, Option(10) at position ($runeX, $runeY) - Actions: $actionsSeq")
+//          }
 //          } else {
 //            logs = logs :+ Log("use HP with function")
 //            actions = actions :+ FakeAction("useOnYourselfFunction", Some(ItemInfo(2874, Option(10))), None)
@@ -365,27 +365,27 @@ object AutoHeal {
 //          logs = logs :+ Log("I need to use MP!")
 //          if (settings.mouseMovements) {
           logs = logs :+ Log("use MP with mouse")
-          findItemInContainerSlot14(json, updatedState, 2874, 7).foreach { runePosition =>
-            val runeX = (runePosition \ "x").as[Int]
-            val runeY = (runePosition \ "y").as[Int]
-
-            // Extracting target position from the mapPanelLoc in the JSON
-            val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
-            val targetX = (mapTarget \ "x").as[Int]
-            val targetY = (mapTarget \ "y").as[Int]
-
-            val actionsSeq = Seq(
-              MouseAction(runeX, runeY, "move"),
-              MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
-              MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
-              MouseAction(targetX, targetY, "move"), // Move to target position
-              MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
-              MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
-            )
-
-            actions = actions :+ FakeAction("useMouse", Some(ItemInfo(2874, Option(7))), Some(MouseActions(actionsSeq)))
-            logs = logs :+ Log(s"Using item 2874, Option(7) at position ($runeX, $runeY) - Actions: $actionsSeq")
-          }
+//          findItemInContainerSlot14Old(json, updatedState, 2874, 7).foreach { runePosition =>
+//            val runeX = (runePosition \ "x").as[Int]
+//            val runeY = (runePosition \ "y").as[Int]
+//
+//            // Extracting target position from the mapPanelLoc in the JSON
+//            val mapTarget = (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").as[JsObject]
+//            val targetX = (mapTarget \ "x").as[Int]
+//            val targetY = (mapTarget \ "y").as[Int]
+//
+//            val actionsSeq = Seq(
+//              MouseAction(runeX, runeY, "move"),
+//              MouseAction(runeX, runeY, "pressRight"), // Right-click on the rune
+//              MouseAction(runeX, runeY, "releaseRight"), // Release right-click on the rune
+//              MouseAction(targetX, targetY, "move"), // Move to target position
+//              MouseAction(targetX, targetY, "pressLeft"), // Press left at target position
+//              MouseAction(targetX, targetY, "releaseLeft") // Release left at target position
+//            )
+//
+//            actions = actions :+ FakeAction("useMouse", Some(ItemInfo(2874, Option(7))), Some(MouseActions(actionsSeq)))
+//            logs = logs :+ Log(s"Using item 2874, Option(7) at position ($runeX, $runeY) - Actions: $actionsSeq")
+//          }
 //          } else {
 //            logs = logs :+ Log("use MP with function")
 //            actions = actions :+ FakeAction("useOnYourselfFunction", Some(ItemInfo(2874, Option(7))), None)

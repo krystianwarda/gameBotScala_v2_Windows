@@ -111,6 +111,48 @@ object Process {
     println(s"Result: $result") // Debugging log
     result
   }
+//
+//  def findItemInContainerSlot14Old(json: JsValue, updatedState: ProcessorState, itemId: Int, itemSubType: Int): Option[JsObject] = {
+//    // Access the specific container information using updatedState
+//    val containerInfo = (json \ "containersInfo" \ updatedState.healingRuneContainerName).as[JsObject]
+//    println(s"Container Info: $containerInfo") // Log the container information for debugging
+//
+//    //    val screenInfoPath = (json \ "screenInfo" \ "inventoryPanelLoc" \ updatedState.uhRuneContainerName \ "contentsPanel").as[JsObject]
+//    val inventoryPanelLoc = (json \ "screenInfo" \ "inventoryPanelLoc").as[JsObject]
+//    val containerKey = inventoryPanelLoc.keys.find(_.contains(updatedState.healingRuneContainerName)).getOrElse("")
+//    val containerScreenInfo = (inventoryPanelLoc \ containerKey \ "contentsPanel").as[JsObject]
+//
+//
+//    // Iterate over slots 1 to 4 to find the item
+//    val itemInContainer = (0 until 4).flatMap { slotIndex =>
+//      (containerInfo \ "items" \ s"slot$slotIndex").asOpt[JsObject].flatMap { slotValue =>
+//        for {
+//          id <- (slotValue \ "itemId").asOpt[Int]
+//          subType <- (slotValue \ "itemSubType").asOpt[Int] if id == itemId && subType == itemSubType
+//        } yield {
+//          println(s"Found in container slot $slotIndex: $slotValue") // Log for debugging
+//          slotValue
+//        }
+//      }
+//    }.headOption
+//
+//    println(s"Item in Container: $itemInContainer") // Debugging log
+//
+//    // If the item exists in containerInfo, then look for its screen position in screenInfo
+//    val result = itemInContainer.flatMap { _ =>
+//      // Direct mapping of slot index to screen position based on the assumption slot indexes directly correlate
+//      (0 until 4).flatMap { slotIndex =>
+//        containerScreenInfo.fields.collectFirst {
+//          case (itemName, itemPos) if itemName.endsWith(s"item$slotIndex") =>
+//            Json.obj("x" -> (itemPos \ "x").as[Int], "y" -> (itemPos \ "y").as[Int])
+//        }
+//      }.headOption
+//    }
+//
+//    println(s"Result: $result") // Debugging log
+//    result
+//  }
+
   def detectPlayersAndMonsters(json: JsValue): Boolean = {
     val currentCharName = (json \ "characterInfo" \ "Name").as[String]
     val spyLevelInfo = (json \ "spyLevelInfo").as[JsObject]
@@ -205,6 +247,8 @@ object Process {
       case _ => None // No 'extraWindowLoc' or it's not an object
     }
   }
+
+
 
   def handleRetryStatus(currentRetryStatus: Int, retryAttemptsMid: Int): Int = {
     if (currentRetryStatus >= retryAttemptsMid) {
