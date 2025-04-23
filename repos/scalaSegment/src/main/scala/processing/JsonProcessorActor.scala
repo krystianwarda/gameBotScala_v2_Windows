@@ -273,21 +273,21 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
   }
 
 
-//  def performAutoHealing(json: JsValue, currentState: ProcessorState): ProcessorState = {
-//    val currentTime = System.currentTimeMillis()
-//    currentState.settings.flatMap { settings =>
-//      if (settings.healingSettings.enabled && currentTime - currentState.lastSpellCastTime >= 1000) {
-//        //        println("Performing healing action.")
-//
-//        val ((actions, logs), updatedState) = computeHealingActions(json, settings, currentState)
-//        // Execute actions and logs if necessary
-//        executeActionsAndLogsNew(actions, logs, Some(settings), Some("autohealing"))
-//
-//        // Return the updated state from computeCaveBotActions, wrapped in an Option
-//        Some(updatedState)
-//      } else None // Here, None is explicitly an Option[ProcessorState], matching the expected return type
-//    }.getOrElse(currentState) // If the settings flatMap results in None, return the original currentState
-//  }
+  def performAutoHealing(json: JsValue, currentState: ProcessorState): ProcessorState = {
+    val currentTime = System.currentTimeMillis()
+    currentState.settings.flatMap { settings =>
+      if (settings.healingSettings.enabled && currentTime - currentState.lastSpellCastTime >= 1000) {
+                println("Performing healing action.")
+
+        val ((actions, logs), updatedState) = computeHealingActions(json, settings, currentState)
+        // Execute actions and logs if necessary
+        executeActionsAndLogsNew(actions, logs, Some(settings), Some("autohealing"))
+
+        // Return the updated state from computeCaveBotActions, wrapped in an Option
+        Some(updatedState)
+      } else None // Here, None is explicitly an Option[ProcessorState], matching the expected return type
+    }.getOrElse(currentState) // If the settings flatMap results in None, return the original currentState
+  }
 
 
   def performAutoLoot(json: JsValue, currentState: ProcessorState): ProcessorState = {

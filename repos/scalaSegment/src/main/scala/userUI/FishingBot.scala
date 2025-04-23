@@ -12,6 +12,7 @@ import java.awt.event._
 import scala.swing.MenuBar.NoMenuBar.reactions
 import scala.swing._
 import scala.swing.event.{ButtonClicked, SelectionChanged}
+import cats.effect.unsafe.implicits.global
 
 
 // Ensure RectangleSettings is defined as a case class with parameters
@@ -167,19 +168,12 @@ class FishingBot(uiAppActor: ActorRef, jsonProcessorActor: ActorRef, settingsRef
 
       println(s"Selected rectangles for mode [$currentMode]: $markedRectangleIds")
 
-      // ✅ Update shared UISettings directly with current selection
-      import cats.effect.unsafe.implicits.global
+
       settingsRef.update { old =>
+        val fs = old.fishingSettings
         val updatedFishing = currentMode match {
-          case "Selected" =>
-            old.fishingSettings.copy(
-              selectedRectangles = markedRectangleIds.toList,
-              enabled = true // ✅ turn on fishing when selected tiles are updated
-            )
-          case "Throwout" =>
-            old.fishingSettings.copy(
-              fishThrowoutRectangles = markedRectangleIds.toList
-            )
+          case "Selected"  => fs.copy(selectedRectangles     = markedRectangleIds.toList)
+          case "Throwout"  => fs.copy(fishThrowoutRectangles = markedRectangleIds.toList)
         }
         old.copy(fishingSettings = updatedFishing)
       }.unsafeRunSync()

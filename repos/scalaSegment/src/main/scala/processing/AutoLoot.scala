@@ -353,8 +353,8 @@ object AutoLoot {
     var logs: Seq[Log] = Seq.empty
     var updatedState = currentState
 
-    // Convert tiles from carsassToLootImmediately and carsassToLootAfterFight to grid format, excluding those not in mapPanelLoc
-    val excludedTilesGrid = (updatedState.autoloot.carsassToLootImmediately ++ updatedState.autoloot.carsassToLootAfterFight)
+    // Convert tiles from carcassToLootImmediately and carcassToLootAfterFight to grid format, excluding those not in mapPanelLoc
+    val excludedTilesGrid = (updatedState.autoloot.carcassToLootImmediately ++ updatedState.autoloot.carcassToLootAfterFight)
       .flatMap { case (tileId, _) => convertGameLocationToGrid(json, tileId) }.toSet
 
     // Get the item's screen position, ID, and count
@@ -679,8 +679,8 @@ object AutoLoot {
     var updatedState = currentState
     val currentTime = System.currentTimeMillis()
 
-    println(s"carsassToLootImmediately: ${updatedState.autoloot.carsassToLootImmediately}")
-    println(s"carsassToLootAfterFight: ${updatedState.autoloot.carsassToLootAfterFight}")
+    println(s"carcassToLootImmediately: ${updatedState.autoloot.carcassToLootImmediately}")
+    println(s"carcassToLootAfterFight: ${updatedState.autoloot.carcassToLootAfterFight}")
     // Calculate time since the last auto-loot action
     val timeSinceLastAction = currentTime - updatedState.autoloot.lastAutoLootAction
 
@@ -689,8 +689,8 @@ object AutoLoot {
       return ProcessResult(actions, logs, updatedState)
     }
 
-    // Convert tiles from carsassToLootImmediately and carsassToLootAfterFight to grid format
-    val excludedTilesGrid = (updatedState.autoloot.carsassToLootImmediately ++ updatedState.autoloot.carsassToLootAfterFight)
+    // Convert tiles from carcassToLootImmediately and carcassToLootAfterFight to grid format
+    val excludedTilesGrid = (updatedState.autoloot.carcassToLootImmediately ++ updatedState.autoloot.carcassToLootAfterFight)
       .flatMap { case (tileId, _) => convertGameLocationToGrid(json, tileId) }.toSet
 
     // Use lastLootedCarcassTile for the carcass to move
@@ -1020,8 +1020,8 @@ object AutoLoot {
     var logs: Seq[Log] = Seq.empty
     var updatedState = currentState
 
-    println(s"carsassToLootImmediately: ${updatedState.autoloot.carsassToLootImmediately}.")
-    println(s"carsassToLootAfterFight: ${updatedState.autoloot.carsassToLootAfterFight}.")
+    println(s"carcassToLootImmediately: ${updatedState.autoloot.carcassToLootImmediately}.")
+    println(s"carcassToLootAfterFight: ${updatedState.autoloot.carcassToLootAfterFight}.")
 
     // Check if there is a carcass tile to loot
     updatedState.autoloot.carcassTileToLoot match {
@@ -1086,28 +1086,28 @@ object AutoLoot {
     val battleShootableCreaturesList = getBattleShootableCreaturesList(json)
     println(s"battleShootableCreaturesList: $battleShootableCreaturesList")
 
-    // Check if carsassToLootImmediately is non-empty and proceed with immediate looting
-    if (updatedState.autoloot.carsassToLootImmediately.nonEmpty) {
+    // Check if carcassToLootImmediately is non-empty and proceed with immediate looting
+    if (updatedState.autoloot.carcassToLootImmediately.nonEmpty) {
 
       // Sort carcass by character proximity if there are multiple carcasses
-      if (updatedState.autoloot.carsassToLootImmediately.length > 1) {
+      if (updatedState.autoloot.carcassToLootImmediately.length > 1) {
 
         updatedState = updatedState.copy(
           autoloot = updatedState.autoloot.copy(
-            carsassToLootImmediately = sortTileListByCharacterProximity(json, updatedState.autoloot.carsassToLootImmediately)
+            carcassToLootImmediately = sortTileListByCharacterProximity(json, updatedState.autoloot.carcassToLootImmediately)
           )
         )
       }
 
       // Get the unique carcass and time from the sorted list
-      val (carcassToLoot, timeOfDeath) = updatedState.autoloot.carsassToLootImmediately.head
+      val (carcassToLoot, timeOfDeath) = updatedState.autoloot.carcassToLootImmediately.head
 
       logs = logs :+ Log(s"Looting immediately. Carcass to loot: $carcassToLoot, Time: $timeOfDeath")
 
       updatedState = updatedState.copy(
         autoloot = updatedState.autoloot.copy(
           carcassTileToLoot = Some((carcassToLoot, timeOfDeath)),
-          carsassToLootImmediately = updatedState.autoloot.carsassToLootImmediately.tail // Remove the looted carcass
+          carcassToLootImmediately = updatedState.autoloot.carcassToLootImmediately.tail // Remove the looted carcass
         ),
         cavebot = updatedState.cavebot.copy(
           stateHunting = "looting in progress",
@@ -1115,31 +1115,31 @@ object AutoLoot {
       )
     }
 
-    // Check if carsassToLootAfterFight is non-empty and it is safe to loot
-    else if (updatedState.autoloot.carsassToLootAfterFight.nonEmpty && battleShootableCreaturesList.isEmpty) {
+    // Check if carcassToLootAfterFight is non-empty and it is safe to loot
+    else if (updatedState.autoloot.carcassToLootAfterFight.nonEmpty && battleShootableCreaturesList.isEmpty) {
 
       // Sort carcass by character proximity if there are multiple carcasses
-      if (updatedState.autoloot.carsassToLootAfterFight.length > 1) {
+      if (updatedState.autoloot.carcassToLootAfterFight.length > 1) {
         updatedState = updatedState.copy(
 
         )
 
         updatedState = updatedState.copy(
           autoloot = updatedState.autoloot.copy(
-            carsassToLootAfterFight = sortTileListByCharacterProximity(json, updatedState.autoloot.carsassToLootAfterFight)
+            carcassToLootAfterFight = sortTileListByCharacterProximity(json, updatedState.autoloot.carcassToLootAfterFight)
           )
         )
       }
 
       // Get the unique carcass and time from the sorted list
-      val (carcassToLoot, timeOfDeath) = updatedState.autoloot.carsassToLootAfterFight.head
+      val (carcassToLoot, timeOfDeath) = updatedState.autoloot.carcassToLootAfterFight.head
 
       logs = logs :+ Log(s"Looting after fight. Carcass to loot: $carcassToLoot, Time: $timeOfDeath")
 
       updatedState = updatedState.copy(
         autoloot = updatedState.autoloot.copy(
           carcassTileToLoot = Some((carcassToLoot, timeOfDeath)),
-          carsassToLootAfterFight = updatedState.autoloot.carsassToLootAfterFight.tail // Remove the looted carcass
+          carcassToLootAfterFight = updatedState.autoloot.carcassToLootAfterFight.tail // Remove the looted carcass
         ),
         cavebot = updatedState.cavebot.copy(
           stateHunting = "looting in progress",
@@ -1286,22 +1286,22 @@ object AutoLoot {
             val carcassEntry = (mainIndex, currentTime)
 
             if (creatureSettings.lootMonsterImmediately) {
-              // Add the carcass index and time to carsassToLootImmediately
+              // Add the carcass index and time to carcassToLootImmediately
               logs = logs :+ Log(s"$creatureName will be looted immediately at position ($creaturePosX, $creaturePosY, $creaturePosZ).")
 
               updatedState = updatedState.copy(
                 autoloot = updatedState.autoloot.copy(
-                  carsassToLootImmediately = updatedState.autoloot.carsassToLootImmediately :+ carcassEntry
+                  carcassToLootImmediately = updatedState.autoloot.carcassToLootImmediately :+ carcassEntry
                 )
               )
 
             } else if (creatureSettings.lootMonsterAfterFight) {
-              // Add the carcass index and time to carsassToLootAfterFight
+              // Add the carcass index and time to carcassToLootAfterFight
               logs = logs :+ Log(s"$creatureName will be looted after the fight at position ($creaturePosX, $creaturePosY, $creaturePosZ).")
 
               updatedState = updatedState.copy(
                 autoloot = updatedState.autoloot.copy(
-                  carsassToLootAfterFight = updatedState.autoloot.carsassToLootAfterFight :+ carcassEntry
+                  carcassToLootAfterFight = updatedState.autoloot.carcassToLootAfterFight :+ carcassEntry
                 )
               )
 

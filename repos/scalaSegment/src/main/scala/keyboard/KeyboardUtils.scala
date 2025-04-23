@@ -120,15 +120,34 @@ object KeyboardUtils {
   private def immediateReleaseFromDirection(direction: String): Boolean =
     direction.contains("Single")
 
+  // Lookup common keys, including all function keys and fallback
   def getKeyCodeForKey(key: String): Int = key.toUpperCase match {
     case "TAB"    => KeyEvent.VK_TAB
     case "CTRL"   => KeyEvent.VK_CONTROL
-    case "E"      => KeyEvent.VK_E
-    case "O"      => KeyEvent.VK_O
-    case "SHIFT"  => KeyEvent.VK_SHIFT
     case "ALT"    => KeyEvent.VK_ALT
+    case "SHIFT"  => KeyEvent.VK_SHIFT
     case "ENTER"  => KeyEvent.VK_ENTER
-//    case _        => KeyEvent.getExtendedKeyCodeForChar(key.headOption.getOrElse('?'))
+    case "SPACE"  => KeyEvent.VK_SPACE
+    // F1–F12
+    case "F1"     => KeyEvent.VK_F1
+    case "F2"     => KeyEvent.VK_F2
+    case "F3"     => KeyEvent.VK_F3
+    case "F4"     => KeyEvent.VK_F4
+    case "F5"     => KeyEvent.VK_F5
+    case "F6"     => KeyEvent.VK_F6
+    case "F7"     => KeyEvent.VK_F7
+    case "F8"     => KeyEvent.VK_F8
+    case "F9"     => KeyEvent.VK_F9
+    case "F10"    => KeyEvent.VK_F10
+    case "F11"    => KeyEvent.VK_F11
+    case "F12"    => KeyEvent.VK_F12
+    // Single character fallback
+    case s if s.length == 1 =>
+      val code = KeyEvent.getExtendedKeyCodeForChar(s.charAt(0))
+      if (code == KeyEvent.VK_UNDEFINED) KeyEvent.VK_UNDEFINED else code
+    case other =>
+      println(s"[WARNING] Unrecognized key '$other', defaulting to VK_UNDEFINED")
+      KeyEvent.VK_UNDEFINED
   }
 
   private def pressKeyUsingJNA(keyCode: Int): Unit = {

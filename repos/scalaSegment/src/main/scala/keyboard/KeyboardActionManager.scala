@@ -42,14 +42,12 @@ class KeyboardActionManager(
       _ <- queueRef.update(_ :+ action)
     } yield ()
 
-  def enqueueTask(actions: List[KeyboardAction], allowOverlap: Boolean = false): IO[Unit] = {
+  def enqueueTask(actions: List[KeyboardAction], allowOverlap: Boolean = false): IO[Unit] =
     for {
       inProgress <- taskInProgressRef.get
-      _ <- if (inProgress && !allowOverlap) IO(println("🟡 Task already in progress, skipping..."))
+      _ <- if (inProgress && !allowOverlap) IO.println("🟡 Task already in progress, skipping...")
       else actions.traverse_(enqueue)
     } yield ()
-  }
-
 
   private def pressAndReleaseKey(keyCode: Int): IO[Unit] =
     IO.blocking {
@@ -65,17 +63,16 @@ class KeyboardActionManager(
       else pressAndReleaseKey(keyCode)
     }.sequence_ *> pressAndReleaseKey(KeyEvent.VK_ENTER)
 
+
   private def executeAction(action: KeyboardAction): IO[Unit] = action match {
     case PressKey(code) =>
-      // direct execution using internal helpers
       pressAndReleaseKey(code) *> IO.sleep(50.millis)
-
     case TextType(text) =>
       typeString(text)
   }
 
 
-  def startProcessing: Stream[IO, Unit] = {
+  def startProcessing: Stream[IO, Unit] =
     Stream.awakeEvery[IO](10.millis).evalMap { _ =>
       queueRef.modify {
         case head :: tail => (tail, Some(head))
@@ -83,28 +80,13 @@ class KeyboardActionManager(
       }.flatMap {
         case Some(action) =>
           for {
-            _ <- taskInProgressRef.set(true)
-            _ <- executeAction(action)
+            _         <- taskInProgressRef.set(true)
+            _         <- executeAction(action)
             remaining <- queueRef.get
-            _ <- if (remaining.isEmpty)
-              taskInProgressRef.set(false)
-            else IO.unit
+            _         <- if (remaining.isEmpty) taskInProgressRef.set(false) else IO.unit
           } yield ()
-
         case None =>
           taskInProgressRef.set(false)
       }
     }
-  }
-
 }
-//
-//object KeyboardManagerApp {
-//  def start(): IO[KeyboardActionManager] = for {
-//    robot <- IO(new Robot())
-//    queueRef <- Ref.of[IO, List[KeyboardAction]](List.empty)
-//    taskInProgressRef <- Ref.of[IO, Boolean](false)
-//    manager = new KeyboardActionManager(robot, queueRef, taskInProgressRef)
-//    _ <- manager.startProcessing.compile.drain.start
-//  } yield manager
-//}

@@ -38,6 +38,7 @@ case class AutoHealState(
                         )
 
 case class GeneralState(
+                         initialSettingsSet: Boolean = false,
                          retryCounters: Map[String, Int] = Map.empty,
                          timestamps: Map[String, Long] = Map.empty,
                          flags: Map[String, Boolean] = Map.empty,
@@ -80,8 +81,8 @@ case class AutoLootState(
                           carsassToLoot: List[(String, Long)] = List(),
                           carcassTileToLoot: Option[(String, Long)] = None,
                           lastLootedCarcassTile: Option[(String, Long)] = None,
-                          carsassToLootImmediately: List[(String, Long)] = List(),
-                          carsassToLootAfterFight: List[(String, Long)] = List(),
+                          carcassToLootImmediately: List[(String, Long)] = List(),
+                          carcassToLootAfterFight: List[(String, Long)] = List(),
                           lootIdToPlunder: Int = 0,
                           lootCountToPlunder: Int = 0,
                           lootScreenPosToPlunder: Vec = Vec(0, 0),

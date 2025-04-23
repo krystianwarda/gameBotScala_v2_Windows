@@ -17,7 +17,8 @@ import utils.{AlertSenderActor, EscapeKeyHandler, EscapeKeyListener, FunctionExe
 import java.awt.Robot
 import scala.concurrent.duration._
 import scala.io.StdIn
-
+import cats.effect.unsafe.IORuntime
+import cats.effect.unsafe.IORuntime.{global => defaultRuntime}
 
 
 case class FunctionCall(functionName: String, arg1: Option[String] = None, arg2: Option[String] = None)
@@ -65,6 +66,7 @@ class ThirdProcessActor extends Actor {
 
 object MainApp extends IOApp.Simple {
 
+  implicit val ioRuntime: IORuntime = defaultRuntime
 
   // Exposed top-level ActorRefs
   var keyboardActorRef: ActorRef = _
@@ -145,19 +147,28 @@ object MainApp extends IOApp.Simple {
       keyboardManager
     )
 
-    _ <- IO {
-    GlobalMouseManager.instance = Some(mouseManager)
-    println("✅ MouseActionManager instance set")
-    mouseManager.startProcessing.compile.drain.unsafeRunAndForget()
-    println("✅ MouseActionManager started")
-    }
+//    _ <- IO {
+//    GlobalMouseManager.instance = Some(mouseManager)
+//    println("✅ MouseActionManager instance set")
+//    mouseManager.startProcessing.compile.drain
+//    println("✅ MouseActionManager started")
+//    }
 
-//
-//    new FishingBot(uiAppActorRef, jsonProcessorActorRef, settingsRef)
-//    new AutoHealBot(uiAppActorRef, jsonProcessorActorRef, settingsRef)
-//
-//
-//    jsonConsumer = new FunctionalJsonConsumer(stateRef, settingsRef, mouseManager)
+    // inside your `run: IO[Unit] = for { … } yield ()` block:
+    _ <- IO {
+      GlobalMouseManager.instance = Some(mouseManager)
+      println("✅ MouseActionManager instance set")
+    }
+    // start the mouse‐processing stream in the background:
+    _ <- mouseManager.startProcessing
+      .compile
+      .drain
+      .start   // returns a Fiber[IO, Unit]
+    // likewise for keyboard:
+    _ <- keyboardManager.startProcessing
+      .compile
+      .drain
+      .start
 
 
     // pass jsonConsumer to actor here

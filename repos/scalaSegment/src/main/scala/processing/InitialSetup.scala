@@ -38,8 +38,8 @@ object InitialSetup {
 
     updatedState = updatedState.copy(
       autoloot = updatedState.autoloot.copy(
-        carsassToLootImmediately = sortCarcassesByDistanceAndTime(json, updatedState.autoloot.carsassToLootImmediately, updatedState),
-        carsassToLootAfterFight = sortCarcassesByDistanceAndTime(json, updatedState.autoloot.carsassToLootAfterFight, updatedState)
+        carcassToLootImmediately = sortCarcassesByDistanceAndTime(json, updatedState.autoloot.carcassToLootImmediately, updatedState),
+        carcassToLootAfterFight = sortCarcassesByDistanceAndTime(json, updatedState.autoloot.carcassToLootAfterFight, updatedState)
       ),
     )
 

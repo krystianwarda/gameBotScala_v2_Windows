@@ -180,11 +180,6 @@ object SettingsUtils {
                                lowSuppliesSettings: List[GuardianLowSuppliesSettings] = List.empty,
                              )
 
-//  case class FishingSettings(
-//                              enabled: Boolean = false,
-//                              selectedRectangles: Seq[String] = Seq.empty,
-//                              fishThrowoutRectangles: Seq[String] = Seq.empty
-//                            )
 
   case class FishingSettings(
                               enabled: Boolean = false,
@@ -219,7 +214,7 @@ object SettingsUtils {
   case class AutoTargetSettings(
                                  enabled: Boolean = false,
                                  creatureList: Seq[String] = Seq.empty,
-//                                 creatureSettingsList: Seq[AutoTargetCreaturesSettings] = Seq.empty,
+                                 dangerCreaturesList : Seq[String] = Seq.empty
                                )
 
 

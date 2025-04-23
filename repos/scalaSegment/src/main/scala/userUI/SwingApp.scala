@@ -21,6 +21,7 @@ import java.awt.Dimension
 import scala.swing.{BoxPanel, Button, CheckBox, ComboBox, Label, MainFrame, Orientation, TabbedPane, TextField}
 import scala.swing.event.{ButtonClicked, SelectionChanged}
 import utils.StartSpecificPeriodicFunction
+import cats.effect.unsafe.implicits.global
 
 
 case class UpdateSettings(settings: UISettings)
@@ -656,27 +657,23 @@ class SwingApp(playerClassList: List[Player],
 
 
 
-    val runButton = new Button("RUN") {
+  val runButton = new Button("RUN") {
     reactions += {
       case ButtonClicked(_) =>
         val currentSettings = collectSettingsFromUI()
 
-        // Send the settings to the UIAppActor
+        // 1) overwrite the shared Ref with whatever’s in the UI right now
+        import cats.effect.unsafe.implicits.global
+        settingsRef.update(_ => currentSettings).unsafeRunSync()
+
+        // 2) fire off your actors with the brand-new settings
         uiAppActor ! MainApp.StartActors(currentSettings)
-
-        // Additional logic based on settings
-        if (currentSettings.mouseMovements) {
-          mainActorRef ! StartMouseMovementActor
-        }
-
         periodicFunctionActorRef ! MainApp.StartActors(currentSettings)
-
-        // Sending the initialization message to JsonProcessorActor
-        jsonProcessorActorRef ! InitializeProcessor(currentPlayer, currentSettings)
+        jsonProcessorActorRef  ! InitializeProcessor(currentPlayer, currentSettings)
         autoResponderManagerRef ! UpdateSettings(currentSettings)
-
     }
   }
+
 
   val updateButton = new Button("Update Settings") {
     reactions += {
