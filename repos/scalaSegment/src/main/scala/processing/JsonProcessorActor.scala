@@ -217,7 +217,7 @@ class JsonProcessorActor(mouseMovementActor: ActorRef, actionStateManager: Actor
 
   private def handleOkStatus(json: JsValue, initialState: ProcessorState): ProcessorState = {
     val updatedState = initialState
-
+    println(settings)
     val afterInitialSetupState = performInitialSetup(json, updatedState)
     val afterGMDetectorState = performGMDetector(json, afterInitialSetupState)
     val afterGuardianState = performGuardian(json, afterGMDetectorState)

@@ -21,6 +21,7 @@ case class GameState(
 case class AutoHealState(
                           lastHealUseTime: Long = 0,
                           stateHealingWithRune: String = "free",
+                          dangerLevelHealing: Boolean = false,
                           statusOfAutoheal:String = "",
                           healingRuneContainerName:String = "",
                           healingCrosshairActive: Boolean = false,

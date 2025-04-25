@@ -16,21 +16,10 @@ object FishingFeature {
 
 
 
-  def computeFishingFeature(
-                             json: JsValue,
-                             settingsRef: Ref[IO, UISettings],
-                             stateRef: Ref[IO, GameState]
-                           ): IO[(List[MouseAction], List[KeyboardAction])] = for {
-    settings <- settingsRef.get
-    result <- if (!settings.fishingSettings.enabled) {
-      IO(println("Fishing disabled in computeFishingFeature")).as((Nil, Nil))
-    } else {
-      stateRef.get.flatMap { state =>
-        val (newState, mouseActs, keyActs) = Steps.runFirst(json, settings, state)
-        stateRef.set(newState).as((mouseActs, keyActs))
-      }
-    }
-  } yield result
+  def run(json: JsValue, settings: UISettings, state: GameState):
+  (GameState, List[MouseAction], List[KeyboardAction]) =
+    if (!settings.fishingSettings.enabled) (state, Nil, Nil)
+    else Steps.runFirst(json, settings, state)
 
   private object Steps {
     // ordered list of steps
@@ -40,13 +29,47 @@ object FishingFeature {
       UseFishingRod
     )
 
-    def runFirst(json: JsValue, settings: UISettings, state: GameState): (GameState, List[MouseAction], List[KeyboardAction]) =
-      all.iterator
-        .flatMap(_.run(state, json, settings))
-        .map { case (s, a) => (s, a.mouse, a.keyboard) }
-        .toSeq
-        .headOption
-        .getOrElse((state, Nil, Nil))
+
+    def runFirst(json: JsValue, settings: UISettings, start: GameState)
+    : (GameState, List[MouseAction], List[KeyboardAction]) = {
+
+      // We'll carry along (currentState, maybeActions)
+      // as we fold through the steps.
+      @annotation.tailrec
+      def loop(remaining: List[Step],
+               currentState: GameState,
+               carriedActions: MKActions): (GameState, MKActions) = remaining match {
+
+        // 1) If we've already gotten actions, stop immediately.
+        case _ if carriedActions.mouse.nonEmpty || carriedActions.keyboard.nonEmpty =>
+          (currentState, carriedActions)
+
+        // 2) No more steps? return what we have so far.
+        case Nil =>
+          (currentState, MKActions(Nil, Nil))
+
+        // 3) Try the next step
+        case step :: rest =>
+          step.run(currentState, json, settings) match {
+            // a) Step wants to update state *and* emits actions:
+            case Some((newState, actions)) if actions.mouse.nonEmpty || actions.keyboard.nonEmpty =>
+              // we break and return immediately
+              (newState, actions)
+
+            // b) Step updates state but has no actions: carry on
+            case Some((newState, MKActions(Nil, Nil))) =>
+              loop(rest, newState, MKActions(Nil, Nil))
+
+            // c) Step does nothing: carry on with same state
+            case None =>
+              loop(rest, currentState, MKActions(Nil, Nil))
+          }
+      }
+
+      // run the loop
+      val (finalState, MKActions(m,k)) = loop(all, start, MKActions(Nil, Nil))
+      (finalState, m, k)
+    }
   }
 
   private object CheckForOkButton extends Step {

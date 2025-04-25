@@ -14,22 +14,10 @@ import utils.ProcessingUtils._
 
 object HealingFeature {
 
-  def computeHealingFeature(
-                             json: JsValue,
-                             settingsRef: Ref[IO, UISettings],
-                             stateRef: Ref[IO, GameState]
-                           ): IO[(List[MouseAction], List[KeyboardAction])] = for {
-    settings <- settingsRef.get
-    result <- if (!settings.healingSettings.enabled) {
-      IO(println("Healing disabled in computeHealingFeature")).as((Nil, Nil))
-    } else {
-      stateRef.get.flatMap { state =>
-        val (newState, mouseActs, keyActs) = Steps.runFirst(json, settings, state)
-        IO.println("Starting healing feature")
-        stateRef.set(newState).as((mouseActs, keyActs))
-      }
-    }
-  } yield result
+  def run(json: JsValue, settings: UISettings, state: GameState):
+  (GameState, List[MouseAction], List[KeyboardAction]) =
+    if (!settings.healingSettings.enabled) (state, Nil, Nil)
+    else Steps.runFirst(json, settings, state)
 
   private object Steps {
     // ordered list of steps
@@ -41,14 +29,118 @@ object HealingFeature {
       TeamHealing
     )
 
-    def runFirst(json: JsValue, settings: UISettings, state: GameState): (GameState, List[MouseAction], List[KeyboardAction]) =
-      all.iterator
-        .flatMap(_.run(state, json, settings))
-        .map { case (s, a) => (s, a.mouse, a.keyboard) }
-        .toSeq
-        .headOption
-        .getOrElse((state, Nil, Nil))
+
+    def runFirst(json: JsValue, settings: UISettings, start: GameState)
+    : (GameState, List[MouseAction], List[KeyboardAction]) = {
+
+      @annotation.tailrec
+      def loop(remaining: List[Step],
+               currentState: GameState,
+               carriedActions: MKActions): (GameState, MKActions) = remaining match {
+
+        // 1) If we've already gotten actions, stop immediately.
+        case _ if carriedActions.mouse.nonEmpty || carriedActions.keyboard.nonEmpty =>
+          (currentState, carriedActions)
+
+        // 2) No more steps? return what we have so far.
+        case Nil =>
+          (currentState, MKActions(Nil, Nil))
+
+        // 3) Try the next step
+        case step :: rest =>
+          step.run(currentState, json, settings) match {
+            // a) Step wants to update state *and* emits actions:
+            case Some((newState, actions)) if actions.mouse.nonEmpty || actions.keyboard.nonEmpty =>
+              // we break and return immediately
+              (newState, actions)
+
+            // b) Step updates state but has no actions: carry on
+            case Some((newState, MKActions(Nil, Nil))) =>
+              loop(rest, newState, MKActions(Nil, Nil))
+
+            // c) Step does nothing: carry on with same state
+            case None =>
+              loop(rest, currentState, MKActions(Nil, Nil))
+          }
+      }
+
+      // run the loop
+      val (finalState, MKActions(m,k)) = loop(all, start, MKActions(Nil, Nil))
+      (finalState, m, k)
+    }
   }
+
+
+  private object DangerLevelHealing extends Step {
+
+    def run(
+             state:    GameState,
+             json:     JsValue,
+             settings: UISettings
+           ): Option[(GameState, MKActions)] = {
+
+      val armed = state.autoHeal.dangerLevelHealing
+      println(s"[DangerLevelHealing] armed = $armed")
+
+      // 1) read in-game crosshair flag
+      val isActiveFromJson = (json \ "characterInfo" \ "IsCrosshairActive")
+        .asOpt[Boolean]
+        .getOrElse(false)
+      println(s"[DangerLevelHealing] in-game crosshair = $isActiveFromJson")
+
+      // 2) sync that into our state
+      val synced = state.copy(
+        autoHeal = state.autoHeal.copy(
+          healingCrosshairActive = isActiveFromJson
+        )
+      )
+
+      // 3) decide whether to fire or clear the crosshair
+      val activateSeq =
+        if (armed && !isActiveFromJson) {
+          println("[DangerLevelHealing] activating crosshair")
+          for {
+            mp      <- (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").asOpt[JsObject]
+            tx      <- (mp   \ "x").asOpt[Int]
+            ty      <- (mp   \ "y").asOpt[Int]
+            runePos <- findItemInContainerSlot14(json, synced, 3160, 1).headOption
+            rx       = (runePos \ "x").as[Int]
+            ry       = (runePos \ "y").as[Int]
+          } yield List(
+            MoveMouse(rx, ry),
+            RightButtonPress(rx, ry),
+            RightButtonRelease(rx, ry),
+            MoveMouse(tx, ty)
+          )
+        } else None
+
+      val deactivateSeq =
+        if (!armed && isActiveFromJson) {
+          println("[DangerLevelHealing] deactivating crosshair")
+          Some(List(RightButtonRelease(0, 0)))
+        } else None
+
+      // 4) pick whichever we got
+      val mouseActions = activateSeq.orElse(deactivateSeq).getOrElse(Nil)
+      if (mouseActions.nonEmpty) println(s"[DangerLevelHealing] will emit: $mouseActions")
+      else                     println("[DangerLevelHealing] no crosshair actions")
+
+      // 5) update our healingCrosshairActive flag
+      val newActive =
+        if (activateSeq.isDefined)  true
+        else if (deactivateSeq.isDefined) false
+        else synced.autoHeal.healingCrosshairActive
+
+      val newState = synced.copy(
+        autoHeal = synced.autoHeal.copy(
+          healingCrosshairActive = newActive
+        )
+      )
+
+      Some((newState, MKActions(mouseActions, Nil)))
+    }
+  }
+
 
   private object SetUpSupplies extends Step {
     def run(
@@ -237,107 +329,6 @@ object HealingFeature {
           None
       }
   }
-
-
-
-  private object DangerLevelHealing extends Step {
-    def run(
-             state:    GameState,
-             json:     JsValue,
-             settings: UISettings
-           ): Option[(GameState, MKActions)] = {
-
-      val level = state.autoTarget.dangerLevelHealing
-      println(s"[DangerLevelHealing] configured level = '$level'")
-
-      // Only skip if explicitly "none"
-      if (level == "none") {
-        println("[DangerLevelHealing] skipping because level = none")
-        None
-      } else {
-        // 1) Read current crosshair flag
-        val isActiveFromJson = (json \ "characterInfo" \ "IsCrosshairActive")
-          .asOpt[Boolean]
-          .getOrElse(false)
-        println(s"[DangerLevelHealing] crosshair in game = $isActiveFromJson")
-
-        // 2) Sync into our state
-        val state1 = state.copy(
-          autoHeal = state.autoHeal.copy(
-            healingCrosshairActive = isActiveFromJson
-          )
-        )
-
-        // 3) Count creatures in battle
-        val battleCreatures: Map[String, Int] =
-          (json \ "battleInfo").asOpt[JsObject]
-            .toList
-            .flatMap(_.fields.map(_._2))
-            .flatMap(obj => (obj \ "Name").asOpt[String])
-            .groupBy(identity)
-            .view
-            .mapValues(_.size)
-            .toMap
-
-        println(s"[DangerLevelHealing] battleCreatures = $battleCreatures")
-
-        // 4) Evaluate thresholds
-        val thresholds = state1.autoTarget.dangerCreaturesList
-        println(s"[DangerLevelHealing] thresholds = $thresholds")
-        val dangerStill = thresholds.exists { cr =>
-          val seen = battleCreatures.getOrElse(cr.name, 0)
-          val meets = if (cr.count == 0) seen >= 1 else seen >= cr.count
-          println(s"  → ${cr.name}: seen=$seen, needed=${cr.count} => $meets")
-          meets
-        }
-        println(s"[DangerLevelHealing] dangerStill = $dangerStill")
-
-        // 5) Activation sequence
-        val activateSeq =
-          if (!isActiveFromJson && dangerStill) {
-            println("[DangerLevelHealing] activating crosshair")
-            for {
-              mp      <- (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").asOpt[JsObject]
-              tx      <- (mp   \ "x").asOpt[Int]
-              ty      <- (mp   \ "y").asOpt[Int]
-              runePos <- findItemInContainerSlot14(json, state1, 3160, 1).headOption
-              rx       = (runePos \ "x").as[Int]
-              ry       = (runePos \ "y").as[Int]
-            } yield List(
-              MoveMouse(rx, ry),
-              RightButtonPress(rx, ry),
-              RightButtonRelease(rx, ry),
-              MoveMouse(tx, ty)
-            )
-          } else None
-
-        // 6) Deactivation sequence
-        val deactivateSeq =
-          if (isActiveFromJson && !dangerStill) {
-            println("[DangerLevelHealing] deactivating crosshair")
-            Some(List(RightButtonRelease(0, 0)))
-          } else None
-
-        // 7) Pick and emit
-        val mouseActions = activateSeq.orElse(deactivateSeq).getOrElse(Nil)
-        if (mouseActions.nonEmpty)
-          println(s"[DangerLevelHealing] will emit: $mouseActions")
-        else
-          println("[DangerLevelHealing] no crosshair actions")
-
-        // 8) Update state
-        val newCrossActive = activateSeq.isDefined || deactivateSeq.fold(isActiveFromJson)(_ => false)
-        val newState = state1.copy(
-          autoHeal = state1.autoHeal.copy(
-            healingCrosshairActive = newCrossActive
-          )
-        )
-
-        Some((newState, MKActions(mouseActions, Nil)))
-      }
-    }
-  }
-
 
 
   private object TeamHealing extends Step {

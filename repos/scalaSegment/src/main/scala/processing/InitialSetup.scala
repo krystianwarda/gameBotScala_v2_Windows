@@ -149,14 +149,16 @@ object InitialSetup {
     if (dangerCreatures.nonEmpty) {
 
 
-      updatedState = updatedState.copy(
-        autotarget = updatedState.autotarget.copy(
-          dangerLevelHealing = "high",
-          dangerCreaturesList = dangerCreatures
-        ),
+      val newAutoheal = currentState.autoheal.copy(
+        dangerLevelHealing = true
       )
-    }
 
+      val newState = updatedState.copy(
+        autoheal = newAutoheal
+      )
+
+      newState
+    }
     updatedState
   }
 

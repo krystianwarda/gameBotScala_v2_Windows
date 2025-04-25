@@ -23,30 +23,34 @@ class FunctionalJsonConsumer(
                               mouseManager: MouseActionManager,
                               keyboardManager: KeyboardActionManager
                             ) {
-
   def runPipeline(json: JsValue): IO[(List[MouseAction], List[KeyboardAction])] =
     for {
-      fishingRes <- FishingFeature.computeFishingFeature(json, settingsRef, stateRef)
-      healingRes <- HealingFeature.computeHealingFeature(json, settingsRef, stateRef)
+      state0   <- stateRef.get
+      settings <- settingsRef.get
 
-      // now destructure in pure definitions
-      (fishingMouse, fishingKeyboard) = fishingRes
-      (healingMouse,  healingKeyboard)  = healingRes
+      // 1) initial setup
+      (state1, initMouse, initKeys) = InitialSetupFeature.run(json, settings, state0)
+
+      // 2) fishing
+      (state2, fishMouse, fishKeys) = FishingFeature.run(json, settings, state1)
+
+      // 3) healing
+      (state3, healMouse, healKeys) = HealingFeature.run(json, settings, state2)
+
+      // 4) commit the final state once
+      _ <- stateRef.set(state3)
     } yield (
-      fishingMouse  ++ healingMouse,
-      fishingKeyboard ++ healingKeyboard
+      initMouse ++ fishMouse ++ healMouse,
+      initKeys  ++ fishKeys  ++ healKeys
     )
 
-
-
   def process(json: JsValue): IO[Unit] =
-    for {
-      result <- runPipeline(json)
-      (mouseActions, keyboardActions) = result
-      _ <- executeMouseActions(mouseActions)
-      _ <- executeKeyboardActions(keyboardActions)
-    } yield ()
-
+    runPipeline(json).flatMap { case (m, k) =>
+      for {
+        _ <- executeMouseActions(m)
+        _ <- executeKeyboardActions(k)
+      } yield ()
+    }
 
 
   def executeKeyboardActions(actions: List[KeyboardAction]): IO[Unit] =

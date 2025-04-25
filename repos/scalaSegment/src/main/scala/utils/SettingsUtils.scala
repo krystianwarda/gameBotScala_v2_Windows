@@ -15,6 +15,7 @@ object SettingsUtils {
   // Define the nested case classes
   case class HealingSettings(
                               enabled: Boolean = false,
+                              dangerLevelHealing: Boolean = false,
                               spellsHealSettings: List[HealingSpellsSettings] = List.empty,
                               ihHealHealthPercent: Int = 0,
                               ihHealMana: Int = 0,
