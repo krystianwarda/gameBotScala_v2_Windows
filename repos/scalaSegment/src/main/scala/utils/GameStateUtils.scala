@@ -29,6 +29,7 @@ case class AutoHealState(
                           healingHPContainerName:String = "",
 
                           healingCrosshairActive: Boolean = false,
+                          mpBoost: Boolean = false,
                           healingRestryStatus: Int = 0,
                           healingRetryAttempts: Int = 1,
                           healingSpellCooldown: Long = 1200,

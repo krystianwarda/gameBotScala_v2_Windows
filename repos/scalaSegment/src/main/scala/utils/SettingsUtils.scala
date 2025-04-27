@@ -24,6 +24,7 @@ object SettingsUtils {
                               hPotionHealHealthPercent: Int = 0,
                               hPotionHealMana: Int = 0,
                               mPotionHealManaMin: Int = 0,
+                              mPotionHealManaMax: Int = 0,
                               friendsHealSettings: List[HealingFriendsSettings] = List.empty
                             )
 

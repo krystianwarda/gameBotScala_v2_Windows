@@ -32,6 +32,7 @@ class Player (val characterName: String) {
   var botHPotionHealHealth: Int = 0
   var botHPotionHealMana: Int = 0
   var botMPotionHealManaMin: Int = 0
+  var botMPotionHealManaMax: Int = 0
 
   var autoHealEnabled: Boolean = false
   var runeMakerEnabled: Boolean = false
@@ -41,7 +42,7 @@ class Player (val characterName: String) {
                      ihHealth: Int, ihMana: Int,
                      uhHealth: Int, uhMana: Int,
                      hPotionHealth: Int, hPotionMana: Int,
-                     mPotionManaMin: Int): Unit = {
+                     mPotionManaMin: Int, mPotionManaMax: Int): Unit = {
     botLightHealSpell = lightSpell
     botLightHealHealth = lightHealth
     botLightHealMana = lightMana
@@ -55,6 +56,7 @@ class Player (val characterName: String) {
     botHPotionHealHealth = hPotionHealth
     botHPotionHealMana = hPotionMana
     botMPotionHealManaMin = mPotionManaMin
+    botMPotionHealManaMax = mPotionManaMax
   }
 
 }

@@ -106,6 +106,7 @@ class SwingApp(playerClassList: List[Player],
       hPotionHealHealthPercent = parseTextFieldToInt(autoHealBot.hPotionHealHealthField.text),
       hPotionHealMana = parseTextFieldToInt(autoHealBot.hPotionHealManaField.text),
       mPotionHealManaMin = parseTextFieldToInt(autoHealBot.mPotionHealManaMinField.text),
+      mPotionHealManaMax = parseTextFieldToInt(autoHealBot.mPotionHealManaMaxField.text),
       friendsHealSettings = List(friendsHeal)
     )
   }
@@ -437,7 +438,7 @@ class SwingApp(playerClassList: List[Player],
     autoHealBot.hPotionHealHealthField.text = healingSettings.hPotionHealHealthPercent.toString
     autoHealBot.hPotionHealManaField.text = healingSettings.hPotionHealMana.toString
     autoHealBot.mPotionHealManaMinField.text = healingSettings.mPotionHealManaMin.toString
-
+    autoHealBot.mPotionHealManaMaxField.text = healingSettings.mPotionHealManaMax.toString
 
 
     // Friend 1 settings
@@ -841,13 +842,14 @@ class SwingApp(playerClassList: List[Player],
     val hPotionHealHealthVar = hPotionHealHealthField.text.toInt
     val hPotionHealManaVar = hPotionHealManaField.text.toInt
     val mPotionHealManaMinVar = mPotionHealManaMinField.text.toInt
+    val mPotionHealManaMaxVar = mPotionHealManaMaxField.text.toInt
 
     selectedExample.updateAutoHeal(lightHealSpellVar, lightHealHealthVar, lightHealManaVar,
       strongHealSpellVar, strongHealHealthVar, strongHealManaVar,
       ihHealHealthVar, ihHealManaVar,
       uhHealHealthVar, uhHealManaVar,
       hPotionHealHealthVar, hPotionHealManaVar,
-      mPotionHealManaMinVar)
+      mPotionHealManaMinVar, mPotionHealManaMaxVar)
   }
 
 
@@ -868,6 +870,7 @@ class SwingApp(playerClassList: List[Player],
     hPotionHealHealthField.text = selectedExample.botHPotionHealHealth.toString
     hPotionHealManaField.text = selectedExample.botHPotionHealMana.toString
     mPotionHealManaMinField.text = selectedExample.botMPotionHealManaMin.toString
+    mPotionHealManaMaxField.text = selectedExample.botMPotionHealManaMax.toString
   }
 
 
@@ -884,6 +887,7 @@ class SwingApp(playerClassList: List[Player],
   val hPotionHealHealthField = new TextField()
   val hPotionHealManaField = new TextField()
   val mPotionHealManaMinField = new TextField()
+  val mPotionHealManaMaxField = new TextField()
 
 
 //  val updateButton = new Button("Update") {

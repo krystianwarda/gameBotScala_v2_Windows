@@ -29,6 +29,7 @@ class AutoHealBot(uiAppActor: ActorRef, jsonProcessorActor: ActorRef, settingsRe
   val hPotionHealHealthField = new TextField()
   val hPotionHealManaField = new TextField()
   val mPotionHealManaMinField = new TextField()
+  val mPotionHealManaMaxField = new TextField()
 
   val friend1HealSpellField = new TextField()
   val friend1NameField = new TextField()
@@ -265,15 +266,25 @@ class AutoHealBot(uiAppActor: ActorRef, jsonProcessorActor: ActorRef, settingsRe
     c.gridy = 5
     addComponent(new Label(""), 1, 5)
 
+    c.gridx = 3
+    c.gridy = 5
+    addComponent(new Label("ManaMin"), 3, 5)
+
+    c.gridx = 4
+    c.gridy = 5
+    c.fill = GridBagConstraints.HORIZONTAL
+    mPotionHealManaMinField.peer.setPreferredSize(new Dimension(standardFieldWidth, mPotionHealManaMinField.peer.getPreferredSize.height))
+    addComponent(mPotionHealManaMinField, 4, 5)
+
     c.gridx = 5
     c.gridy = 5
-    addComponent(new Label("Mana"), 5, 5)
+    addComponent(new Label("ManaMax"), 5, 5)
 
     c.gridx = 6
     c.gridy = 5
     c.fill = GridBagConstraints.HORIZONTAL
-    mPotionHealManaMinField.peer.setPreferredSize(new Dimension(standardFieldWidth, mPotionHealManaMinField.peer.getPreferredSize.height))
-    addComponent(mPotionHealManaMinField, 6, 5)
+    mPotionHealManaMaxField.peer.setPreferredSize(new Dimension(standardFieldWidth, mPotionHealManaMaxField.peer.getPreferredSize.height))
+    addComponent(mPotionHealManaMaxField, 6, 5)
 
 //    addComponent(mPotionHotkeyCheckbox, 7, 5)
 //    c.gridx = c.gridx + 1

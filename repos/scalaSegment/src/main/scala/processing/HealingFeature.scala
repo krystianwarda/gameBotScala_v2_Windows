@@ -26,6 +26,7 @@ object HealingFeature {
     // ordered list of steps
     val allSteps: List[Step] = List(
       SetUpSupplies,
+      CheckSupplies,
       HandleBackpacks,
       DangerLevelHealing,
       SelfHealing,
@@ -127,6 +128,60 @@ object HealingFeature {
     }
   }
 
+
+  private object CheckSupplies extends Step {
+    private val taskName = "CheckSupplies"
+    def run(
+             state:    GameState,
+             json:     JsValue,
+             settings: UISettings
+           ): Option[(GameState, MKTask)] = {
+      val ah     = state.autoHeal
+      val status = ah.statusOfAutoheal
+      if (status != "ready") return None
+
+      // only MP/HP
+      val toCheck = List(
+        ah.healingMPContainerName -> 2874,
+        ah.healingHPContainerName -> 2874
+      ).filter(_._1.nonEmpty).filterNot(_._1 == "not_set")
+
+      toCheck.collectFirst {
+        case (name, id)
+          if !(json \ "containersInfo" \ name \ "items").asOpt[JsObject]
+            .exists(_.values.exists(item => (item \ "itemId").asOpt[Int].contains(id)))
+        => name
+      } match {
+        case Some(emptyPotContainer) =>
+          println(s"[$taskName] '$emptyPotContainer' out of potions → removing it")
+          val upSeqOpt = for {
+            invObj   <- (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
+            panelKey <- invObj.keys.find(_.contains(emptyPotContainer))
+            upBtn    <- (invObj \ panelKey \ "upButton").asOpt[JsObject]
+            x        <- (upBtn \ "x").asOpt[Int]
+            y        <- (upBtn \ "y").asOpt[Int]
+          } yield List(
+            MoveMouse(x, y),
+            LeftButtonPress(x, y),
+            LeftButtonRelease(x, y)
+          )
+
+          val actions     = upSeqOpt.getOrElse(Nil)
+          val updatedAH   = ah.copy(
+            healingRuneContainerName = emptyPotContainer,
+            statusOfAutoheal         = "remove_backpack"
+          )
+          val updatedState = state.copy(autoHeal = updatedAH)
+          Some(updatedState -> MKTask(taskName, MKActions(actions, Nil)))
+
+        case None =>
+          None
+      }
+    }
+  }
+
+
+
   private object SetUpSupplies extends Step {
     private val taskName = "SetUpSupplies"
     def run(
@@ -139,58 +194,7 @@ object HealingFeature {
       val container = ah.healingRuneContainerName
       val status    = ah.statusOfAutoheal
       println("start SetUpSupplies")
-      println(s"  [SetUpSupplies] existing UH container='$container', status='$status'")
 
-      // --- PREFLIGHT: ONLY check MP & HP containers for “empty of potions” ---
-      if (status == "ready") {
-        val toCheck = List(
-          ah.healingMPContainerName -> 2874,  // MP potions
-          ah.healingHPContainerName -> 2874   // HP potions
-        ).filter { case (name, _) => name.nonEmpty && name != "not_set" }
-
-        println("[SetUpSupplies] preflight checking MP/HP for exhaustion:")
-        toCheck.foreach { case (name, id) =>
-          val itemsOpt = (json \ "containersInfo" \ name \ "items").asOpt[JsObject]
-          val hasRelevant = itemsOpt.exists(_.values.exists(item =>
-            (item \ "itemId").asOpt[Int].contains(id)
-          ))
-          println(s"    - '$name' hasRelevant($id)=$hasRelevant")
-        }
-
-        // remove the first MP/HP container that has NO more potions
-        toCheck.collectFirst {
-          case (name, id)
-            if !(json \ "containersInfo" \ name \ "items").asOpt[JsObject]
-              .exists(_.values.exists(item => (item \ "itemId").asOpt[Int].contains(id)))
-          => name
-        } match {
-          case Some(emptyPotContainer) =>
-            println(s"[SetUpSupplies] container '$emptyPotContainer' has no potions → removing it first")
-            val upSeqOpt: Option[List[MouseAction]] = for {
-              invObj   <- (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
-              matching <- invObj.keys.find(_.contains(emptyPotContainer))
-              upBtn    <- (invObj \ matching \ "upButton").asOpt[JsObject]
-              x        <- (upBtn \ "x").asOpt[Int]
-              y        <- (upBtn \ "y").asOpt[Int]
-            } yield List(
-              MoveMouse(x, y),
-              LeftButtonPress(x, y),
-              LeftButtonRelease(x, y)
-            )
-
-            val actions = upSeqOpt.getOrElse(Nil)
-            val updatedState = state.copy(autoHeal = ah.copy(
-              healingRuneContainerName = emptyPotContainer,
-              statusOfAutoheal         = "remove_backpack"
-            ))
-            return Some(updatedState -> MKTask(taskName, MKActions(actions, Nil)))
-
-          case None =>
-            println("[SetUpSupplies] MP & HP both still stocked, proceeding")
-        }
-      }
-
-      // === 1) Discover which container holds UH runes ===
       if (container.isEmpty || container == "not_set") {
         val containers = (json \ "containersInfo").asOpt[JsObject]
           .map(_.fields)
@@ -626,45 +630,52 @@ object HealingFeature {
       // MP‐healing branch
       val mpBranch: Option[(String, List[MouseAction], List[KeyboardAction], AutoHealState)] = {
         val subTaskName = "mpHealing"
-        println(s"[SelfHealing][$subTaskName] checking if we should try an MP potion")
-        val manaMin = settings.healingSettings.mPotionHealManaMin
-        val mpCont  = ah.healingMPContainerName
+        println(s"[SelfHealing][$subTaskName] checking MP‐boost (mpBoost=${ah.mpBoost})")
 
-        // checks slots 1 through 4 in containerInfo, then uses contentsPanel for screen coords
-        def findOneInFirstFour(containerName: String, itemId: Int): Option[(Int, Int)] = {
-          // locate which "slotN" (1–4) contains our potion
-          val maybeSlotIndex: Option[Int] = (0 to 3).find { idx =>
-            (json \ "containersInfo" \ containerName \ "items" \ s"slot$idx" \ "itemId")
-              .asOpt[Int].contains(itemId)
-          }
-          println(s"[SelfHealing][$subTaskName] findOneInFirstFour found slot index = $maybeSlotIndex")
+        val mMin = settings.healingSettings.mPotionHealManaMin
+        val mMax = settings.healingSettings.mPotionHealManaMax
+        val boosting = ah.mpBoost
 
-          maybeSlotIndex.flatMap { idx =>
-            val itemKey = s"item$idx"
-            // find the matching contentsPanel entry
-            val contentsOpt = for {
-              invPanel  <- (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
-              panelKey  <- invPanel.keys.find(_.contains(containerName))
-              contPanel <- (invPanel \ panelKey \ "contentsPanel").asOpt[JsObject]
-              posObj    <- (contPanel \ itemKey).asOpt[JsObject]
-            } yield ( (posObj \ "x").as[Int], (posObj \ "y").as[Int] )
-
-            println(s"[SelfHealing][$subTaskName] slot 'slot$idx' → '$itemKey' screen pos = $contentsOpt")
-            contentsOpt
-          }
+        // 1) If we were boosting but have reached mMax, turn off and skip
+        if (boosting && mMax > 0 && mana >= mMax) {
+          println(s"[SelfHealing][$subTaskName] reached max mana ($mana ≥ $mMax), stopping boost")
+          val newAh = ah.copy(mpBoost = false)
+          val updatedState = state.copy(autoHeal = newAh)
+          return Some(updatedState -> MKTask(subTaskName, MKActions.empty))
         }
 
-        // use MP only when mana ≤ threshold
-        if (manaMin > 0 && mana <= manaMin) {
-          println(s"[SelfHealing][$subTaskName] condition passed (mana $mana ≤ $manaMin)")
+        // 2) Decide if we should boost now or continue
+        val shouldStart = !boosting && mMin > 0 && mana <= mMin
+        val shouldContinue = boosting && mMax > 0 && mana < mMax
 
-          findOneInFirstFour(mpCont, 2874) match {
+        if (shouldStart || shouldContinue) {
+          println(s"[SelfHealing][$subTaskName] BOOSTING (mana=$mana, mMin=$mMin, mMax=$mMax)")
+
+          // find a potion in slots 0-3
+          def findOneInFirstFour(containerName: String, itemId: Int): Option[(Int, Int)] = {
+            val maybeSlot = (0 to 3).find { idx =>
+              (json \ "containersInfo" \ containerName \ "items" \ s"slot$idx" \ "itemId")
+                .asOpt[Int].contains(itemId)
+            }
+            println(s"[SelfHealing][$subTaskName] findOne slot = $maybeSlot")
+            maybeSlot.flatMap { idx =>
+              val itemKey = s"item$idx"
+              for {
+                invPanel <- (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
+                panelKey <- invPanel.keys.find(_.contains(containerName))
+                cont     <- (invPanel \ panelKey \ "contentsPanel").asOpt[JsObject]
+                posObj   <- (cont \ itemKey).asOpt[JsObject]
+              } yield ((posObj \ "x").as[Int], (posObj \ "y").as[Int])
+            }
+          }
+
+          findOneInFirstFour(ah.healingMPContainerName, 2874) match {
             case Some((px, py)) =>
               (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").asOpt[JsObject] match {
                 case Some(mpObj) =>
                   val tx = (mpObj \ "x").as[Int]
                   val ty = (mpObj \ "y").as[Int]
-                  println(s"[SelfHealing][$subTaskName] found potion at ($px,$py), target at ($tx,$ty)")
+                  println(s"[SelfHealing][$subTaskName] using potion at ($px,$py) → target ($tx,$ty)")
 
                   val seq = List(
                     MoveMouse(px, py),
@@ -674,27 +685,25 @@ object HealingFeature {
                     LeftButtonPress(tx, ty),
                     LeftButtonRelease(tx, ty)
                   )
+                  // mark boost = true
                   val newAh = ah.copy(
-                    lastHealUseTime     = now,
-                    stateHealingWithRune = "free"
+                    lastHealUseTime = now,
+                    stateHealingWithRune = "free",
+                    mpBoost = true
                   )
                   Some((subTaskName, seq, Nil, newAh))
 
                 case None =>
-                  println(s"[SelfHealing][$subTaskName] ERROR: mapPanelLoc[8x6] not found in JSON")
+                  println(s"[SelfHealing][$subTaskName] ERROR: mapPanelLoc[8x6] missing")
                   None
               }
 
             case None =>
-              println(s"[SelfHealing][$subTaskName] SKIP: no MP potion (id=2874) in slots 1–4 of '$mpCont'")
+              println(s"[SelfHealing][$subTaskName] SKIP: no MP potion in slots 0–3")
               None
           }
-
         } else {
-          val reason =
-            if (manaMin <= 0) "threshold disabled (mPotionHealManaMin ≤ 0)"
-            else s"mana ($mana) > threshold ($manaMin)"
-          println(s"[SelfHealing][$subTaskName] SKIPPING: $reason")
+          println(s"[SelfHealing][$subTaskName] not boosting (mana=$mana, mpBoost=$boosting)")
           None
         }
       }
