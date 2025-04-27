@@ -64,6 +64,7 @@ class ThirdProcessActor extends Actor {
 }
 
 
+
 object MainApp extends IOApp.Simple {
 
   implicit val ioRuntime: IORuntime = defaultRuntime
@@ -147,12 +148,12 @@ object MainApp extends IOApp.Simple {
       keyboardManager
     )
 
-//    _ <- IO {
-//    GlobalMouseManager.instance = Some(mouseManager)
-//    println("✅ MouseActionManager instance set")
-//    mouseManager.startProcessing.compile.drain
-//    println("✅ MouseActionManager started")
-//    }
+    //    _ <- IO {
+    //    GlobalMouseManager.instance = Some(mouseManager)
+    //    println("✅ MouseActionManager instance set")
+    //    mouseManager.startProcessing.compile.drain
+    //    println("✅ MouseActionManager started")
+    //    }
 
     // inside your `run: IO[Unit] = for { … } yield ()` block:
     _ <- IO {
@@ -209,7 +210,6 @@ object MainApp extends IOApp.Simple {
   } yield ()
 
 }
-
 
 
 //object MainApp extends App {

@@ -2,30 +2,16 @@ package userUI
 
 import akka.actor.ActorRef
 import cats.effect.{IO, Ref}
-import play.api.libs.json.{Format, Json}
 import player.Player
 import utils.SettingsUtils.UISettings
 
 import javax.swing._
 import java.awt._
 import java.awt.event._
-import scala.swing.MenuBar.NoMenuBar.reactions
 import scala.swing._
-import scala.swing.event.{ButtonClicked, SelectionChanged}
-import cats.effect.unsafe.implicits.global
+import scala.swing.event._
 
-
-// Ensure RectangleSettings is defined as a case class with parameters
-// RectangleSettings defined as a case class
 case class RectangleSettings(x: Int, y: Int, width: Int, height: Int)
-
-
-
-// Companion object for RectangleSettings
-object RectangleSettings {
-  implicit val format: Format[RectangleSettings] = Json.format[RectangleSettings]
-}
-
 
 class FishingBot(uiAppActor: ActorRef, jsonProcessorActor: ActorRef, settingsRef: Ref[IO, UISettings]) {
   var selectedRectangles: Seq[String] = Seq.empty // Change to store strings directly
@@ -82,13 +68,13 @@ class FishingBot(uiAppActor: ActorRef, jsonProcessorActor: ActorRef, settingsRef
       }
     })
 
-    addKeyListener(new KeyAdapter() {
-      override def keyPressed(e: KeyEvent): Unit = {
-        if (e.getKeyCode == KeyEvent.VK_ESCAPE) {
-          overlayFrame.dispose() // Close overlay when Escape is pressed
-        }
-      }
-    })
+//    addKeyListener(new KeyAdapter() {
+//      override def keyPressed(e: KeyEvent): Unit = {
+//        if (e.getKeyCode == KeyEvent.VK_ESCAPE) {
+//          overlayFrame.dispose() // Close overlay when Escape is pressed
+//        }
+//      }
+//    })
 
     // Ensure component is focusable to receive key events
     setFocusable(true)
@@ -106,7 +92,6 @@ class FishingBot(uiAppActor: ActorRef, jsonProcessorActor: ActorRef, settingsRef
   overlayFrame.getContentPane.setLayout(new BorderLayout())
   overlayFrame.getContentPane.add(drawingComponent, BorderLayout.CENTER)
 
-
   private def createGridOverlay(startPoint: Point, endPoint: Point): Unit = {
     val width = Math.abs(startPoint.x - endPoint.x)
     val height = Math.abs(startPoint.y - endPoint.y)
@@ -121,6 +106,7 @@ class FishingBot(uiAppActor: ActorRef, jsonProcessorActor: ActorRef, settingsRef
     gridFrame.setLocation(x, y)
     val transparentWhite = new Color(255, 255, 255, 128)
     gridFrame.setBackground(transparentWhite)
+
 
     val panel: JPanel = new JPanel(new GridLayout(11, 15))
     panel.setOpaque(false)
@@ -158,39 +144,30 @@ class FishingBot(uiAppActor: ActorRef, jsonProcessorActor: ActorRef, settingsRef
     // Position closeButtonFrame directly below or to the side of gridFrame
     closeButtonFrame.setLocation(x, y + height) // Example: Placed directly below the grid
 
+    // close button below grid
+    val closeFrame = new JFrame() {
+      setUndecorated(true); setAlwaysOnTop(true)
+      setSize(100,50); setLocation(x, y + height)
+    }
     val closeButton = new JButton("Close")
     closeButton.addActionListener(_ => {
-      val markedRectangleIds: Seq[String] = panel.getComponents
-        .filter(_.isInstanceOf[JButton])
-        .map(_.asInstanceOf[JButton])
-        .filter(button => Option(button.getClientProperty("selected")).getOrElse(false).asInstanceOf[Boolean])
-        .map(_.getText)
+      // collect selections
+      val gridPanel = gridFrame.getContentPane.getComponent(0).asInstanceOf[JPanel]
+      val marked = gridPanel.getComponents.collect {
+        case b: JButton if Option(b.getClientProperty("selected")).contains(true) =>
+          b.getText
+      }
+      println(s"Selected rectangles for mode [$currentMode]: $marked")
 
-      println(s"Selected rectangles for mode [$currentMode]: $markedRectangleIds")
+      // update only the in-memory vars
+      currentMode match {
+        case "Selected" => selectedRectangles = marked.toSeq
+        case "Throwout" => fishThrowoutRectangles = marked.toSeq
+      }
 
-
-      settingsRef.update { old =>
-        val fs = old.fishingSettings
-        val updatedFishing = currentMode match {
-          case "Selected"  => fs.copy(selectedRectangles     = markedRectangleIds.toList)
-          case "Throwout"  => fs.copy(fishThrowoutRectangles = markedRectangleIds.toList)
-        }
-        old.copy(fishingSettings = updatedFishing)
-      }.unsafeRunSync()
-
-
-      gridFrame.dispose()
-      closeButtonFrame.dispose()
+      closeFrame.dispose(); gridFrame.dispose()
     })
-
-
-
-    closeButtonFrame.add(closeButton)
-    closeButtonFrame.pack() // Adjust frame size to fit the button
-    closeButtonFrame.setVisible(true)
-
-    gridFrame.setVisible(true)
-    gridFrame.requestFocus()
+    closeFrame.add(closeButton); closeFrame.pack(); closeFrame.setVisible(true)
   }
 
 

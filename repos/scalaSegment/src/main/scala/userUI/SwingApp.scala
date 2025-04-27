@@ -660,20 +660,21 @@ class SwingApp(playerClassList: List[Player],
   val runButton = new Button("RUN") {
     reactions += {
       case ButtonClicked(_) =>
+        // 1) build fresh settings from every UI var, including fishingBot.selectedRectangles
         val currentSettings = collectSettingsFromUI()
 
-        // 1) overwrite the shared Ref with whatever’s in the UI right now
+        // 2) Overwrite the shared Ref so everyone downstream sees it
         import cats.effect.unsafe.implicits.global
-        settingsRef.update(_ => currentSettings).unsafeRunSync()
+        settingsRef.set(currentSettings).unsafeRunAndForget()
 
-        // 2) fire off your actors with the brand-new settings
-        uiAppActor ! MainApp.StartActors(currentSettings)
+        // 2) log & send to actors
+        println(s"[UI] starting with settings: $currentSettings")
+        uiAppActor             ! MainApp.StartActors(currentSettings)
         periodicFunctionActorRef ! MainApp.StartActors(currentSettings)
         jsonProcessorActorRef  ! InitializeProcessor(currentPlayer, currentSettings)
         autoResponderManagerRef ! UpdateSettings(currentSettings)
     }
   }
-
 
   val updateButton = new Button("Update Settings") {
     reactions += {

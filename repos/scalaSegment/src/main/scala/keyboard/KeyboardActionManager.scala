@@ -36,6 +36,14 @@ class KeyboardActionManager(
                              taskInProgressRef: Ref[IO, Boolean]
                            ) {
 
+  def enqueueBatches(batches: List[(String, List[KeyboardAction])]): IO[Unit] =
+    batches.traverse_ { case (taskName, actions) =>
+      IO.println(s"[$taskName] Enqueueing ${actions.size} keyboard actions") *>
+        actions.traverse_( { action =>
+          IO.println(s"[$taskName] ➡ $action") *> enqueue(action)
+        })
+    }
+
   def enqueue(action: KeyboardAction): IO[Unit] =
     for {
       _ <- IO.println(s"Enqueuing keyboard action: $action")

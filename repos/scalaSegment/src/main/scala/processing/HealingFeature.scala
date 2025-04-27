@@ -15,13 +15,16 @@ import utils.ProcessingUtils._
 object HealingFeature {
 
   def run(json: JsValue, settings: UISettings, state: GameState):
-  (GameState, List[MouseAction], List[KeyboardAction]) =
-    if (!settings.healingSettings.enabled) (state, Nil, Nil)
-    else Steps.runFirst(json, settings, state)
+  (GameState, List[MKTask]) =
+    if (!settings.healingSettings.enabled) (state, Nil)
+    else {
+      val (s, maybeTask) = Steps.runFirst(json, settings, state)
+      (s, maybeTask.toList)
+    }
 
   private object Steps {
     // ordered list of steps
-    val all: List[Step] = List(
+    val allSteps: List[Step] = List(
       SetUpSupplies,
       HandleBackpacks,
       DangerLevelHealing,
@@ -30,75 +33,52 @@ object HealingFeature {
     )
 
 
-    def runFirst(json: JsValue, settings: UISettings, start: GameState)
-    : (GameState, List[MouseAction], List[KeyboardAction]) = {
-
+    def runFirst(
+                  json: JsValue,
+                  settings: UISettings,
+                  startState: GameState
+                ): (GameState, Option[MKTask]) = {
       @annotation.tailrec
-      def loop(remaining: List[Step],
-               currentState: GameState,
-               carriedActions: MKActions): (GameState, MKActions) = remaining match {
-
-        // 1) If we've already gotten actions, stop immediately.
-        case _ if carriedActions.mouse.nonEmpty || carriedActions.keyboard.nonEmpty =>
-          (currentState, carriedActions)
-
-        // 2) No more steps? return what we have so far.
-        case Nil =>
-          (currentState, MKActions(Nil, Nil))
-
-        // 3) Try the next step
+      def loop(
+                remaining: List[Step],
+                current: GameState
+              ): (GameState, Option[MKTask]) = remaining match {
+        case Nil => (current, None)
         case step :: rest =>
-          step.run(currentState, json, settings) match {
-            // a) Step wants to update state *and* emits actions:
-            case Some((newState, actions)) if actions.mouse.nonEmpty || actions.keyboard.nonEmpty =>
-              // we break and return immediately
-              (newState, actions)
-
-            // b) Step updates state but has no actions: carry on
-            case Some((newState, MKActions(Nil, Nil))) =>
-              loop(rest, newState, MKActions(Nil, Nil))
-
-            // c) Step does nothing: carry on with same state
+          step.run(current, json, settings) match {
+            case Some((newState, task)) =>
+              (newState, Some(task))
             case None =>
-              loop(rest, currentState, MKActions(Nil, Nil))
+              loop(rest, current)
           }
       }
 
-      // run the loop
-      val (finalState, MKActions(m,k)) = loop(all, start, MKActions(Nil, Nil))
-      (finalState, m, k)
+      loop(allSteps, startState)
     }
   }
 
 
   private object DangerLevelHealing extends Step {
-
+    private val taskName = "DangerLevelHealing"
     def run(
              state:    GameState,
              json:     JsValue,
              settings: UISettings
-           ): Option[(GameState, MKActions)] = {
+           ): Option[(GameState, MKTask)] = {
 
       val armed = state.autoHeal.dangerLevelHealing
-      println(s"[DangerLevelHealing] armed = $armed")
-
-      // 1) read in-game crosshair flag
       val isActiveFromJson = (json \ "characterInfo" \ "IsCrosshairActive")
-        .asOpt[Boolean]
-        .getOrElse(false)
-      println(s"[DangerLevelHealing] in-game crosshair = $isActiveFromJson")
+        .asOpt[Boolean].getOrElse(false)
 
-      // 2) sync that into our state
-      val synced = state.copy(
-        autoHeal = state.autoHeal.copy(
-          healingCrosshairActive = isActiveFromJson
-        )
-      )
+      // sync our state
+      val synced = state.copy(autoHeal = state.autoHeal.copy(
+        healingCrosshairActive = isActiveFromJson
+      ))
 
-      // 3) decide whether to fire or clear the crosshair
-      val activateSeq =
+      // === explicitly type these as Option[List[MouseAction]] ===
+      val activateSeq: Option[List[MouseAction]] =
         if (armed && !isActiveFromJson) {
-          println("[DangerLevelHealing] activating crosshair")
+          // The for-comprehension here already returns Option[List[MouseAction]]
           for {
             mp      <- (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").asOpt[JsObject]
             tx      <- (mp   \ "x").asOpt[Int]
@@ -112,86 +92,161 @@ object HealingFeature {
             RightButtonRelease(rx, ry),
             MoveMouse(tx, ty)
           )
-        } else None
+        } else {
+          // now this is unambiguously the same type
+          Option.empty[List[MouseAction]]
+        }
 
-      val deactivateSeq =
+      val deactivateSeq: Option[List[MouseAction]] =
         if (!armed && isActiveFromJson) {
           println("[DangerLevelHealing] deactivating crosshair")
           Some(List(RightButtonRelease(0, 0)))
-        } else None
+        } else {
+          Option.empty[List[MouseAction]]
+        }
 
-      // 4) pick whichever we got
-      val mouseActions = activateSeq.orElse(deactivateSeq).getOrElse(Nil)
-      if (mouseActions.nonEmpty) println(s"[DangerLevelHealing] will emit: $mouseActions")
-      else                     println("[DangerLevelHealing] no crosshair actions")
+      // now orElse, isDefined, etc. will compile
+      val mouseActionsOpt = activateSeq.orElse(deactivateSeq)
 
-      // 5) update our healingCrosshairActive flag
-      val newActive =
-        if (activateSeq.isDefined)  true
-        else if (deactivateSeq.isDefined) false
-        else synced.autoHeal.healingCrosshairActive
+      mouseActionsOpt match {
+        case Some(mouseActions) if mouseActions.nonEmpty =>
+          println(s"[DangerLevelHealing] will emit: $mouseActions")
 
-      val newState = synced.copy(
-        autoHeal = synced.autoHeal.copy(
-          healingCrosshairActive = newActive
-        )
-      )
+          // determine the new crosshair‐active state
+          val newActive = activateSeq.isDefined
 
-      Some((newState, MKActions(mouseActions, Nil)))
+          val newState = synced.copy(autoHeal = synced.autoHeal.copy(
+            healingCrosshairActive = newActive
+          ))
+          Some(newState -> MKTask(taskName, MKActions(mouseActions, Nil)))
+
+        case _ =>
+          println("[DangerLevelHealing] no crosshair actions, passing through")
+          None
+      }
     }
   }
 
-
   private object SetUpSupplies extends Step {
+    private val taskName = "SetUpSupplies"
     def run(
              state:    GameState,
              json:     JsValue,
              settings: UISettings
-           ): Option[(GameState, MKActions)] = {
+           ): Option[(GameState, MKTask)] = {
 
       val ah        = state.autoHeal
       val container = ah.healingRuneContainerName
       val status    = ah.statusOfAutoheal
       println("start SetUpSupplies")
-      println(s"  [SetUpSupplies] container='${ah.healingRuneContainerName}', status='${ah.statusOfAutoheal}'")
+      println(s"  [SetUpSupplies] existing UH container='$container', status='$status'")
+
+      // --- PREFLIGHT: ONLY check MP & HP containers for “empty of potions” ---
+      if (status == "ready") {
+        val toCheck = List(
+          ah.healingMPContainerName -> 2874,  // MP potions
+          ah.healingHPContainerName -> 2874   // HP potions
+        ).filter { case (name, _) => name.nonEmpty && name != "not_set" }
+
+        println("[SetUpSupplies] preflight checking MP/HP for exhaustion:")
+        toCheck.foreach { case (name, id) =>
+          val itemsOpt = (json \ "containersInfo" \ name \ "items").asOpt[JsObject]
+          val hasRelevant = itemsOpt.exists(_.values.exists(item =>
+            (item \ "itemId").asOpt[Int].contains(id)
+          ))
+          println(s"    - '$name' hasRelevant($id)=$hasRelevant")
+        }
+
+        // remove the first MP/HP container that has NO more potions
+        toCheck.collectFirst {
+          case (name, id)
+            if !(json \ "containersInfo" \ name \ "items").asOpt[JsObject]
+              .exists(_.values.exists(item => (item \ "itemId").asOpt[Int].contains(id)))
+          => name
+        } match {
+          case Some(emptyPotContainer) =>
+            println(s"[SetUpSupplies] container '$emptyPotContainer' has no potions → removing it first")
+            val upSeqOpt: Option[List[MouseAction]] = for {
+              invObj   <- (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
+              matching <- invObj.keys.find(_.contains(emptyPotContainer))
+              upBtn    <- (invObj \ matching \ "upButton").asOpt[JsObject]
+              x        <- (upBtn \ "x").asOpt[Int]
+              y        <- (upBtn \ "y").asOpt[Int]
+            } yield List(
+              MoveMouse(x, y),
+              LeftButtonPress(x, y),
+              LeftButtonRelease(x, y)
+            )
+
+            val actions = upSeqOpt.getOrElse(Nil)
+            val updatedState = state.copy(autoHeal = ah.copy(
+              healingRuneContainerName = emptyPotContainer,
+              statusOfAutoheal         = "remove_backpack"
+            ))
+            return Some(updatedState -> MKTask(taskName, MKActions(actions, Nil)))
+
+          case None =>
+            println("[SetUpSupplies] MP & HP both still stocked, proceeding")
+        }
+      }
 
       // === 1) Discover which container holds UH runes ===
       if (container.isEmpty || container == "not_set") {
-        // scan all containers for itemId == 3160
-        val foundOpt: Option[String] = (json \ "containersInfo").asOpt[JsObject]
-          .flatMap { info =>
-            info.fields.collectFirst {
-              case (name, details)
-                if (details \ "items").asOpt[JsObject]
-                  .exists(_.values.exists(item =>
-                    (item \ "itemId").asOpt[Int].contains(3160)
-                  ))
-              => name
-            }
-          }
+        val containers = (json \ "containersInfo").asOpt[JsObject]
+          .map(_.fields)
+          .getOrElse(Nil)
 
-        val newContainer = foundOpt.getOrElse {
+        println(s"  [SetUpSupplies] found ${containers.size} containers:")
+        containers.foreach { case (name, details) =>
+          val ids = (details \ "items").asOpt[JsObject]
+            .map(_.values.flatMap(item => (item \ "itemId").asOpt[Int])).getOrElse(Seq.empty)
+          println(s"    - $name contains IDs: ${ids.mkString(",")}")
+        }
+
+        // find UH rune container
+        val uhContainerOpt = containers.collectFirst {
+          case (name, details)
+            if (details \ "items").asOpt[JsObject]
+              .exists(_.values.exists(item => (item \ "itemId").asOpt[Int].contains(3160)))
+          => name
+        }
+        // find MP potion container
+        val mpContainerOpt = containers.collectFirst {
+          case (name, details)
+            if (details \ "items").asOpt[JsObject]
+              .exists(_.values.exists(item => (item \ "itemId").asOpt[Int].contains(2874)))
+          => name
+        }
+
+        val newUH = uhContainerOpt.getOrElse {
           println("    → no UH runes found in any container, but marking ready anyway")
           "not_set"
         }
+        val newMP = mpContainerOpt.getOrElse {
+          println("    → no MP potions found in any container (you won’t be able to heal MP)")
+          "not_set"
+        }
 
-        val newState = state.copy(autoHeal = ah.copy(
-          healingRuneContainerName = newContainer,
+        println(s"  [SetUpSupplies] selecting UH='$newUH', MP='$newMP'")
+
+        val updatedState = state.copy(autoHeal = ah.copy(
+          healingRuneContainerName = newUH,
+          healingMPContainerName   = newMP,
           statusOfAutoheal         = "ready"
         ))
 
-        println(s"  → SetUpSupplies: new container='$newContainer', status='ready'")
-        return Some((newState, MKActions(Nil, Nil)))
+        println(s"  → SetUpSupplies: UH container='$newUH', MP container='$newMP', status='ready'")
+        return Some(updatedState -> MKTask(taskName, MKActions.empty))
 
-        // === 2) If we know the container and are “ready”, check freeSpace & hasParent ===
       } else if (container != "not_set" && status == "ready") {
         val infoOpt = (json \ "containersInfo" \ container).asOpt[JsObject]
         val free    = infoOpt.flatMap(ci => (ci \ "freeSpace").asOpt[Int])
         val parent  = infoOpt.flatMap(ci => (ci \ "hasParent").asOpt[Boolean])
 
+        println(s"  [SetUpSupplies] checking backpack '$container': freeSpace=$free, hasParent=$parent")
+
         // only when it’s a full backpack with a parent
         if (free.contains(20) && parent.contains(true)) {
-          // build the “go up one level” click‑sequence
           val upSeqOpt: Option[List[MouseAction]] = for {
             invObj   <- (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
             matching <- invObj.keys.find(_.contains(container))
@@ -205,59 +260,61 @@ object HealingFeature {
           )
 
           val actions = upSeqOpt.getOrElse(Nil)
-          // bump into the remove_backpack phase
-          val newState = state.copy(autoHeal = ah.copy(
+          println(s"  [SetUpSupplies] going up from '$container', actions = $actions")
+
+          val updatedState = state.copy(autoHeal = ah.copy(
             statusOfAutoheal = "remove_backpack"
           ))
 
-          Some((newState, MKActions(actions, Nil)))
+          return Some(updatedState -> MKTask(taskName, MKActions(actions, Nil)))
 
         } else {
-          // nothing to do yet
+          println(s"  [SetUpSupplies] nothing to do in '$container' yet")
           None
         }
 
       } else {
-        // not our phase
+        println("  [SetUpSupplies] not in setup phase, passing through")
         None
       }
     }
   }
 
-
   private object HandleBackpacks extends Step {
-    def run(
-             state:    GameState,
-             json:     JsValue,
-             settings: UISettings
-           ): Option[(GameState, MKActions)] =
+    private val taskName = "HandleBackpacks"
 
+    def run(
+             state: GameState,
+             json:  JsValue,
+             settings: UISettings
+           ): Option[(GameState, MKTask)] = {
 
       state.autoHeal.statusOfAutoheal match {
 
         case "remove_backpack" =>
+          val subTaskName = "remove_backpack"
           println("start remove_backpack")
           // 1) character position as Option[(x,y)]
-          val maybeCharLoc: Option[(Int,Int)] =
+          val maybeCharLoc: Option[(Int, Int)] =
             for {
               mp <- (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").asOpt[JsObject]
-              x  <- (mp \ "x").asOpt[Int]
-              y  <- (mp \ "y").asOpt[Int]
+              x <- (mp \ "x").asOpt[Int]
+              y <- (mp \ "y").asOpt[Int]
             } yield (x, y)
 
           // 2) build the four‑step remove sequence if everything is present
           val maybeActions: Option[List[MouseAction]] = for {
-            (cx, cy)   <- maybeCharLoc
-            invObj     <- (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
-            matching   <- invObj.keys.find(_.contains(state.autoHeal.healingRuneContainerName))
-            item0Obj   <- (invObj \ matching \ "contentsPanel" \ "item0").asOpt[JsObject]
-            emptyX     <- (item0Obj \ "x").asOpt[Int]
-            emptyY     <- (item0Obj \ "y").asOpt[Int]
+            (cx, cy) <- maybeCharLoc
+            invObj <- (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
+            matching <- invObj.keys.find(_.contains(state.autoHeal.healingRuneContainerName))
+            item0Obj <- (invObj \ matching \ "contentsPanel" \ "item0").asOpt[JsObject]
+            emptyX <- (item0Obj \ "x").asOpt[Int]
+            emptyY <- (item0Obj \ "y").asOpt[Int]
           } yield List(
             MoveMouse(emptyX, emptyY),
             LeftButtonPress(emptyX, emptyY),
-            MoveMouse(cx,       cy),
-            LeftButtonRelease(cx,       cy)
+            MoveMouse(cx, cy),
+            LeftButtonRelease(cx, cy)
           )
 
           // 3) fold: if we found them, use them; if not, return no actions
@@ -268,75 +325,103 @@ object HealingFeature {
           val newAutoHeal = state.autoHeal.copy(
             statusOfAutoheal = "open_new_backpack"
           )
-          val newState = state.copy(autoHeal = newAutoHeal)
+          val updatedState = state.copy(autoHeal = newAutoHeal)
 
-          // 5) return only the actions we built (and no keyboard actions)
-          Some((
-            newState,
-            MKActions(mouseActions, Nil)
-          ))
+          return Some(updatedState -> MKTask(s"$taskName - $subTaskName", MKActions(mouseActions, Nil)))
 
         case "open_new_backpack" =>
-          println("start open_new_backpack")
+          val subTaskName = "open_new_backpack"
           // find the new‑backpack slot and build a right‑click sequence
           val maybeOpenSeq: Option[List[MouseAction]] = for {
-            invObj   <- (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
+            invObj <- (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
             matching <- invObj.keys.find(_.contains(state.autoHeal.healingRuneContainerName))
             item0Obj <- (invObj \ matching \ "contentsPanel" \ "item0").asOpt[JsObject]
-            x        <- (item0Obj \ "x").asOpt[Int]
-            y        <- (item0Obj \ "y").asOpt[Int]
+            x <- (item0Obj \ "x").asOpt[Int]
+            y <- (item0Obj \ "y").asOpt[Int]
           } yield List(
             MoveMouse(x, y),
             RightButtonPress(x, y),
             RightButtonRelease(x, y)
           )
 
-          val openActions = maybeOpenSeq.getOrElse(Nil)
+          val mouseActions = maybeOpenSeq.getOrElse(Nil)
 
           // bump to “verifying” so the next loop can check runes
-          val newState2 = state.copy(
+          val updatedState = state.copy(
             autoHeal = state.autoHeal.copy(statusOfAutoheal = "verifying")
           )
 
-          Some((newState2, MKActions(openActions, Nil)))
+          return Some(updatedState -> MKTask(s"$taskName - $subTaskName", MKActions(mouseActions, Nil)))
 
         case "verifying" =>
+          val sub = "verifying"
+          val ah  = state.autoHeal
+          val curr = ah.healingRuneContainerName
+          println(s"[$taskName] [$sub] verifying container='$curr'")
 
-          println("start verifying")
-          // Look up the container info, then check items for UH runes (id=3160, subtype=1)
-          val containsUH: Boolean = (for {
-            containerInfo <- (json \ "containersInfo" \ state.autoHeal.healingRuneContainerName).asOpt[JsObject]
-            itemsObj      <- (containerInfo \ "items").asOpt[JsObject]
-          } yield {
-            itemsObj.fields.exists { case (_, itemInfo) =>
-              (itemInfo \ "itemId").asOpt[Int].contains(3160) &&
-                (itemInfo \ "itemSubType").asOpt[Int].contains(1)
-            }
-          }).getOrElse(false)
+          // 1) pick the right itemId for this container
+          val currId =
+            if (curr == ah.healingMPContainerName || curr == ah.healingHPContainerName) 2874
+            else 3160
 
-          // If found → ready, else stay in verifying
-          val nextStatus = if (containsUH) "ready" else "verifying"
+          // 2) check for any of that item left
+          val rem = (json \ "containersInfo" \ curr \ "items").asOpt[JsObject]
+            .exists(_.values.exists(item =>
+              (item \ "itemId").asOpt[Int].contains(currId)
+            ))
+          println(s"[$taskName] [$sub] container '$curr' hasRemaining($currId)=$rem")
 
-          val newState3 = state.copy(
-            autoHeal = state.autoHeal.copy(statusOfAutoheal = nextStatus)
-          )
+          if (rem) {
+            // items still here → done
+            println(s"[$taskName] [$sub] items still present, switching to READY")
+            val newState = state.copy(autoHeal = ah.copy(statusOfAutoheal = "ready"))
+            return Some(newState -> MKTask(s"$taskName - $sub", MKActions.empty))
+          }
 
-          // no mouse or keyboard actions for verification
-          Some((newState3, MKActions(Nil, Nil)))
+          // 3) find next container in UH→MP→HP order
+          val nextOpt =
+            if (curr != ah.healingMPContainerName &&
+              (json \ "containersInfo" \ ah.healingMPContainerName \ "items").asOpt[JsObject]
+                .exists(_.values.exists(item => (item \ "itemId").asOpt[Int].contains(2874)))
+            ) Some(ah.healingMPContainerName)
+            else if (curr != ah.healingHPContainerName &&
+              (json \ "containersInfo" \ ah.healingHPContainerName \ "items").asOpt[JsObject]
+                .exists(_.values.exists(item => (item \ "itemId").asOpt[Int].contains(2874)))
+            ) Some(ah.healingHPContainerName)
+            else None
 
+          nextOpt match {
+            case Some(nextCont) =>
+              println(s"[$taskName] [$sub] switching to next container='$nextCont'")
+              val updatedAH = ah.copy(
+                healingRuneContainerName = nextCont,
+                statusOfAutoheal         = "remove_backpack"
+              )
+              return Some(
+                state.copy(autoHeal = updatedAH) ->
+                  MKTask(s"$taskName - $sub", MKActions.empty)
+              )
+
+            case None =>
+              // no more containers with items → we're done
+              println(s"[$taskName] [$sub] no more containers, switching to READY")
+              val doneState = state.copy(autoHeal = ah.copy(statusOfAutoheal = "ready"))
+              return Some(doneState -> MKTask(s"$taskName - $sub", MKActions.empty))
+          }
 
         case _ =>
           None
       }
+    }
   }
 
-
   private object TeamHealing extends Step {
+    private val taskName = "TeamHealing"
     def run(
              state:    GameState,
              json:     JsValue,
              settings: UISettings
-           ): Option[(GameState, MKActions)] = {
+           ): Option[(GameState, MKTask)] = {
 
       val ah   = state.autoHeal
       val now  = System.currentTimeMillis()
@@ -378,18 +463,17 @@ object HealingFeature {
           // we found a spell to cast on a friend
           case Some(spell) =>
             // enqueue a TextType action
-            val kbActs = List(TextType(spell))
+            val keyboardActions = List(TextType(spell))
 
             // update timestamp & mark busy
-            val newAuto = ah.copy(
+            val updatedAHState = ah.copy(
               lastHealUseTime     = now,
               stateHealingWithRune = "busy"
             )
-            val newState = state.copy(autoHeal = newAuto)
 
-            Some((newState, MKActions(Nil, kbActs)))
+            val updatedState = state.copy(autoHeal = updatedAHState)
 
-          // no friend needs healing right now
+            return Some(updatedState -> MKTask(taskName, MKActions(Nil, keyboardActions)))
           case None =>
             None
         }
@@ -400,100 +484,55 @@ object HealingFeature {
     }
   }
 
-
   private object SelfHealing extends Step {
+    private val taskName = "SelfHealing"
     def run(
              state:    GameState,
              json:     JsValue,
              settings: UISettings
-           ): Option[(GameState, MKActions)] = {
-      val ah  = state.autoHeal
+           ): Option[(GameState, MKTask)] = {
+      val ah = state.autoHeal
       val now = System.currentTimeMillis()
+      println(s"[SelfHealing] run() called: status=${ah.statusOfAutoheal}, runeState=${ah.stateHealingWithRune}")
 
-      println("=== start SelfHealing ===")
-      // 0) Top‐level readiness
-      println(s"  statusOfAutoheal='${ah.statusOfAutoheal}', stateHealingWithRune='${ah.stateHealingWithRune}'")
-      if (ah.statusOfAutoheal != "ready" || ah.stateHealingWithRune != "free") {
-        println("  → skipping SelfHealing: not ready/free")
+      // only if ready/free
+      if (ah.statusOfAutoheal != "ready" || ah.stateHealingWithRune != "free")
         return None
-      }
-      println("  → ready/free, checking thresholds…")
 
-      // only run if we're “ready” and not already healing
-      if (ah.statusOfAutoheal == "ready" && ah.stateHealingWithRune == "free") {
+      def findOne(id: Int, count: Int) =
+        findItemInContainerSlot14(json, state, id, count).headOption
 
-        // 1) Grab health and mana %
-        val healthPercent= (json \ "characterInfo" \ "HealthPercent").asOpt[Int].getOrElse(100)
-        val mana         = (json \ "characterInfo" \ "Mana").         asOpt[Int].getOrElse(0)
-        val manaMax      = (json \ "characterInfo" \ "ManaMax").      asOpt[Int].getOrElse(1)
-        val manaPercent  = (mana.toDouble / manaMax * 100).toInt
+      val healthPercent = (json \ "characterInfo" \ "HealthPercent").asOpt[Int].getOrElse(100)
+      val mana = (json \ "characterInfo" \ "Mana").asOpt[Int].getOrElse(0)
+      val manaMax = (json \ "characterInfo" \ "ManaMax").asOpt[Int].getOrElse(1)
 
-        println(s"  health% = $healthPercent, mana = $mana, mana% = $manaPercent")
 
-        // helper to find a single item slot
-        def findOne(id: Int, count: Int) =
-          findItemInContainerSlot14(json, state, id, count).headOption
-
-        // --- 2) UH rune branch ---
-        val uhBranch: Option[(List[MouseAction], List[KeyboardAction], AutoHealState)] =
-          if (
-            settings.healingSettings.uhHealHealthPercent > 0 &&
-              healthPercent <= settings.healingSettings.uhHealHealthPercent &&
-              mana >= settings.healingSettings.uhHealMana &&
-              (now - ah.lastHealUseTime) > (ah.healingUseCooldown + ah.healUseRandomness) &&
-              ah.healingRuneContainerName != "not_set"
-          ) {
-            for {
-              runePos <- findOne(3160, 1)
-              mpObj   <- (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").asOpt[JsObject]
-              tx      <- (mpObj   \ "x").asOpt[Int]
-              ty      <- (mpObj   \ "y").asOpt[Int]
-              rx      =  (runePos \ "x").as[Int]
-              ry      =  (runePos \ "y").as[Int]
-            } yield {
-              // crosshair‐active changes the sequence
-              val mouseSeq = if (ah.healingCrosshairActive) {
-                List(
-                  MoveMouse(tx, ty),
-                  LeftButtonPress(tx, ty),
-                  LeftButtonRelease(tx, ty)
-                )
-              } else {
-                List(
-                  MoveMouse(rx, ry),
-                  RightButtonPress(rx, ry),
-                  RightButtonRelease(rx, ry),
-                  MoveMouse(tx, ty),
-                  LeftButtonPress(tx, ty),
-                  LeftButtonRelease(tx, ty)
-                )
-              }
-              val newRandom = generateRandomDelay(ah.strongHeal.strongHealUseTimeRange)
-              val newAh = ah.copy(
-                lastHealUseTime      = now,
-                healUseRandomness    = newRandom,
-                stateHealingWithRune = "free"      // <<< reset to free
+      // collect branches with a subName
+      val uhBranch: Option[(String, List[MouseAction], List[KeyboardAction], AutoHealState)] = {
+        val subTaskName = "uhHealing"
+        if (
+          settings.healingSettings.uhHealHealthPercent > 0 &&
+            healthPercent <= settings.healingSettings.uhHealHealthPercent &&
+            mana >= settings.healingSettings.uhHealMana &&
+            (now - ah.lastHealUseTime) > (ah.healingUseCooldown + ah.healUseRandomness) &&
+            ah.healingRuneContainerName != "not_set"
+        ) {
+          for {
+            runePos <- findOne(3160, 1)
+            mpObj <- (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").asOpt[JsObject]
+            tx <- (mpObj \ "x").asOpt[Int]
+            ty <- (mpObj \ "y").asOpt[Int]
+            rx = (runePos \ "x").as[Int]
+            ry = (runePos \ "y").as[Int]
+          } yield {
+            val mouseSeq = if (ah.healingCrosshairActive) {
+              List(
+                MoveMouse(tx, ty),
+                LeftButtonPress(tx, ty),
+                LeftButtonRelease(tx, ty)
               )
-              (mouseSeq, Nil, newAh)
-            }
-          } else None
-
-        // --- 3) IH rune branch ---
-        val ihBranch: Option[(List[MouseAction], List[KeyboardAction], AutoHealState)] =
-          if (
-            settings.healingSettings.ihHealHealthPercent > 0 &&
-              healthPercent <= settings.healingSettings.ihHealHealthPercent &&
-              mana >= settings.healingSettings.ihHealMana
-          ) {
-            for {
-              runePos <- findOne(3152, 1)
-              mpObj   <- (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").asOpt[JsObject]
-              tx      <- (mpObj   \ "x").asOpt[Int]
-              ty      <- (mpObj   \ "y").asOpt[Int]
-              rx      =  (runePos \ "x").as[Int]
-              ry      =  (runePos \ "y").as[Int]
-            } yield {
-              val seq = List(
+            } else {
+              List(
                 MoveMouse(rx, ry),
                 RightButtonPress(rx, ry),
                 RightButtonRelease(rx, ry),
@@ -501,170 +540,258 @@ object HealingFeature {
                 LeftButtonPress(tx, ty),
                 LeftButtonRelease(tx, ty)
               )
-              val newRandom = generateRandomDelay(ah.strongHeal.strongHealUseTimeRange)
-              val newAh = ah.copy(
-                lastHealUseTime      = now,
-                healUseRandomness    = newRandom,
-                stateHealingWithRune = "free"      // <<< reset to free
-              )
-
-              (seq, Nil, newAh)
             }
-          } else None
+            val newAh = ah.copy(
+              lastHealUseTime = now,
+              healUseRandomness = generateRandomDelay(ah.strongHeal.strongHealUseTimeRange),
+              stateHealingWithRune = "free"
+            )
+            (subTaskName, mouseSeq, Nil, newAh)
+          }
+        } else None
+      }
 
-        // --- 4) HP potion branch ---
-        val hpBranch: Option[(List[MouseAction], List[KeyboardAction], AutoHealState)] =
+
+      // --- 3) IH rune branch ---
+      val ihBranch: Option[(String, List[MouseAction], List[KeyboardAction], AutoHealState)] = {
+        val subTaskName = "ihHealing"
+        if (
+          settings.healingSettings.ihHealHealthPercent > 0 &&
+            healthPercent <= settings.healingSettings.ihHealHealthPercent &&
+            mana >= settings.healingSettings.ihHealMana
+        ) {
+          for {
+            runePos <- findOne(3152, 1)
+            mpObj <- (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").asOpt[JsObject]
+            tx <- (mpObj \ "x").asOpt[Int]
+            ty <- (mpObj \ "y").asOpt[Int]
+            rx = (runePos \ "x").as[Int]
+            ry = (runePos \ "y").as[Int]
+          } yield {
+            val mouseSeq = List(
+              MoveMouse(rx, ry),
+              RightButtonPress(rx, ry),
+              RightButtonRelease(rx, ry),
+              MoveMouse(tx, ty),
+              LeftButtonPress(tx, ty),
+              LeftButtonRelease(tx, ty)
+            )
+            val newRandom = generateRandomDelay(ah.strongHeal.strongHealUseTimeRange)
+            val newAh = ah.copy(
+              lastHealUseTime = now,
+              healUseRandomness = newRandom,
+              stateHealingWithRune = "free" // <<< reset to free
+            )
+            (subTaskName, mouseSeq, Nil, newAh)
+          }
+        } else None
+      }
+
+      // --- 4) HP potion branch ---
+      val hpBranch: Option[(String, List[MouseAction], List[KeyboardAction], AutoHealState)] = {
+        val subTaskName = "hpHealing"
+        if (
+          settings.healingSettings.hPotionHealHealthPercent > 0 &&
+            healthPercent <= settings.healingSettings.hPotionHealHealthPercent &&
+            mana >= settings.healingSettings.hPotionHealMana
+        ) {
+          for {
+            potionPos <- findOne(2874, 10)
+            mpObj <- (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").asOpt[JsObject]
+            tx <- (mpObj \ "x").asOpt[Int]
+            ty <- (mpObj \ "y").asOpt[Int]
+            px = (potionPos \ "x").as[Int]
+            py = (potionPos \ "y").as[Int]
+          } yield {
+            val mouseSeq = List(
+              MoveMouse(px, py),
+              RightButtonPress(px, py),
+              RightButtonRelease(px, py),
+              MoveMouse(tx, ty),
+              LeftButtonPress(tx, ty),
+              LeftButtonRelease(tx, ty)
+            )
+            val newRandom = generateRandomDelay(ah.strongHeal.strongHealUseTimeRange)
+            val newAh = ah.copy(
+              lastHealUseTime = now,
+              healUseRandomness = newRandom,
+              stateHealingWithRune = "free" // <<< reset to free
+            )
+            (subTaskName, mouseSeq, Nil, newAh)
+          }
+        } else None
+      }
+
+
+      // MP‐healing branch
+      val mpBranch: Option[(String, List[MouseAction], List[KeyboardAction], AutoHealState)] = {
+        val subTaskName = "mpHealing"
+        println(s"[SelfHealing][$subTaskName] checking if we should try an MP potion")
+        val manaMin = settings.healingSettings.mPotionHealManaMin
+        val mpCont  = ah.healingMPContainerName
+
+        // checks slots 1 through 4 in containerInfo, then uses contentsPanel for screen coords
+        def findOneInFirstFour(containerName: String, itemId: Int): Option[(Int, Int)] = {
+          // locate which "slotN" (1–4) contains our potion
+          val maybeSlotIndex: Option[Int] = (0 to 3).find { idx =>
+            (json \ "containersInfo" \ containerName \ "items" \ s"slot$idx" \ "itemId")
+              .asOpt[Int].contains(itemId)
+          }
+          println(s"[SelfHealing][$subTaskName] findOneInFirstFour found slot index = $maybeSlotIndex")
+
+          maybeSlotIndex.flatMap { idx =>
+            val itemKey = s"item$idx"
+            // find the matching contentsPanel entry
+            val contentsOpt = for {
+              invPanel  <- (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
+              panelKey  <- invPanel.keys.find(_.contains(containerName))
+              contPanel <- (invPanel \ panelKey \ "contentsPanel").asOpt[JsObject]
+              posObj    <- (contPanel \ itemKey).asOpt[JsObject]
+            } yield ( (posObj \ "x").as[Int], (posObj \ "y").as[Int] )
+
+            println(s"[SelfHealing][$subTaskName] slot 'slot$idx' → '$itemKey' screen pos = $contentsOpt")
+            contentsOpt
+          }
+        }
+
+        // use MP only when mana ≤ threshold
+        if (manaMin > 0 && mana <= manaMin) {
+          println(s"[SelfHealing][$subTaskName] condition passed (mana $mana ≤ $manaMin)")
+
+          findOneInFirstFour(mpCont, 2874) match {
+            case Some((px, py)) =>
+              (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").asOpt[JsObject] match {
+                case Some(mpObj) =>
+                  val tx = (mpObj \ "x").as[Int]
+                  val ty = (mpObj \ "y").as[Int]
+                  println(s"[SelfHealing][$subTaskName] found potion at ($px,$py), target at ($tx,$ty)")
+
+                  val seq = List(
+                    MoveMouse(px, py),
+                    RightButtonPress(px, py),
+                    RightButtonRelease(px, py),
+                    MoveMouse(tx, ty),
+                    LeftButtonPress(tx, ty),
+                    LeftButtonRelease(tx, ty)
+                  )
+                  val newAh = ah.copy(
+                    lastHealUseTime     = now,
+                    stateHealingWithRune = "free"
+                  )
+                  Some((subTaskName, seq, Nil, newAh))
+
+                case None =>
+                  println(s"[SelfHealing][$subTaskName] ERROR: mapPanelLoc[8x6] not found in JSON")
+                  None
+              }
+
+            case None =>
+              println(s"[SelfHealing][$subTaskName] SKIP: no MP potion (id=2874) in slots 1–4 of '$mpCont'")
+              None
+          }
+
+        } else {
+          val reason =
+            if (manaMin <= 0) "threshold disabled (mPotionHealManaMin ≤ 0)"
+            else s"mana ($mana) > threshold ($manaMin)"
+          println(s"[SelfHealing][$subTaskName] SKIPPING: $reason")
+          None
+        }
+      }
+
+
+
+      // --- 6) Strong heal spell branch ---
+      val strongBranch: Option[(String, List[MouseAction], List[KeyboardAction], AutoHealState)] = {
+        val subTaskName = "strongHealing"
+        settings.healingSettings.spellsHealSettings.headOption.flatMap { cfg =>
           if (
-            settings.healingSettings.hPotionHealHealthPercent > 0 &&
-              healthPercent <= settings.healingSettings.hPotionHealHealthPercent &&
-              mana >= settings.healingSettings.hPotionHealMana
+            cfg.strongHealSpell.nonEmpty &&
+              healthPercent <= cfg.strongHealHealthPercent &&
+              mana >= cfg.strongHealMana
           ) {
-            for {
-              potionPos <- findOne(2874, 10)
-              mpObj     <- (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").asOpt[JsObject]
-              tx        <- (mpObj   \ "x").asOpt[Int]
-              ty        <- (mpObj   \ "y").asOpt[Int]
-              px        =  (potionPos \ "x").as[Int]
-              py        =  (potionPos \ "y").as[Int]
-            } yield {
-              val seq = List(
-                MoveMouse(px, py),
-                RightButtonPress(px, py),
-                RightButtonRelease(px, py),
-                MoveMouse(tx, ty),
-                LeftButtonPress(tx, ty),
-                LeftButtonRelease(tx, ty)
-              )
-              val newRandom = generateRandomDelay(ah.strongHeal.strongHealUseTimeRange)
-              val newAh = ah.copy(
-                lastHealUseTime      = now,
-                healUseRandomness    = newRandom,
-                stateHealingWithRune = "free"      // <<< reset to free
-              )
-              (seq, Nil, newAh)
-            }
-          } else None
+            // build the one key-action we want
+            val kb: KeyboardAction =
+              if (cfg.strongHealHotkeyEnabled)
+                PressKey.fromKeyString(cfg.strongHealHotkey)
+              else
+                TextType(cfg.strongHealSpell)
 
-        // --- 5) MP potion branch ---
-        val mpBranch: Option[(List[MouseAction], List[KeyboardAction], AutoHealState)] =
+            // here’s your List of keyboard actions
+            val keyboardSeq: List[KeyboardAction] = List(kb)
+
+            val newRandom = generateRandomDelay(ah.strongHeal.strongHealUseTimeRange)
+            val newAh = ah.copy(
+              lastHealUseTime = now,
+              healUseRandomness = newRandom,
+              stateHealingWithRune = "free"
+            )
+            Some((subTaskName, Nil, keyboardSeq, newAh))
+          } else None
+        }
+      }
+
+
+      // --- 7) Light heal spell branch ---
+      val lightBranch: Option[(String, List[MouseAction], List[KeyboardAction], AutoHealState)] = {
+        val subTaskName = "lightHealing"
+        println("Start light healing")
+        settings.healingSettings.spellsHealSettings.headOption.flatMap { cfg =>
+          println(s"    lightBranch: cfgOpt.isDefined=true")
           if (
-            settings.healingSettings.mPotionHealManaMin > 0 &&
-              mana >= settings.healingSettings.mPotionHealManaMin
+            cfg.lightHealSpell.length > 1 &&
+              cfg.lightHealHealthPercent > 0 &&
+              healthPercent <= cfg.lightHealHealthPercent &&
+              mana >= cfg.lightHealMana
           ) {
-            for {
-              potionPos <- findOne(2874, 7)
-              mpObj     <- (json \ "screenInfo" \ "mapPanelLoc" \ "8x6").asOpt[JsObject]
-              tx        <- (mpObj   \ "x").asOpt[Int]
-              ty        <- (mpObj   \ "y").asOpt[Int]
-              px        =  (potionPos \ "x").as[Int]
-              py        =  (potionPos \ "y").as[Int]
-            } yield {
-              val seq = List(
-                MoveMouse(px, py),
-                RightButtonPress(px, py),
-                RightButtonRelease(px, py),
-                MoveMouse(tx, ty),
-                LeftButtonPress(tx, ty),
-                LeftButtonRelease(tx, ty)
-              )
-              val newAh = ah.copy(
-                lastHealUseTime      = now,
-                stateHealingWithRune = "healing"
-              )
-              (seq, Nil, newAh)
-            }
-          } else None
+            // schedule the delay if needed
+            val lowDelay =
+              if (ah.lightHeal.lightHealDelayTime == 0)
+                generateRandomDelay(ah.lightHeal.lightHealDelayTimeRange)
+              else
+                ah.lightHeal.lightHealDelayTime
 
-        // --- 6) Strong heal spell branch ---
-        val strongBranch: Option[(List[MouseAction], List[KeyboardAction], AutoHealState)] = {
-          val cfgOpt = settings.healingSettings.spellsHealSettings.headOption
-          cfgOpt.flatMap { cfg =>
-            if (
-              cfg.strongHealSpell.length > 1 &&
-                cfg.strongHealHealthPercent > 0 &&
-                healthPercent <= cfg.strongHealHealthPercent &&
-                mana >= cfg.strongHealMana
-            ) {
+            // only fire when cooldown + randomness + lowDelay has elapsed
+            if ((now - ah.lastHealUseTime) > (ah.healingUseCooldown + ah.healUseRandomness + lowDelay)) {
+              // build the one key-action we want
               val kb: KeyboardAction =
-                if (cfg.strongHealHotkeyEnabled)
-                  PressKey.fromKeyString(cfg.strongHealHotkey)
+                if (cfg.lightHealHotkeyEnabled)
+                  PressKey.fromKeyString(cfg.lightHealHotkey)
                 else
-                  TextType(cfg.strongHealSpell)
+                  TextType(cfg.lightHealSpell)
 
-              val newRandom = generateRandomDelay(ah.strongHeal.strongHealUseTimeRange)
+              // wrap it in a List
+              val keyboardSeq: List[KeyboardAction] = List(kb)
+
+              // pick a new random for next time
+              val newRandom = generateRandomDelay(ah.lightHeal.lightHealDelayTimeRange)
+
+              // reset any per-branch state
               val newAh = ah.copy(
-                lastHealUseTime      = now,
-                healUseRandomness    = newRandom,
-                stateHealingWithRune = "free"      // <<< reset to free
+                lastHealUseTime = now,
+                healUseRandomness = newRandom,
+                lightHeal = ah.lightHeal.copy(lightHealDelayTime = 0),
+                stateHealingWithRune = "free"
               )
-              Some((Nil, List(kb), newAh))
+
+              Some((subTaskName, Nil, keyboardSeq, newAh))
             } else None
-          }
+          } else None
         }
+      }
 
-        // --- 7) Light heal spell branch ---
-        val lightBranch: Option[(List[MouseAction], List[KeyboardAction], AutoHealState)] = {
-          println("Start light healing")
-          val cfgOpt = settings.healingSettings.spellsHealSettings.headOption
-          println(s"    lightBranch: cfgOpt.isDefined=${cfgOpt.isDefined}")
-          cfgOpt.flatMap { cfg =>
-            if (
-              cfg.lightHealSpell.length > 1 &&
-                cfg.lightHealHealthPercent > 0 &&
-                healthPercent <= cfg.lightHealHealthPercent &&
-                mana >= cfg.lightHealMana
-            ) {
-              // schedule the delay if needed
-              val lowDelay =
-                if (ah.lightHeal.lightHealDelayTime == 0)
-                  generateRandomDelay(ah.lightHeal.lightHealDelayTimeRange)
-                else
-                  ah.lightHeal.lightHealDelayTime
+      val chosen = uhBranch
+        .orElse(ihBranch)
+        .orElse(hpBranch)
+        .orElse(mpBranch)
+        .orElse(strongBranch)
+        .orElse(lightBranch)
 
-              // only fire when the combined cooldown + randomness + lowDelay has elapsed
-              if ((now - ah.lastHealUseTime) > (ah.healingUseCooldown + ah.healUseRandomness + lowDelay)) {
-                val kb: KeyboardAction =
-                  if (cfg.lightHealHotkeyEnabled)
-                    PressKey.fromKeyString(cfg.lightHealHotkey)
-                  else
-                    TextType(cfg.lightHealSpell)
-
-                val newRandom = generateRandomDelay(ah.lightHeal.lightHealDelayTimeRange)
-
-                val newLightHeal = state.autoHeal.lightHeal.copy(
-                  lightHealDelayTime = 0
-                )
-
-                // reset right back to "free" so on the very next tick you can re-evaluate against the cooldown
-                val newAh = ah.copy(
-                  lastHealUseTime      = now,
-                  healUseRandomness    = newRandom,
-                  lightHeal = ah.lightHeal.copy(lightHealDelayTime = 0),
-                  stateHealingWithRune = "free"
-                )
-
-
-                Some((Nil, List(kb), newAh))
-              } else None
-            } else None
-          }
-        }
-
-        // chain them in priority order
-        val chosen = uhBranch
-          .orElse(ihBranch)
-          .orElse(hpBranch)
-          .orElse(mpBranch)
-          .orElse(strongBranch)
-          .orElse(lightBranch)
-
-        chosen.map { case (mActs, kActs, newAh) =>
-          val newState = state.copy(autoHeal = newAh)
-          (newState, MKActions(mActs, kActs))
-        }
-
-      } else {
-        None
+      // now they all have the same shape, so this pattern works:
+      chosen.map { case (subName, mActs, kActs, newAh) =>
+        val newState  = state.copy(autoHeal = newAh)
+        val fullName  = s"$taskName - $subName"
+        newState -> MKTask(fullName, MKActions(mActs, kActs))
       }
     }
   }

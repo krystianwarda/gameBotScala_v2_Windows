@@ -184,8 +184,8 @@ object SettingsUtils {
 
   case class FishingSettings(
                               enabled: Boolean = false,
-                              selectedRectangles: Seq[String] = Seq("8x6", "9x6", "10x6"),
-                              fishThrowoutRectangles: Seq[String] = Seq("8x5")
+                              selectedRectangles: Seq[String] =  Seq.empty,
+                              fishThrowoutRectangles: Seq[String] =  Seq.empty
                             )
 
 

@@ -5,112 +5,126 @@ import cats.effect.Ref
 import play.api.libs.json.{JsObject, JsValue, Json, Reads, Writes}
 import mouse.MouseAction
 import keyboard.KeyboardAction
-
 import utils.SettingsUtils.UISettings
 import utils.GameState
-import utils.ProcessingUtils.{MKActions, Step}
+import utils.ProcessingUtils.{MKActions, MKTask, Step}
 
 
 
 object InitialSetupFeature {
 
-  def run(json: JsValue, settings: UISettings, state: GameState):
-  (GameState, List[MouseAction], List[KeyboardAction]) =
-    Steps.runFirst(json, settings, state)
+  def run(
+           json:     JsValue,
+           settings: UISettings,
+           state:    GameState
+         ): (GameState, List[MKTask]) = {
 
+    val (s, maybeTask) = Steps.runFirst(json, settings, state)
+    (s, maybeTask.toList)
+  }
 
   private object Steps {
+
     // ordered list of steps
-    val all: List[Step] = List(
+    val allSteps: List[Step] = List(
       SortCarcassesByDistanceAndTime,
       CheckDynamicHealing,
     )
 
 
-    def runFirst(json: JsValue, settings: UISettings, start: GameState)
-    : (GameState, List[MouseAction], List[KeyboardAction]) = {
-
-      // We'll carry along (currentState, maybeActions)
-      // as we fold through the steps.
+    def runFirst(
+                  json:     JsValue,
+                  settings: UISettings,
+                  startState:    GameState
+                ): (GameState, Option[MKTask]) = {
       @annotation.tailrec
-      def loop(remaining: List[Step],
-               currentState: GameState,
-               carriedActions: MKActions): (GameState, MKActions) = remaining match {
-
-        // 1) If we've already gotten actions, stop immediately.
-        case _ if carriedActions.mouse.nonEmpty || carriedActions.keyboard.nonEmpty =>
-          (currentState, carriedActions)
-
-        // 2) No more steps? return what we have so far.
-        case Nil =>
-          (currentState, MKActions(Nil, Nil))
-
-        // 3) Try the next step
+      def loop(
+                remaining: List[Step],
+                current:   GameState
+              ): (GameState, Option[MKTask]) = remaining match {
+        case Nil => (current, None)
         case step :: rest =>
-          step.run(currentState, json, settings) match {
-            // a) Step wants to update state *and* emits actions:
-            case Some((newState, actions)) if actions.mouse.nonEmpty || actions.keyboard.nonEmpty =>
-              // we break and return immediately
-              (newState, actions)
-
-            // b) Step updates state but has no actions: carry on
-            case Some((newState, MKActions(Nil, Nil))) =>
-              loop(rest, newState, MKActions(Nil, Nil))
-
-            // c) Step does nothing: carry on with same state
+          step.run(current, json, settings) match {
+            case Some((newState, task)) =>
+              (newState, Some(task))
             case None =>
-              loop(rest, currentState, MKActions(Nil, Nil))
+              loop(rest, current)
           }
       }
 
-      // run the loop
-      val (finalState, MKActions(m,k)) = loop(all, start, MKActions(Nil, Nil))
-      (finalState, m, k)
+      loop(allSteps, startState)
     }
   }
 
   private object SortCarcassesByDistanceAndTime extends Step {
-    override def run(state: GameState, json: JsValue, settings: UISettings) = {
-      val sortedImm = sortCarcass(state.autoLoot.carcassToLootImmediately, json)
-      val sortedPost = sortCarcass(state.autoLoot.carcassToLootAfterFight, json)
+    private val taskName = "sortCarcasses"
 
-      val updated = state.copy(autoLoot = state.autoLoot.copy(
-        carcassToLootImmediately  = sortedImm,
-        carcassToLootAfterFight   = sortedPost
-      ))
-      Some((updated, MKActions(Nil, Nil)))
+    def run(
+             state:    GameState,
+             json:     JsValue,
+             settings: UISettings
+           ): Option[(GameState, MKTask)] = {
+      // EARLY EXIT: nothing to sort
+      if (state.autoLoot.carcassToLootImmediately.isEmpty &&
+        state.autoLoot.carcassToLootAfterFight.isEmpty) {
+        None
+      } else {
+        // do your sorting as before
+        val sortedImm = sortCarcass(state.autoLoot.carcassToLootImmediately, json)
+        val sortedPost = sortCarcass(state.autoLoot.carcassToLootAfterFight, json)
+        val updatedState = state.copy(
+          autoLoot = state.autoLoot.copy(
+            carcassToLootImmediately = sortedImm,
+            carcassToLootAfterFight  = sortedPost
+          )
+        )
+
+        // wrap in an MKTask — no actions, so use MKActions.empty
+        Some(updatedState -> MKTask(taskName, MKActions.empty))
+      }
     }
 
     private def sortCarcass(carcassList: List[(String, Long)], json: JsValue) = {
       // extract character pos
       val (cx, cy, cz) = (json \ "characterInfo").asOpt[JsObject].map { info =>
-        ((info \ "PositionX").asOpt[Int].getOrElse(0),
+        (
+          (info \ "PositionX").asOpt[Int].getOrElse(0),
           (info \ "PositionY").asOpt[Int].getOrElse(0),
-          (info \ "PositionZ").asOpt[Int].getOrElse(0))
-      }.getOrElse((0,0,0))
+          (info \ "PositionZ").asOpt[Int].getOrElse(0)
+        )
+      }.getOrElse((0, 0, 0))
 
-      def extract(tile: String): (Int,Int,Int) = {
-        val x = tile.substring(0,5).toInt
-        val y = tile.substring(5,10).toInt
-        val z = tile.substring(10,12).toInt
-        (x,y,z)
+      def extract(tile: String): (Int, Int, Int) = {
+        val x = tile.substring(0, 5).toInt
+        val y = tile.substring(5, 10).toInt
+        val z = tile.substring(10, 12).toInt
+        (x, y, z)
       }
-      def dist(a:(Int,Int,Int), b:(Int,Int,Int)): Double =
-        math.sqrt(math.pow(a._1-b._1,2)+math.pow(a._2-b._2,2)+math.pow(a._3-b._3,2))
+
+      def dist(a: (Int, Int, Int), b: (Int, Int, Int)): Double =
+        math.sqrt(
+          math.pow(a._1 - b._1, 2) +
+            math.pow(a._2 - b._2, 2) +
+            math.pow(a._3 - b._3, 2)
+        )
 
       carcassList.sortBy { case (tile, time) =>
         val pt = extract(tile)
-        (dist(pt,(cx,cy,cz)), time)
+        (dist(pt, (cx, cy, cz)), time)
       }
     }
   }
 
+
+
   private object CheckDynamicHealing extends Step {
+    private val taskName = "checkDynamicHealing"
+
     def run(
              state:    GameState,
              json:     JsValue,
              settings: UISettings
-           ): Option[(GameState, MKActions)] = {
+           ): Option[(GameState, MKTask)] = {
 
       // 1) parse the UI-list into (name, countThreshold, dangerLevel)
       case class Cfg(name: String, count: Int, danger: Int)
@@ -122,8 +136,12 @@ object InitialSetupFeature {
         }
       }
 
-      val thresholds = settings.autoTargetSettings.creatureList.flatMap(parse)
+      val thresholds = settings.autoTargetSettings.creatureList
+        .flatMap(parse)
         .filter(_.danger >= 5)
+
+      // EARLY EXIT: nothing to check if no high‐danger creatures configured
+      if (thresholds.isEmpty) return None
 
       // 2) tally how many of each are in battle
       val counts: Map[String, Int] =
@@ -144,13 +162,17 @@ object InitialSetupFeature {
       (state.autoHeal.dangerLevelHealing, shouldBeOn) match {
         case (false, true) =>
           println("[CheckDynamicHealing] → ARM danger‐healing")
-          val s2 = state.copy(autoHeal = state.autoHeal.copy(dangerLevelHealing = true))
-          Some((s2, MKActions(Nil, Nil)))
+          val updatedState = state.copy(
+            autoHeal = state.autoHeal.copy(dangerLevelHealing = true)
+          )
+          Some(updatedState -> MKTask(taskName, MKActions.empty))
 
         case (true, false) =>
           println("[CheckDynamicHealing] → DISARM danger‐healing")
-          val s2 = state.copy(autoHeal = state.autoHeal.copy(dangerLevelHealing = false))
-          Some((s2, MKActions(Nil, Nil)))
+          val updatedState = state.copy(
+            autoHeal = state.autoHeal.copy(dangerLevelHealing = false)
+          )
+          Some(updatedState -> MKTask(taskName, MKActions.empty))
 
         case _ =>
           None

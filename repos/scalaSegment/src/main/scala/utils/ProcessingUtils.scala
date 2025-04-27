@@ -14,9 +14,14 @@ object ProcessingUtils {
     val empty = MKActions(Nil, Nil)
   }
 
-  trait Step {
-    def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKActions)]
-  }
+  case class MKTask(taskName: String, actions: MKActions)
 
+  trait Step {
+    def run(
+             state:    GameState,
+             json:     JsValue,
+             settings: UISettings
+           ): Option[(GameState, MKTask)]
+  }
 
 }

@@ -45,7 +45,13 @@ class MouseActionManager(
   private def sortQueue(queue: List[MouseAction]): List[MouseAction] =
     queue.sortBy(_.priority)
 
-
+  def enqueueBatches(batches: List[(String, List[MouseAction])]): IO[Unit] =
+    batches.traverse_ { case (taskName, actions) =>
+      IO.println(s"[$taskName] Enqueueing ${actions.size} mouse actions") *>
+        actions.traverse_( { action =>
+          IO.println(s"[$taskName] ➡ $action") *> enqueue(action)
+        })
+    }
 
   def enqueue(action: MouseAction): IO[Unit] =
     for {
@@ -262,24 +268,24 @@ object MouseManagerApp {
 }
 
 
-
-// ✅ Updated: MainApp now correctly starts MouseManagerApp and enqueues actions
-object MainApp extends IOApp.Simple {
-  override def run: IO[Unit] =
-    for {
-      _ <- IO(MouseManagerApp.start()) // ✅ Start the mouse manager
-
-      _ <- IO.sleep(1.second) // Wait a moment before enqueueing actions
-      _ <- IO(println("Enqueueing actions..."))
-
-      _ <- IO(GlobalMouseManager.instance.foreach { manager =>
-        manager.enqueue(MoveMouse(800, 500)).unsafeRunAndForget()
-        manager.enqueue(RightButtonPress(800, 500)).unsafeRunAndForget()
-        manager.enqueue(RightButtonRelease(800, 500)).unsafeRunAndForget()
-        manager.enqueue(LeftButtonPress(800, 500)).unsafeRunAndForget()
-        manager.enqueue(LeftButtonRelease(800, 500)).unsafeRunAndForget()
-      })
-
-      _ <- IO.sleep(5.seconds) // Let the actions process before exit
-    } yield ()
-}
+//
+//// ✅ Updated: MainApp now correctly starts MouseManagerApp and enqueues actions
+//object MainApp extends IOApp.Simple {
+//  override def run: IO[Unit] =
+//    for {
+//      _ <- IO(MouseManagerApp.start()) // ✅ Start the mouse manager
+//
+//      _ <- IO.sleep(1.second) // Wait a moment before enqueueing actions
+//      _ <- IO(println("Enqueueing actions..."))
+//
+//      _ <- IO(GlobalMouseManager.instance.foreach { manager =>
+//        manager.enqueue(MoveMouse(800, 500)).unsafeRunAndForget()
+//        manager.enqueue(RightButtonPress(800, 500)).unsafeRunAndForget()
+//        manager.enqueue(RightButtonRelease(800, 500)).unsafeRunAndForget()
+//        manager.enqueue(LeftButtonPress(800, 500)).unsafeRunAndForget()
+//        manager.enqueue(LeftButtonRelease(800, 500)).unsafeRunAndForget()
+//      })
+//
+//      _ <- IO.sleep(5.seconds) // Let the actions process before exit
+//    } yield ()
+//}

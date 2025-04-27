@@ -23,7 +23,11 @@ case class AutoHealState(
                           stateHealingWithRune: String = "free",
                           dangerLevelHealing: Boolean = false,
                           statusOfAutoheal:String = "",
+
                           healingRuneContainerName:String = "",
+                          healingMPContainerName:String = "",
+                          healingHPContainerName:String = "",
+
                           healingCrosshairActive: Boolean = false,
                           healingRestryStatus: Int = 0,
                           healingRetryAttempts: Int = 1,
@@ -61,6 +65,7 @@ case class FishingState(
                          retryFishingStatus: Int = 0,
                          fishingRetryAttempts: Int = 4,
                          retryMergeFishStatus: Int = 0,
+                         retryMidDelay: Int = 1000
                        )
 
 case class LightHealState(
