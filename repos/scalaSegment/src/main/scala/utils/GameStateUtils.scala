@@ -10,6 +10,7 @@ import scala.collection.mutable
 
 case class GameState(
                       general: GeneralState = GeneralState(),
+                      characterInfo: CharacterInfoState = CharacterInfoState(),
                       autoLoot: AutoLootState = AutoLootState(),
                       caveBot: CaveBotState = CaveBotState(),
                       autoTarget: AutoTargetState = AutoTargetState(),
@@ -17,6 +18,27 @@ case class GameState(
                       guardian: GuardianState = GuardianState(),
                       fishing: FishingState = FishingState()
                     )
+
+case class CharacterInfoState(
+                         presentCharLocation: Vec = Vec(0, 0),
+                         presentCharZLocation: Int = 0,
+                         lastDirection: Option[String] = None,
+                       )
+
+case class CaveBotState(
+                         stateHunting: String = "free",
+                         antiOverpassDelay: Long = 0,
+                         slowWalkStatus: Int = 0,
+                         waypointsLoaded: Boolean = false,
+                         currentWaypointIndex: Int = 0,
+                         subWaypoints: List[Vec] = List(),
+                         fixedWaypoints: List[WaypointInfo] = List(),
+                         caveBotLevelsList: List[Int] = List(),
+                         antiCaveBotStuckStatus: Int = 0,
+                         currentWaypointLocation: Vec = Vec(0, 0),
+                         gridBoundsState: (Int, Int, Int, Int) = (0, 0, 0, 0),
+                         gridState: Array[Array[Boolean]] = Array.ofDim[Boolean](10, 10),
+                       )
 
 case class AutoHealState(
                           lastHealUseTime: Long = 0,
@@ -43,6 +65,7 @@ case class AutoHealState(
                           runeUseTimeRange: (Int, Int) = (500, 1000)
                         )
 
+
 case class GeneralState(
                          initialSettingsSet: Boolean = false,
                          retryCounters: Map[String, Int] = Map.empty,
@@ -53,6 +76,9 @@ case class GeneralState(
                          lastActionTimestamp: Option[Long] = None,
                          temporaryData: Map[String, String] = Map.empty,
                          retryThroughoutFishesStatus: Option[Int] = None,
+                         retryAttempts:  Int = 0,
+                         retryAttemptsVerLong: Int = 60,
+
 //                         retryAttemptsLong: Option[Long] = None
                        )
 
@@ -61,7 +87,6 @@ case class GeneralState(
 case class FishingState(
                          retryThroughoutFishesStatus: Option[Int] = None,
                          retryAttemptsLong: Option[Long] = None,
-                         retryAttempts:  Int = 0,
                          lastFishingCommandSent: Long = 0,
                          retryFishingStatus: Int = 0,
                          fishingRetryAttempts: Int = 4,
@@ -97,13 +122,14 @@ case class AutoLootState(
                           lastEatFoodTime: Long = 0
                         )
 
-case class CaveBotState(
-                         stateHunting: String = "free",
-                       )
+
 
 case class AutoTargetState(
                             dangerLevelHealing: String = "low",
                             dangerCreaturesList: Seq[Creature] = Seq.empty,
+                            creatureTarget: Int = 0,
+                            lastTargetName: String = "",
+                            lastTargetPos: (Int, Int, Int) = (0,0,0),
                           )
 
 case class GuardianState(

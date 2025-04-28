@@ -27,8 +27,6 @@ case class SendJsonCommand(json: JsValue)
 
 
 
-
-
 import utils.SettingsUtils.UISettings
 //
 class ThirdProcessActor extends Actor {
