@@ -1,7 +1,7 @@
 package processing
 
 import cats.effect.{IO, Ref}
-import play.api.libs.json.{JsObject, JsSuccess, JsValue}
+import play.api.libs.json.{JsObject, JsSuccess, JsValue, Json}
 import utils.SettingsUtils.UISettings
 import mouse._
 import keyboard._
@@ -355,7 +355,6 @@ object FishingFeature {
         .orElse(mergeStacksOpt)
     }
   }
-
 
 
 

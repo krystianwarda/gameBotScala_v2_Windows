@@ -757,9 +757,6 @@ object AutoTarget {
     creaturesData.map(description => {
       val creatureSettings = parseCreature(description)
 
-      // Debug: Print parsed creature settings before converting to JSON
-//      println(s"[DEBUG] Parsed CreatureSettings: $creatureSettings")
-
       Json.toJson(creatureSettings) // Convert creature settings to JsValue
     }).toList
   }
@@ -907,6 +904,7 @@ object AutoTarget {
       false
     }
   }
+
   def findCreatureInfoById(creatureId: Long, battleInfo: Map[String, JsValue]): Option[CreatureInfo] = {
     battleInfo.collectFirst {
       case (_, creatureData) if (creatureData \ "Id").as[Long] == creatureId =>

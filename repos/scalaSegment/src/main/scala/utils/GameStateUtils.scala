@@ -130,6 +130,17 @@ case class AutoTargetState(
                             creatureTarget: Int = 0,
                             lastTargetName: String = "",
                             lastTargetPos: (Int, Int, Int) = (0,0,0),
+                            statusOfAutoTarget: String = "not_set",
+                            autoTargetContainerMapping: Map[Int, String] = Map.empty[Int, String],
+                            currentAutoAttackContainerName: String = "",
+                            isUsingAmmo: String = "not_set",
+                            ammoId: Int = 0,
+                            ammoCountForNextResupply: Int = 0,
+                            AttackSuppliesLeftMap: Map[Int, Int] = Map.empty[Int, Int],
+                            chosenTargetId: Int = 0,
+                            chosenTargetName: String = "",
+                            lastTargetMarkCommandSend: Long = 0,
+                            targetFreezeCreatureId: Int = 0,
                           )
 
 case class GuardianState(
