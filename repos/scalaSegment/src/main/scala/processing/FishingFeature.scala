@@ -5,11 +5,10 @@ import play.api.libs.json.{JsObject, JsSuccess, JsValue, Json}
 import utils.SettingsUtils.UISettings
 import mouse._
 import keyboard._
-import processing.Fishing.{extractItemInfoOpt, extractStackSize}
 import processing.Process.{extractOkButtonPosition, timeToRetry}
 import utils.GameState
 import cats.syntax.all._
-import processing.HealingFeature.{DangerLevelHealing, HandleBackpacks, SelfHealing, SetUpSupplies, Steps, TeamHealing}
+import processing.HealingFeature.{DangerLevelHealing, SelfHealing, Steps, TeamHealing}
 import utils.ProcessingUtils.{MKActions, MKTask, Step}
 
 object FishingFeature {
@@ -356,7 +355,24 @@ object FishingFeature {
     }
   }
 
+  def extractStackSize(slot: String): Int = {
+    // Assume slot naming convention contains numbers which imply stack size, e.g., "slot1" implies 1 item.
+    // This is purely illustrative. Adjust to match your actual data.
+    val size = slot.filter(_.isDigit)
+    if (size.isEmpty) 1 else size.toInt
+  }
 
+  // Function to dynamically determine the full key name based on substring and extract the necessary JSON object
+  def extractItemInfoOpt(json: JsValue, containerNameSubstring: String, contentsPanel: String, itemSlot: String): Option[JsObject] = {
+    // Retrieve all keys from "inventoryPanelLoc" and filter them to find the full key containing the substring
+    val inventoryPanelLoc = (json \ "screenInfo" \ "inventoryPanelLoc").as[JsObject]
+    val fullContainerNameOpt = inventoryPanelLoc.keys.find(_.contains(containerNameSubstring))
+
+    // Using the full container name to navigate further if available
+    fullContainerNameOpt.flatMap { fullContainerName =>
+      (json \ "screenInfo" \ "inventoryPanelLoc" \ fullContainerName \ contentsPanel \ itemSlot).asOpt[JsObject]
+    }
+  }
 
 
 }

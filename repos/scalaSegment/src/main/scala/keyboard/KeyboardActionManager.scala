@@ -3,6 +3,7 @@ package keyboard
 import cats.effect.{IO, Ref}
 import cats.implicits.{catsSyntaxNestedFoldable, toFoldableOps}
 import fs2.Stream
+import keyboard.KeyboardUtils.{keyCodeFromString, pressArrowKey}
 import mouse.MouseAction
 
 import java.awt.Robot
@@ -13,19 +14,16 @@ sealed trait KeyboardAction {
   def priority: Int
 }
 
-case class PressKey(keyCode: Int) extends KeyboardAction {
-  val priority = 1
-}
 
-object PressKey {
-  def fromKeyString(key: String): PressKey = {
-    val keyCode = KeyboardUtils.getKeyCodeForKey(key)
-    PressKey(keyCode)
-  }
-}
 
 case class TextType(text: String) extends KeyboardAction {
+  val priority = 3
+}
+case class GeneralKey(code: Int) extends KeyboardAction {
   val priority = 2
+}
+case class DirectionalKey(direction: String) extends KeyboardAction {
+  val priority = 1
 }
 
 
@@ -36,6 +34,22 @@ class KeyboardActionManager(
                              taskInProgressRef: Ref[IO, Boolean]
                            ) {
 
+  def fromString(input: String): KeyboardAction = {
+    val directionKeys = Set(
+      "MoveUp", "MoveDown", "MoveLeft", "MoveRight",
+      "MoveUpLeft", "MoveUpRight", "MoveDownLeft", "MoveDownRight"
+    )
+
+    if (directionKeys.contains(input)) {
+      DirectionalKey(input)
+    } else if (input.length == 1 || input.matches("^[a-zA-Z0-9]+$")) {
+      TextType(input)
+    } else {
+      val code = keyCodeFromString(input)
+      if (code != -1) GeneralKey(code) else TextType(input)
+    }
+  }
+
   def enqueueBatches(batches: List[(String, List[KeyboardAction])]): IO[Unit] =
     batches.traverse_ { case (taskName, actions) =>
       IO.println(s"[$taskName] Enqueueing ${actions.size} keyboard actions") *>
@@ -45,16 +59,12 @@ class KeyboardActionManager(
     }
 
   def enqueue(action: KeyboardAction): IO[Unit] =
-    for {
-      _ <- IO.println(s"Enqueuing keyboard action: $action")
-      _ <- queueRef.update(_ :+ action)
-    } yield ()
+    queueRef.update(_ :+ action)
 
   def enqueueTask(actions: List[KeyboardAction], allowOverlap: Boolean = false): IO[Unit] =
     for {
       inProgress <- taskInProgressRef.get
-      _ <- if (inProgress && !allowOverlap) IO.println("🟡 Task already in progress, skipping...")
-      else actions.traverse_(enqueue)
+      _ <- if (inProgress && !allowOverlap) IO.unit else actions.traverse_(enqueue)
     } yield ()
 
   private def pressAndReleaseKey(keyCode: Int): IO[Unit] =
@@ -67,17 +77,26 @@ class KeyboardActionManager(
   private def typeString(text: String): IO[Unit] =
     text.toList.map { char =>
       val keyCode = KeyEvent.getExtendedKeyCodeForChar(char.toInt)
-      if (keyCode == KeyEvent.VK_UNDEFINED) IO.println(s"Cannot type char: $char")
-      else pressAndReleaseKey(keyCode)
+      if (keyCode == KeyEvent.VK_UNDEFINED) IO.unit else pressAndReleaseKey(keyCode)
     }.sequence_ *> pressAndReleaseKey(KeyEvent.VK_ENTER)
 
 
+
   private def executeAction(action: KeyboardAction): IO[Unit] = action match {
-    case PressKey(code) =>
+    case DirectionalKey(direction) =>
+      println(s"DirectionalKey - pressing $direction")
+      pressArrowKey(robot, direction) *> IO.sleep(50.millis)
+
+    case GeneralKey(code) =>
+      println(s"GeneralKey - pressing $code")
       pressAndReleaseKey(code) *> IO.sleep(50.millis)
+
     case TextType(text) =>
+      println(s"TextType - typing $text")
       typeString(text)
   }
+
+
 
 
   def startProcessing: Stream[IO, Unit] =

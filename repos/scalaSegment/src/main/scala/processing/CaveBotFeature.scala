@@ -1,36 +1,44 @@
 package processing
 
-import keyboard.{KeyboardAction, PressKey}
+import keyboard.{DirectionalKey, KeyboardAction, KeyboardUtils}
 import play.api.libs.json.{JsObject, JsValue}
-import processing.CaveBot.Vec
 import utils.{GameState, StaticGameInfo}
-import utils.ProcessingUtils.{MKActions, MKTask, Step}
+import utils.ProcessingUtils.{MKActions, MKTask, NoOpTask, Step}
 import utils.SettingsUtils.UISettings
 import utils.consoleColorPrint.{ANSI_BLUE, printInColor}
 
 import scala.collection.mutable
 import scala.util.Try
 import scala.util.chaining.scalaUtilChainingOps
-import keyboard.KeyboardAction
 import mouse.{LeftButtonPress, LeftButtonRelease, MoveMouse}
 
 
 object CaveBotFeature {
+  import cats.syntax.all._
 
-  def run(json: JsValue, settings: UISettings, state: GameState):
-  (GameState, List[MKTask]) =
-    if (!settings.caveBotSettings.enabled) (state, Nil)
-    else {
-      val (s, maybeTask) = Steps.runFirst(json, settings, state)
-      (s, maybeTask.toList)
-    }
+  def run(json: JsValue, settings: UISettings, state: GameState): (GameState, List[MKTask]) =
+    (!settings.caveBotSettings.enabled).guard[Option]
+      .as((state, Nil))
+      .getOrElse {
+        val (s, maybeTask) = Steps.runFirst(json, settings, state)
+        (s, maybeTask.toList)
+      }
+
+
+//  def run(json: JsValue, settings: UISettings, state: GameState):
+//  (GameState, List[MKTask]) =
+//    if (!settings.caveBotSettings.enabled) (state, Nil)
+//    else {
+//      val (s, maybeTask) = Steps.runFirst(json, settings, state)
+//      (s, maybeTask.toList)
+//    }
 
   private object Steps {
     // ordered list of steps
     val allSteps: List[Step] = List(
       WaypointLoader,
       WrongFloorSaver,
-      WaypointStuckSaver,
+//      WaypointStuckSaver,
       UpdateLocation,
       MovementToSubwaypoint
     )
@@ -42,114 +50,314 @@ object CaveBotFeature {
                   startState: GameState
                 ): (GameState, Option[MKTask]) = {
       @annotation.tailrec
-      def loop(
-                remaining: List[Step],
-                current: GameState
-              ): (GameState, Option[MKTask]) = remaining match {
-        case Nil => (current, None)
-        case step :: rest =>
-          step.run(current, json, settings) match {
-            case Some((newState, task)) =>
-              (newState, Some(task))
-            case None =>
-              loop(rest, current)
-          }
-      }
+      def loop(remaining: List[Step], current: GameState): (GameState, Option[MKTask]) =
+        remaining match {
+          case Nil => (current, None)
+          case step :: rest =>
+            step.run(current, json, settings) match {
+              case Some((newState, task)) if task == NoOpTask =>
+                // Skip no-op task, continue with updated state
+                loop(rest, newState)
+
+              case Some((newState, task)) =>
+                // Emit real task
+                (newState, Some(task))
+
+              case None =>
+                // No update, move on
+                loop(rest, current)
+            }
+        }
+
 
       loop(allSteps, startState)
     }
   }
 
 
+  private object UpdateLocation extends Step {
+    private val taskName = "UpdateLocation"
+
+    override def run(
+                      state:    GameState,
+                      json:     JsValue,
+                      settings: UISettings
+                    ): Option[(GameState, MKTask)] = {
+      // read current character position
+      val x = (json \ "characterInfo" \ "PositionX").as[Int]
+      val y = (json \ "characterInfo" \ "PositionY").as[Int]
+
+      val cb  = state.caveBot
+      val idx = cb.currentWaypointIndex
+      val wps = cb.fixedWaypoints
+
+      println(s"[UpdateLocation] starting; idx=$idx, totalWPs=${wps.size}, pos=($x,$y)")
+
+      if (!wps.isDefinedAt(idx)) {
+        println(s"[UpdateLocation] no waypoint at index $idx → skipping")
+        None
+      } else {
+        val wp = wps(idx)
+        val dx = math.abs(wp.waypointX - x)
+        val dy = math.abs(wp.waypointY - y)
+        println(s"[UpdateLocation] current WP #$idx at (${wp.waypointX},${wp.waypointY}), Δ=($dx,$dy)")
+        val man   = math.abs(wp.waypointX - x) + math.abs(wp.waypointY - y)
+        if (man <= 3) {
+          val nextIdx = (idx + 1) % wps.size
+          println(s"[UpdateLocation] within 3 tiles (man=$man) → advancing to index $nextIdx")
+
+          val newCb = cb.copy(
+            currentWaypointIndex   = nextIdx,
+            subWaypoints           = List.empty,
+            antiCaveBotStuckStatus = 0
+          )
+          val updatedState = state.copy(caveBot = newCb)
+
+          println(s"[UpdateLocation] emitting marker task $taskName")
+          Some(updatedState -> NoOpTask)
+        } else {
+          println(s"[UpdateLocation] not yet at WP → no task")
+          None
+        }
+      }
+    }
+  }
+
+
+  private object MovementToSubwaypoint extends Step {
+    private val taskName = "MovementToSubwaypoint"
+
+    override def run(
+                      state:    GameState,
+                      json:     JsValue,
+                      settings: UISettings
+                    ): Option[(GameState, MKTask)] = {
+      val cb  = state.caveBot
+      val idx = cb.currentWaypointIndex
+
+      println(s"[MovementToSubwaypoint] starting; idx=$idx, subWaypoints.size=${cb.subWaypoints.size}")
+
+      val fixedWps = cb.fixedWaypoints
+      if (!fixedWps.isDefinedAt(idx)) {
+        println(s"[MovementToSubwaypoint] no fixed WP at $idx → skipping")
+        return None
+      }
+
+      val currentWp = fixedWps(idx)
+      println(s"[MovementToSubwaypoint] target fixed WP #$idx = (${currentWp.waypointX},${currentWp.waypointY})")
+
+      // 1) read current character pos from JSON
+      val px  = (json \ "characterInfo" \ "PositionX").as[Int]
+      val py  = (json \ "characterInfo" \ "PositionY").as[Int]
+      val loc = Vec(px, py)
+
+      println(s"[TICK] Character pos = $loc, WP target = (${currentWp.waypointX}, ${currentWp.waypointY})")
+
+      println("[MovementToSubwaypoint] regenerating full path to target WP")
+      val gen = generateSubwaypoints(currentWp, state, json)
+      println(s"[MovementToSubwaypoint] regenerated path length = ${gen.caveBot.subWaypoints.size}")
+      val baseState = gen
+      val subs0 = gen.caveBot.subWaypoints
+
+      // 4) take the head of subs0 as our next step
+      subs0.headOption.map { nextWp =>
+        println(s"[MovementToSubwaypoint] moving from $loc to next subWP $nextWp")
+
+        val dirOpt = calculateDirection(loc, nextWp, baseState.characterInfo.lastDirection)
+        println(s"[MovementToSubwaypoint] calculateDirection → $dirOpt")
+
+        // ▶ 5) update both lastDirection AND presentCharLocation
+        val updatedCharInfo = baseState.characterInfo.copy(
+          lastDirection        = dirOpt,
+          presentCharLocation  = loc
+        )
+        val updatedState = baseState.copy(characterInfo = updatedCharInfo)
+
+        val kbActions: List[KeyboardAction] = dirOpt.toList
+          .map(DirectionalKey(_))
+        println(s"[MovementToSubwaypoint] emitting movement task with ${kbActions.size} keyboard actions")
+
+        // 7) drop the head we just consumed, keep the tail
+        val newCb = updatedState.caveBot.copy(
+          subWaypoints = subs0.drop(1)
+        )
+
+        val nextState = updatedState.copy(caveBot = newCb)
+
+        nextState -> MKTask(
+          taskName,
+          MKActions(mouse = Nil, keyboard = kbActions)
+        )
+      }
+    }
+  }
+
+  def generateSubwaypoints(
+                            currentWaypoint: WaypointInfo,
+                            state:           GameState,
+                            json:            JsValue
+                          ): GameState = {
+    // 1) pull all tiles and compute grid bounds
+    val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+    println(s"[generateSubwaypoints] tile count = ${tiles.size}")
+    val xs    = tiles.keys.map(_.substring(0,5).toInt)
+    val ys    = tiles.keys.map(_.substring(5,10).toInt)
+    val (minX, minY, maxX, maxY) = (xs.min, ys.min, xs.max, ys.max)
+    val gridBounds                = (minX, minY, maxX, maxY)
+
+    // 2) build boolean grid, getting its offset minimums
+    val (grid, (offX, offY)) = createBooleanGrid(tiles, minX, minY)
+    println(s"[generateSubwaypoints] grid bounds = ${gridBounds}, offset = ($offX,$offY)")
+
+    // 3) desired waypoint position (no longer clipped)
+    val rawWpPos = Vec(currentWaypoint.waypointX, currentWaypoint.waypointY)
+    if (
+      rawWpPos.x < minX || rawWpPos.x > maxX ||
+        rawWpPos.y < minY || rawWpPos.y > maxY
+    ) {
+      printInColor(ANSI_BLUE,
+        s"[WARNING] Waypoint $rawWpPos is outside grid $gridBounds — attempting full A* anyway")
+    }
+
+
+    val px = (json \ "characterInfo" \ "PositionX").as[Int]
+    val py = (json \ "characterInfo" \ "PositionY").as[Int]
+    val presentLoc = Vec(px, py)
+
+
+    // 5) decide whether we're already at the WP
+    val (nextIndex, targetPos) =
+      if (presentLoc == rawWpPos) {
+        // wrap to next waypoint
+        val nextIdx = (state.caveBot.currentWaypointIndex + 1) % state.caveBot.fixedWaypoints.size
+        val nwp     = state.caveBot.fixedWaypoints(nextIdx)
+        val np      = Vec(nwp.waypointX, nwp.waypointY)
+        printInColor(ANSI_BLUE,
+          s"[WAYPOINTS] Reached $rawWpPos, advancing to #$nextIdx → $np")
+        (nextIdx, np)
+      } else {
+        (state.caveBot.currentWaypointIndex, rawWpPos)
+      }
+
+    // 6) always run A* from presentLoc to targetPos
+    val rawPath =
+      if (presentLoc != targetPos)
+        aStarSearch(presentLoc, targetPos, grid, offX, offY)
+      else
+        Nil
+
+    // 7) drop the starting position from the path
+    val subWaypoints = rawPath.drop(1)
+
+
+    // 8) debug‐print full grid & path
+    printGrid(
+      grid           = grid,
+      gridBounds     = gridBounds,
+      path           = rawPath,
+      charPos        = presentLoc,
+      waypointPos    = rawWpPos
+    )
+
+    // 9) assemble new caveBot state
+    val newCaveBot = state.caveBot.copy(
+      currentWaypointIndex    = nextIndex,
+      subWaypoints            = subWaypoints,
+      gridBoundsState         = gridBounds,
+      gridState               = grid,
+      currentWaypointLocation = targetPos
+    )
+
+    state.copy(caveBot = newCaveBot)
+  }
+
+
+
   private object WaypointLoader extends Step {
     private val taskName = "WaypointLoader"
 
-    def run(
-             state:    GameState,
-             json:     JsValue,
-             settings: UISettings
-           ): Option[(GameState, MKTask)] =
+    def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
+      if (state.caveBot.waypointsLoaded) None
+      else {
+        println("[WaypointLoader] Loading waypoints from settings")
+        val updatedState = loadingWaypointsFromSettings(settings, state)
 
-      // only load once
-      Option.when(!state.caveBot.waypointsLoaded) {
-        // 1) load from settings
-        val loaded = loadingWaypointsFromSettings(settings, state)
-
-        // 2) read current position
-        val x = (json \ "characterInfo" \ "PositionX").as[Int]
-        val y = (json \ "characterInfo" \ "PositionY").as[Int]
-        val pos = Vec(x, y)
-        println(s"[DEBUG] Initial character pos: ($x,$y)")
-
-        // 3) find nearest waypoint
-        val indexedDistances =
-          loaded.caveBot.fixedWaypoints.zipWithIndex.map { case (wp, idx) =>
-            idx -> pos.manhattanDistance(Vec(wp.waypointX, wp.waypointY))
-          }
-        val (closestIdx, _) = indexedDistances.minBy(_._2)
-
-
-        val newCaveBotState = state.caveBot.copy(
-          waypointsLoaded = true,
-          currentWaypointIndex = closestIdx,
-          subWaypoints         = List.empty
-        )
-
-        val newCharInfoState = state.characterInfo.copy(presentCharLocation  = pos)
-
-        val updatedState = state.copy(
-          caveBot = newCaveBotState,
-          characterInfo = newCharInfoState
-        )
-
-        // 5) no mouse/keyboard actions — just a “marker” task so Steps.runFirst will stop here
-        updatedState -> MKTask(taskName, MKActions.empty)
-      }
-  }
-
-
-  def loadingWaypointsFromSettings(
-                                    settings: UISettings,
-                                    state:    GameState
-                                  ): GameState = {
-    // 1) grab the raw strings from your UISettings (e.g. Seq("walk, ground, 100,200,7", ...))
-    val waypointsSeq: Seq[String] = settings.caveBotSettings.waypointsList
-
-    // 2) parse them into WaypointInfo, filtering out any non-"walk" or malformed entries
-    val waypointsInfoList: List[WaypointInfo] = waypointsSeq.flatMap { raw =>
-      raw.split(", ").toList match {
-        case "walk" :: placement :: xS :: yS :: zS :: Nil =>
-          Try {
-            WaypointInfo(
-              waypointType      = "walk",
-              waypointPlacement = placement,
-              waypointX         = xS.toInt,
-              waypointY         = yS.toInt,
-              waypointZ         = zS.toInt
-            )
-          }.toOption.tap {
-            case None => println(s"[WaypointLoader] failed to parse waypoint '$raw'")
-          }
-        case other =>
-          println(s"[WaypointLoader] skipping non-walk or bad format: $raw")
+        // If no waypoints, mark loaded and skip
+        if (updatedState.caveBot.fixedWaypoints.isEmpty) {
+          println("[WaypointLoader] No waypoints found, marking as loaded and skipping")
+          val cleared = updatedState.copy(caveBot = updatedState.caveBot.copy(waypointsLoaded = true))
           None
+        } else {
+          println(s"[WaypointLoader] Loaded waypoints: ${updatedState.caveBot.fixedWaypoints}")
+          val x = (json \ "characterInfo" \ "PositionX").as[Int]
+          val y = (json \ "characterInfo" \ "PositionY").as[Int]
+          val pos = Vec(x, y)
+          println(s"[WaypointLoader] Character pos: ($x,$y)")
+
+          val indexed = updatedState.caveBot.fixedWaypoints.zipWithIndex.map { case (wp, i) =>
+            i -> pos.manhattanDistance(Vec(wp.waypointX, wp.waypointY))
+          }
+          val (closest, dist) = indexed.minBy(_._2)
+          println(s"[WaypointLoader] Closest waypoint idx=$closest dist=$dist")
+
+          val newCave = updatedState.caveBot.copy(
+            waypointsLoaded = true,
+            currentWaypointIndex = closest,
+            subWaypoints = List.empty
+          )
+          val newChar = updatedState.characterInfo.copy(presentCharLocation = pos)
+          val finalState = updatedState.copy(caveBot = newCave, characterInfo = newChar)
+
+          println(s"[WaypointLoader] Emitting marker task: $taskName")
+          Some(finalState -> MKTask(taskName, MKActions.empty))
+        }
       }
-    }.toList
-
-    // 3) build the distinct list of Z-levels we’ll need to traverse
-    val caveBotLevelsList: List[Int] =
-      waypointsInfoList.map(_.waypointZ).distinct
-
-    val newCaveBotState = state.caveBot.copy(
-      fixedWaypoints     = waypointsInfoList,
-      waypointsLoaded    = true,
-      caveBotLevelsList  = caveBotLevelsList
-    )
-    // 4) return the new state with fixedWaypoints, flags, and levels updated
-    state.copy(
-      caveBot = newCaveBotState
-    )
+    }
   }
+
+
+  def loadingWaypointsFromSettings(settings: UISettings, state: GameState): GameState = {
+    // before you group, do:
+    val rawLines: Seq[String] = settings.caveBotSettings.waypointsList
+    println(s"[loadingWaypointsFromSettings] Raw lines (${rawLines.size}): $rawLines")
+
+    // split on commas and/or whitespace, trim out any empties
+    val tokens: Seq[String] =
+      rawLines
+        .flatMap(_.split("[,\\s]+"))
+        .map(_.trim)
+        .filter(_.nonEmpty)
+
+    println(s"[loadingWaypointsFromSettings] Tokens (${tokens.size}): $tokens")
+    // should now print Tokens (25): List(walk, center, 32681, 31687, 7, walk, center, …)
+
+
+    // Each group of 5 tokens defines a waypoint (walk, placement, x, y, z)
+    val chunks: List[Seq[String]] = tokens.grouped(5).toList
+    println(s"[loadingWaypointsFromSettings] Token chunks (sizes): ${chunks.map(_.size)}")
+
+    val waypointsInfoList: List[WaypointInfo] = chunks.collect {
+      case Seq("walk", placement, xS, yS, zS)
+        if Try(xS.toInt).isSuccess &&
+          Try(yS.toInt).isSuccess &&
+          Try(zS.toInt).isSuccess =>
+        WaypointInfo("walk", xS.toInt, yS.toInt, zS.toInt, placement)
+    }
+    println(s"[loadingWaypointsFromSettings] Parsed waypoints: $waypointsInfoList")
+
+    val levels: List[Int] = waypointsInfoList.map(_.waypointZ).distinct
+    println(s"[loadingWaypointsFromSettings] Levels: $levels")
+
+    val newCaveBot = state.caveBot.copy(
+      fixedWaypoints    = waypointsInfoList,
+      waypointsLoaded   = false,  // only mark loaded when first step completes
+      caveBotLevelsList = levels
+    )
+    println("[loadingWaypointsFromSettings] Returning updated caveBot state")
+    state.copy(caveBot = newCaveBot)
+  }
+
+
 
 
   private object WrongFloorSaver extends Step {
@@ -308,178 +516,6 @@ object CaveBotFeature {
       // 6) always return a “marker” task (no mouse/keyboard) to block further steps this tick
       Some(updatedState -> MKTask(taskName, MKActions.empty))
     }
-  }
-
-
-  private object UpdateLocation extends Step {
-    private val taskName = "UpdateLocation"
-
-    override def run(
-                      state:    GameState,
-                      json:     JsValue,
-                      settings: UISettings
-                    ): Option[(GameState, MKTask)] = {
-      // read current character position
-      val x = (json \ "characterInfo" \ "PositionX").as[Int]
-      val y = (json \ "characterInfo" \ "PositionY").as[Int]
-
-      // shorthands
-      val cb      = state.caveBot
-      val idx     = cb.currentWaypointIndex
-      val wps     = cb.fixedWaypoints
-
-      // only proceed if there's actually a waypoint at this index
-      if (!wps.isDefinedAt(idx)) None
-      else {
-        val wp = wps(idx)
-        // check if within 4 tiles on both axes
-        if (math.abs(wp.waypointX - x) <= 4 && math.abs(wp.waypointY - y) <= 4) {
-          // compute next index, wrapping around
-          val nextIdx = (idx + 1) % wps.size
-
-          // debug log
-          printInColor(
-            ANSI_BLUE,
-            f"[WAYPOINT PROGRESS] Character advanced to next waypoint. Advancing to next Waypoint Index: $nextIdx"
-          )
-
-          // update caveBot state
-          val newCb = cb.copy(
-            currentWaypointIndex   = nextIdx,
-            subWaypoints           = List.empty,
-            antiCaveBotStuckStatus = 0
-          )
-
-          // assemble new GameState
-          val updatedState = state.copy(caveBot = newCb)
-
-          // return a “marker” task so that no further steps run this tick
-          Some(updatedState -> MKTask(taskName, MKActions.empty))
-        } else None
-      }
-    }
-  }
-
-  private object MovementToSubwaypoint extends Step {
-    private val taskName = "MovementToSubwaypoint"
-
-    override def run(
-                      state:    GameState,
-                      json:     JsValue,
-                      settings: UISettings
-                    ): Option[(GameState, MKTask)] = {
-      val cb       = state.caveBot
-      val idx      = cb.currentWaypointIndex
-      val fixedWps = cb.fixedWaypoints
-      if (!fixedWps.isDefinedAt(idx)) return None
-
-      val currentWp      = fixedWps(idx)
-      val generatedState = generateSubwaypoints(currentWp, state, json)
-
-      generatedState.caveBot.subWaypoints.headOption.map { nextWp =>
-        val px  = (json \ "characterInfo" \ "PositionX").as[Int]
-        val py  = (json \ "characterInfo" \ "PositionY").as[Int]
-        val loc = Vec(px, py)
-
-        val dirOpt = calculateDirection(loc, nextWp, generatedState.characterInfo.lastDirection)
-        val updatedState = generatedState.copy(
-          characterInfo = generatedState.characterInfo.copy(lastDirection = dirOpt)
-        )
-
-        // translate MoveUp/MoveDownLeft/etc. into actual arrow key presses
-        val kbActions: List[KeyboardAction] = dirOpt.toList.flatMap { dir =>
-          // strip "Move" prefix, e.g. "UpLeft"
-          val keyPart = dir.stripPrefix("Move")
-          // split diagonals into two arrows
-          val keys = keyPart match {
-            case "Up"         => List("Up")
-            case "Down"       => List("Down")
-            case "Left"       => List("Left")
-            case "Right"      => List("Right")
-            case "UpLeft"     => List("Up", "Left")
-            case "UpRight"    => List("Up", "Right")
-            case "DownLeft"   => List("Down", "Left")
-            case "DownRight"  => List("Down", "Right")
-            case _            => Nil
-          }
-          keys.map(PressKey.fromKeyString)
-        }
-
-        updatedState -> MKTask(
-          taskName,
-          MKActions(mouse = Nil, keyboard = kbActions)
-        )
-      }
-    }
-  }
-
-
-  def generateSubwaypoints(
-                            currentWaypoint: WaypointInfo,
-                            state:           GameState,
-                            json:            JsValue
-                          ): GameState = {
-    // 1) pull all tiles and compute grid bounds
-    val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
-    val xs    = tiles.keys.map(_.substring(0,5).toInt)
-    val ys    = tiles.keys.map(_.substring(5,10).toInt)
-    val (minX, minY, maxX, maxY) = (xs.min, ys.min, xs.max, ys.max)
-    val gridBounds                = (minX, minY, maxX, maxY)
-
-    // 2) build boolean grid, getting its offset minimums
-    val (grid, (offX, offY)) = createBooleanGrid(tiles, minX, minY)
-
-    // 3) desired waypoint position and adjust if outside grid
-    val rawWpPos = Vec(currentWaypoint.waypointX, currentWaypoint.waypointY)
-    val wpPos = if (
-      rawWpPos.x < minX || rawWpPos.x > maxX ||
-        rawWpPos.y < minY || rawWpPos.y > maxY
-    ) {
-      val adj = adjustGoalWithinBounds(rawWpPos, grid, gridBounds)
-      printInColor(ANSI_BLUE,
-        s"[WARNING] Waypoint out of grid. Adjusting from $rawWpPos to $adj")
-      adj
-    } else rawWpPos
-
-    // 4) current character loc (from prior steps)
-    val presentLoc = state.characterInfo.presentCharLocation
-
-    // 5) decide whether we're already at wp — if so, advance main index
-    val (nextIndex, targetPos) =
-      if (presentLoc == wpPos) {
-        // wrap to next waypoint
-        val nextIdx = (state.caveBot.currentWaypointIndex + 1) % state.caveBot.fixedWaypoints.size
-        val newWp   = state.caveBot.fixedWaypoints(nextIdx)
-        val newPos  = Vec(newWp.waypointX, newWp.waypointY)
-        printInColor(ANSI_BLUE,
-          s"[WAYPOINTS] Reached waypoint, advancing to index $nextIdx → $newPos")
-        (nextIdx, newPos)
-      } else {
-        // stay on the same index
-        (state.caveBot.currentWaypointIndex, wpPos)
-      }
-
-    // 6) always run A* from presentLoc to targetPos
-    val rawPath =
-      if (presentLoc != targetPos)
-        aStarSearch(presentLoc, targetPos, grid, offX, offY)
-      else
-        Nil
-
-    // 7) drop the starting position from the path
-    val subWaypoints = rawPath.filterNot(_ == presentLoc)
-
-    // 8) assemble new caveBot state
-    val newCaveBot = state.caveBot.copy(
-      currentWaypointIndex     = nextIndex,
-      subWaypoints             = subWaypoints,
-      gridBoundsState          = gridBounds,
-      gridState                = grid,
-      currentWaypointLocation  = targetPos
-    )
-
-    // 9) return updated GameState
-    state.copy(caveBot       = newCaveBot)
   }
 
 
@@ -671,7 +707,96 @@ object CaveBotFeature {
     Vec(adjustedX, adjustedY)
   }
 
+  case class Vec(x: Int, y: Int) {
+    def +(other: Vec): Vec = Vec(x + other.x, y + other.y)
+    def manhattanDistance(other: Vec): Int = (x - other.x).abs + (y - other.y).abs
+
+    // Euclidean distance between two points
+    def distanceTo(other: Vec): Double = {
+      val dx = this.x - other.x
+      val dy = this.y - other.y
+      Math.sqrt(dx * dx + dy * dy)
+    }
+
+    // Normalize the vector to unit length
+    def normalize(): Vec = {
+      val magnitude = distanceTo(Vec(0, 0))
+      if (magnitude != 0) {
+        Vec((x / magnitude).toInt, (y / magnitude).toInt)
+      } else {
+        this
+      }
+    }
+
+    // Add another Vec to this Vec
+//    def +(other: Vec): Vec = {
+//      Vec(this.x + other.x, this.y + other.y)
+//    }
+
+    // Subtract another Vec from this Vec
+    def -(other: Vec): Vec = {
+      Vec(this.x - other.x, this.y - other.y)
+    }
+
+    // Multiply by a scalar value
+    def *(scalar: Int): Vec = {
+      Vec(this.x * scalar, this.y * scalar)
+    }
+
+    // Round to the nearest grid point (e.g., for grid alignment)
+    def roundToGrid(): Vec = {
+      Vec(Math.round(x).toInt, Math.round(y).toInt)
+    }
+  }
+
+  case class WaypointInfo(
+                           waypointType: String,
+                           waypointX: Int,
+                           waypointY: Int,
+                           waypointZ: Int,
+                           waypointPlacement: String
+                         )
 
 
+  def printGrid(grid: Array[Array[Boolean]], gridBounds: (Int, Int, Int, Int), path: List[Vec], charPos: Vec, waypointPos: Vec): Unit = {
+    val (min_x, min_y, maxX, maxY) = gridBounds
+
+    // ANSI escape codes for colors
+    val red = "\u001B[31m" // Non-walkable
+    val green = "\u001B[32m" // Walkable
+    val gold = "\u001B[33m" // Character position
+    val pink = "\u001B[35m" // Path
+    val lightBlue = "\u001B[34m" // Waypoint
+    val reset = "\u001B[0m" // Reset to default
+
+    // Calculate offset for mapping game coordinates to grid indices
+    val offsetX = min_x
+    val offsetY = min_y
+    val width = maxX - min_x + 1
+    val height = maxY - min_y + 1
+
+    // Ensure the grid dimensions match expected size based on bounds
+    require(grid.length >= height && grid(0).length >= width, "Grid size does not match the provided bounds.")
+
+    for (y <- 0 until height) {
+      for (x <- 0 until width) {
+        // Translate grid indices back to game coordinates
+        val gameX = x + offsetX
+        val gameY = y + offsetY
+        val cellVec = Vec(gameX, gameY)
+
+        val symbol = (cellVec, path.contains(cellVec), cellVec == charPos, cellVec == waypointPos, grid(y)(x)) match {
+          case (_, _, true, _, _) => s"${gold}[P]$reset"
+          case (_, _, _, true, _) => s"${lightBlue}[T]$reset"
+          case (_, true, _, _, _) => s"${pink}[W]$reset"
+          case (_, _, _, _, true) => s"${green}[O]$reset"
+          case _ => s"${red}[X]$reset"
+        }
+
+        print(symbol)
+      }
+      println() // New line after each row
+    }
+  }
 
 }

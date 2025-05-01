@@ -1,10 +1,7 @@
 package processing
 
-import keyboard.KeyAction
 import play.api.libs.json.JsObject
-import mouse.{ActionCompleted, ActionTypes, FakeAction, ItemInfo, MouseMoveCommand, MouseMovementSettings, MouseUtils}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
-import processing.CaveBot.{Vec, aStarSearch, createBooleanGrid, printGrid}
 
 import scala.util.Random
 import play.api.libs.json._
@@ -14,6 +11,7 @@ import scala.io.Source
 import java.awt.Toolkit
 import com.sun.speech.freetts.Voice
 import com.sun.speech.freetts.VoiceManager
+import processing.CaveBotFeature.{Vec, aStarSearch, createBooleanGrid, printGrid}
 import utils.{GameState, ProcessorState}
 import utils.consoleColorPrint.{ANSI_BLUE, printInColor}
 
@@ -287,34 +285,34 @@ object Process {
     timeSinceLastAttempt >= retryMidDelay
   }
 
-
-  // Function to load spells from a file
-  def loadSpellsFromFile(filePath: String): List[String] = {
-    Source.fromFile(filePath).getLines.toList
-  }
-
-  def loadTextFromFile(filePath: String): String = {
-    try {
-      Source.fromFile(filePath).getLines.mkString("\n")
-    } catch {
-      case e: Exception =>
-        println(s"Failed to read $filePath: ${e.getMessage}")
-        ""
-    }
-  }
-  def performMouseActionSequance(actionsSeq: Seq[MouseAction]): Seq[FakeAction] = {
-    Seq(FakeAction("useMouse", None, Some(MouseActions(actionsSeq))))
-  }
-
-  def addMouseAction(command: String, itemData: Option[ItemInfo], updatedState: ProcessorState, actionsSeq: Seq[MouseAction]): FakeAction = {
-    val modifiedSeq = if (updatedState.healingCrosshairActive) {
-      println("Have to unclick crosshair.")
-      MouseAction(0, 0, "pressRight") +: actionsSeq
-    } else {
-      actionsSeq
-    }
-    FakeAction(command, itemData, Some(MouseActions(modifiedSeq)))
-  }
+//
+//  // Function to load spells from a file
+//  def loadSpellsFromFile(filePath: String): List[String] = {
+//    Source.fromFile(filePath).getLines.toList
+//  }
+//
+//  def loadTextFromFile(filePath: String): String = {
+//    try {
+//      Source.fromFile(filePath).getLines.mkString("\n")
+//    } catch {
+//      case e: Exception =>
+//        println(s"Failed to read $filePath: ${e.getMessage}")
+//        ""
+//    }
+//  }
+//  def performMouseActionSequance(actionsSeq: Seq[MouseAction]): Seq[FakeAction] = {
+//    Seq(FakeAction("useMouse", None, Some(MouseActions(actionsSeq))))
+//  }
+//
+//  def addMouseAction(command: String, itemData: Option[ItemInfo], updatedState: ProcessorState, actionsSeq: Seq[MouseAction]): FakeAction = {
+//    val modifiedSeq = if (updatedState.healingCrosshairActive) {
+//      println("Have to unclick crosshair.")
+//      MouseAction(0, 0, "pressRight") +: actionsSeq
+//    } else {
+//      actionsSeq
+//    }
+//    FakeAction(command, itemData, Some(MouseActions(modifiedSeq)))
+//  }
 
 
   def generateSubwaypointsToGamePosition(currentWaypointLocation: Vec, initialState: ProcessorState, json: JsValue): ProcessorState = {

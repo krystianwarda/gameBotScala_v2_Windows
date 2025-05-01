@@ -1,7 +1,7 @@
 package processing
 
 import cats.effect.{IO, Ref}
-import keyboard.{KeyboardAction, PressKey, TextType, TypeText}
+import keyboard.{GeneralKey, KeyboardAction, KeyboardUtils, TextType}
 import mouse._
 import play.api.libs.json.{JsObject, JsValue}
 import processing.Process.generateRandomDelay
@@ -723,9 +723,11 @@ object HealingFeature {
             // build the one key-action we want
             val kb: KeyboardAction =
               if (cfg.strongHealHotkeyEnabled)
-                PressKey.fromKeyString(cfg.strongHealHotkey)
+                GeneralKey(KeyboardUtils.fromHotkeyString(cfg.strongHealHotkey))
+
               else
                 TextType(cfg.strongHealSpell)
+
 
             // here’s your List of keyboard actions
             val keyboardSeq: List[KeyboardAction] = List(kb)
@@ -766,9 +768,10 @@ object HealingFeature {
               // build the one key-action we want
               val kb: KeyboardAction =
                 if (cfg.lightHealHotkeyEnabled)
-                  PressKey.fromKeyString(cfg.lightHealHotkey)
+                  GeneralKey(KeyboardUtils.fromHotkeyString(cfg.lightHealHotkey))
                 else
                   TextType(cfg.lightHealSpell)
+
 
               // wrap it in a List
               val keyboardSeq: List[KeyboardAction] = List(kb)

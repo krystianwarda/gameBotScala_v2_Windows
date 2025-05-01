@@ -10,7 +10,7 @@ import java.awt.event.InputEvent
 import scala.concurrent.duration._
 import scala.util.Random
 import cats.syntax.all._
-import processing.MouseAction
+
 
 import scala.math.{pow, sqrt}
 
@@ -215,7 +215,7 @@ class MouseActionManager(
         case Some(action) =>
           for {
             _ <- IO(println(s"[EXECUTE] $action"))
-            _ <- IO(println(s"🎯 Executing: $action"))
+//            _ <- IO(println(s"🎯 Executing: $action"))
             _ <- wasInProgressRef.set(true)
             _ <- taskInProgressRef.set(true)
             _ <- executeAction(action)
@@ -266,26 +266,3 @@ object MouseManagerApp {
     println("✅ MouseActionManager started")
   }
 }
-
-
-//
-//// ✅ Updated: MainApp now correctly starts MouseManagerApp and enqueues actions
-//object MainApp extends IOApp.Simple {
-//  override def run: IO[Unit] =
-//    for {
-//      _ <- IO(MouseManagerApp.start()) // ✅ Start the mouse manager
-//
-//      _ <- IO.sleep(1.second) // Wait a moment before enqueueing actions
-//      _ <- IO(println("Enqueueing actions..."))
-//
-//      _ <- IO(GlobalMouseManager.instance.foreach { manager =>
-//        manager.enqueue(MoveMouse(800, 500)).unsafeRunAndForget()
-//        manager.enqueue(RightButtonPress(800, 500)).unsafeRunAndForget()
-//        manager.enqueue(RightButtonRelease(800, 500)).unsafeRunAndForget()
-//        manager.enqueue(LeftButtonPress(800, 500)).unsafeRunAndForget()
-//        manager.enqueue(LeftButtonRelease(800, 500)).unsafeRunAndForget()
-//      })
-//
-//      _ <- IO.sleep(5.seconds) // Let the actions process before exit
-//    } yield ()
-//}

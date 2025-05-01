@@ -6,13 +6,13 @@ import cats.effect.{IO, IOApp, Ref}
 import cats.effect.unsafe.implicits.global
 import com.github.kwhat.jnativehook.GlobalScreen
 import player.Player
-import mouse.{ActionMouseManager, GlobalMouseManager, MouseAction, MouseActionManager, MouseManagerApp, MouseMovementActor, MouseUtils}
-import keyboard.{ActionKeyboardManager, AutoResponderManager, KeyboardAction, KeyboardActionManager, KeyboardActor}
+import mouse.{GlobalMouseManager, MouseAction, MouseActionManager, MouseManagerApp, MouseUtils}
+import keyboard.{KeyboardAction, KeyboardActionManager}
 import play.api.libs.json._
-import processing.{FunctionalJsonConsumer, JsonProcessorActor}
+import processing.{FunctionalJsonConsumer}
 import utils.SettingsUtils._
 import userUI.{AutoHealBot, FishingBot, UIAppActor}
-import utils.{AlertSenderActor, EscapeKeyHandler, EscapeKeyListener, FunctionExecutorActor, GameState, InitialJsonProcessorActor, InitialRunActor, MainActor, MouseJiggler, PeriodicFunctionActor}
+import utils.{AlertSenderActor, EscapeKeyHandler, EscapeKeyListener, FunctionExecutorActor, GameState, InitialJsonProcessorActor, InitialRunActor, MouseJiggler, PeriodicFunctionActor}
 
 import java.awt.Robot
 import scala.concurrent.duration._
@@ -176,21 +176,21 @@ object MainApp extends IOApp.Simple {
 
 
 
-      keyboardActorRef = system.actorOf(Props[KeyboardActor], "keyboardActor")
-      actionStateManagerRef = system.actorOf(Props[ActionMouseManager], "actionStateManager")
-      actionKeyboardManagerRef = system.actorOf(Props(new ActionKeyboardManager(keyboardActorRef)), "actionKeyboardManager")
+//      keyboardActorRef = system.actorOf(Props[KeyboardActor], "keyboardActor")
+//      actionStateManagerRef = system.actorOf(Props[ActionMouseManager], "actionStateManager")
+//      actionKeyboardManagerRef = system.actorOf(Props(new ActionKeyboardManager(keyboardActorRef)), "actionKeyboardManager")
       alertSenderActorRef = system.actorOf(Props[AlertSenderActor], "alertSender")
 
       // Use lazy val in correct order
-      jsonProcessorActorRef = system.actorOf(Props(new JsonProcessorActor(mouseMovementActorRef, actionStateManagerRef, actionKeyboardManagerRef)), "jsonProcessor")
-      mouseMovementActorRef = system.actorOf(Props(new MouseMovementActor(actionStateManagerRef, jsonProcessorActorRef)), "mouseMovementActor")
+//      jsonProcessorActorRef = system.actorOf(Props(new JsonProcessorActor(mouseMovementActorRef, actionStateManagerRef, actionKeyboardManagerRef)), "jsonProcessor")
+//      mouseMovementActorRef = system.actorOf(Props(new MouseMovementActor(actionStateManagerRef, jsonProcessorActorRef)), "mouseMovementActor")
 
-      autoResponderManagerRef = system.actorOf(AutoResponderManager.props(keyboardActorRef, jsonProcessorActorRef), "autoResponderManager")
+//      autoResponderManagerRef = system.actorOf(AutoResponderManager.props(keyboardActorRef, jsonProcessorActorRef), "autoResponderManager")
       keyListenerActorRef = system.actorOf(Props[EscapeKeyListener], "EscapeKeyListener")
       functionExecutorActorRef = system.actorOf(Props[FunctionExecutorActor], "functionExecutorActor")
       initialJsonProcessorActorRef = system.actorOf(Props[InitialJsonProcessorActor], "initialJsonProcessor")
       initialRunActorRef = system.actorOf(Props(new InitialRunActor(initialJsonProcessorActorRef)), "initialRunActor")
-      mainActorRef = system.actorOf(Props[MainActor], "mainActor")
+//      mainActorRef = system.actorOf(Props[MainActor], "mainActor")
       periodicFunctionActorRef = system.actorOf(Props(new PeriodicFunctionActor(jsonProcessorActorRef, jsonConsumer)), "periodicFunctionActor")
       thirdProcessActorRef = system.actorOf(Props[ThirdProcessActor], "thirdProcess")
       uiAppActorRef = system.actorOf(Props(new UIAppActor(playerClassList, jsonProcessorActorRef, periodicFunctionActorRef, thirdProcessActorRef, mainActorRef, settingsRef)), "uiAppActor")
@@ -208,51 +208,4 @@ object MainApp extends IOApp.Simple {
   } yield ()
 
 }
-
-
-//object MainApp extends App {
-//
-//  val system = ActorSystem("MySystem")
-//
-//  // Define case classes and objects as before
-//
-//  val playerClassList: List[Player] = List(new Player("Player1"))
-//  case class StartActors(settings: UISettings)
-//  case class JsonData(json: JsValue)
-//
-//  lazy val jsonProcessorActorRef = system.actorOf(Props(new JsonProcessorActor(mouseMovementActorRef, actionStateManagerRef, actionKeyboardManagerRef)), "jsonProcessor")
-//
-//  // Create the ActionStateManager without any parameters
-//  val actionStateManagerRef = system.actorOf(Props[ActionStateManager], "actionStateManager")
-//
-//  // Create the MouseMovementActor, passing the ActionStateManager reference
-//  val mouseMovementActorRef = system.actorOf(Props(new MouseMovementActor(actionStateManagerRef, jsonProcessorActorRef)), "mouseMovementActor")
-//
-//  // Create the KeyboardActor
-//  val keyboardActorRef = system.actorOf(Props[KeyboardActor], "keyboardActor")
-//
-//  val autoResponderManagerRef = system.actorOf(AutoResponderManager.props(keyboardActorRef), "autoResponderManager")
-//
-//  // Create the ActionKeyboardManager, passing the KeyboardActor reference
-//  val actionKeyboardManagerRef = system.actorOf(Props(new ActionKeyboardManager(keyboardActorRef)), "actionKeyboardManager")
-//
-//  // Update JsonProcessorActor creation to include the ActionKeyboardManager reference
-////  val jsonProcessorActorRef = system.actorOf(Props(new JsonProcessorActor(mouseMovementActorRef, actionStateManagerRef, actionKeyboardManagerRef)), "jsonProcessor")
-//  val functionExecutorActorRef = system.actorOf(Props[FunctionExecutorActor], "functionExecutorActor")
-//
-//  // Continue with the creation of other actors as before
-//  val initialJsonProcessorActorRef = system.actorOf(Props[InitialJsonProcessorActor], "initialJsonProcessor")
-//  val initialRunActorRef = system.actorOf(Props(new InitialRunActor(initialJsonProcessorActorRef)), "initialRunActor")
-//  val mainActorRef = system.actorOf(Props[MainActor], "mainActor")
-//  val periodicFunctionActorRef = system.actorOf(Props(classOf[PeriodicFunctionActor], jsonProcessorActorRef), "periodicFunctionActor")
-//  val thirdProcessActorRef = system.actorOf(Props[ThirdProcessActor], "thirdProcess")
-//  val uiAppActorRef = system.actorOf(Props(new UIAppActor(playerClassList, jsonProcessorActorRef, periodicFunctionActorRef, thirdProcessActorRef, mainActorRef)), "uiAppActor")
-//
-//  println("Press ENTER to exit...")
-//  scala.io.StdIn.readLine()
-//
-//  system.terminate()
-//}
-
-
 

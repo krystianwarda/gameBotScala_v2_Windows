@@ -1,8 +1,9 @@
 package utils
 
 import play.api.libs.json.JsValue
-import processing.CaveBot.Vec
-import processing.{Creature, WaypointInfo}
+
+import processing.CaveBotFeature.{Vec, WaypointInfo}
+
 import utils.SettingsUtils.UISettings
 
 import scala.collection.mutable
@@ -123,9 +124,23 @@ case class AutoLootState(
                         )
 
 
+case class Creature(
+                     name: String,
+                     count: Int,
+                     danger: Int,
+                     targetBattle: Boolean,
+                     loot: Boolean,
+                     chase: Boolean,
+                     keepDistance: Boolean,
+                     avoidWaves: Boolean,
+                     useRune: Boolean,
+                     useRuneOnScreen: Boolean,
+                     useRuneOnBattle: Boolean
+                   )
 
 case class AutoTargetState(
                             dangerLevelHealing: String = "low",
+                            lastRuneUseTime: Long = 0,
                             dangerCreaturesList: Seq[Creature] = Seq.empty,
                             creatureTarget: Int = 0,
                             lastTargetName: String = "",
@@ -141,6 +156,10 @@ case class AutoTargetState(
                             chosenTargetName: String = "",
                             lastTargetMarkCommandSend: Long = 0,
                             targetFreezeCreatureId: Int = 0,
+                            subWaypoints: List[Vec] = List(),
+                            runeUseCooldown: Long = 2000,
+                            runeUseRandomness: Long = 0,
+                            runeUseTimeRange:  (Int, Int) = (500,1000),
                           )
 
 case class GuardianState(

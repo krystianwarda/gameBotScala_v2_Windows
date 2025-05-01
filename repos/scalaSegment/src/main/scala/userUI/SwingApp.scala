@@ -3,7 +3,7 @@ import cats.effect.{IO, Ref}
 
 import java.awt.GridBagLayout
 import java.awt.GridBagConstraints
-import processing.{ConnectToServer, InitializeProcessor}
+//import processing.{ConnectToServer, InitializeProcessor}
 import main.scala.MainApp.{autoResponderManagerRef, jsonProcessorActorRef, periodicFunctionActorRef, uiAppActorRef}
 import play.api.libs.json.{Format, Json}
 import utils.SettingsUtils
@@ -15,7 +15,7 @@ import scala.swing.{Component, Dialog, FileChooser, Insets}
 import akka.actor.ActorRef
 import main.scala.MainApp
 import player.Player
-import utils.StartMouseMovementActor
+//import utils.StartMouseMovementActor
 
 import java.awt.Dimension
 import scala.swing.{BoxPanel, Button, CheckBox, ComboBox, Label, MainFrame, Orientation, TabbedPane, TextField}
@@ -672,8 +672,8 @@ class SwingApp(playerClassList: List[Player],
         println(s"[UI] starting with settings: $currentSettings")
         uiAppActor             ! MainApp.StartActors(currentSettings)
         periodicFunctionActorRef ! MainApp.StartActors(currentSettings)
-        jsonProcessorActorRef  ! InitializeProcessor(currentPlayer, currentSettings)
-        autoResponderManagerRef ! UpdateSettings(currentSettings)
+//        jsonProcessorActorRef  ! InitializeProcessor(currentPlayer, currentSettings)
+//        autoResponderManagerRef ! UpdateSettings(currentSettings)
     }
   }
 

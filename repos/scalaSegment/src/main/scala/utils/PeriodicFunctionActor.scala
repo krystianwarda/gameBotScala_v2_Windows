@@ -49,7 +49,8 @@ class PeriodicFunctionActor(
 
 
     case json: JsValue =>
-      jsonProcessorActor ! MainApp.JsonData(json)
+      println(s"JSON: ${json}")
+//      jsonProcessorActor ! MainApp.JsonData(json)
       latestJson = Some(json)
       jsonConsumer.process(json).unsafeRunAndForget()
 

@@ -11,10 +11,10 @@ import scala.swing._
 import scala.swing.event._
 import java.awt.event._
 import player.Player
-import processing.InitializeProcessor
+//import processing.InitializeProcessor
 import main.scala.MainApp.jsonProcessorActorRef
 import utils.SettingsUtils.UISettings
-import utils.StartMouseMovementActor
+//import utils.StartMouseMovementActor
 
 import java.awt.Dimension
 import scala.concurrent.ExecutionContext.Implicits.global

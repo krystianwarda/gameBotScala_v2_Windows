@@ -33,16 +33,17 @@ class FunctionalJsonConsumer(
         // 1) normal processing
         for {
           settings <- settingsRef.get
-//          _        <- IO.println(s"[Consumer] got settings: $settings")
           state0   <- stateRef.get
 
-          // Run fishing & healing
-          (state1, fishTasks) = FishingFeature.run(json, settings, state0)
-          (state2, healTasks) = HealingFeature.run(json, settings, state1)
-          _        <- stateRef.set(state2)
-        } yield (state2, fishTasks ++ healTasks)
+          // Run fishing, healing & cavebot features
+          (state1, fishTasks)  = FishingFeature.run(json, settings, state0)
+          (state2, healTasks)  = HealingFeature.run(json, settings, state1)
+          (state3, caveTasks)  = CaveBotFeature.run(json, settings, state2)
+          _        <- stateRef.set(state3)
+        } yield (state3, fishTasks ++ healTasks ++ caveTasks)
     }
   }
+
 
   def process(json: JsValue): IO[Unit] =
     runPipeline(json).flatMap { case (_, tasks) =>
