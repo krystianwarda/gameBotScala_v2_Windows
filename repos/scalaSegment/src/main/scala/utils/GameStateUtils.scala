@@ -78,7 +78,7 @@ case class GeneralState(
                          temporaryData: Map[String, String] = Map.empty,
                          retryThroughoutFishesStatus: Option[Int] = None,
                          retryAttempts:  Int = 0,
-                         retryAttemptsVerLong: Int = 60,
+                         retryAttemptsVerLong: Int = 7,
 
 //                         retryAttemptsLong: Option[Long] = None
                        )

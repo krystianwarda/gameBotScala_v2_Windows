@@ -41,6 +41,7 @@ object StaticGameInfo {
       469, // stairs down
       414, // Stairs down
       428, // Stairs down
+      432, // ladder down
       434, // Stairs down
       469, // Stairs down
       594, // opened shovel hole

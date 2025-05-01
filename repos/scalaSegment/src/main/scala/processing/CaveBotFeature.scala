@@ -5,7 +5,7 @@ import play.api.libs.json.{JsObject, JsValue}
 import utils.{GameState, StaticGameInfo}
 import utils.ProcessingUtils.{MKActions, MKTask, NoOpTask, Step}
 import utils.SettingsUtils.UISettings
-import utils.consoleColorPrint.{ANSI_BLUE, printInColor}
+import utils.consoleColorPrint.{ANSI_BLUE, ANSI_PURPLE, printInColor}
 
 import scala.collection.mutable
 import scala.util.Try
@@ -24,21 +24,12 @@ object CaveBotFeature {
         (s, maybeTask.toList)
       }
 
-
-//  def run(json: JsValue, settings: UISettings, state: GameState):
-//  (GameState, List[MKTask]) =
-//    if (!settings.caveBotSettings.enabled) (state, Nil)
-//    else {
-//      val (s, maybeTask) = Steps.runFirst(json, settings, state)
-//      (s, maybeTask.toList)
-//    }
-
   private object Steps {
     // ordered list of steps
     val allSteps: List[Step] = List(
       WaypointLoader,
       WrongFloorSaver,
-//      WaypointStuckSaver,
+      WaypointStuckSaver,
       UpdateLocation,
       MovementToSubwaypoint
     )
@@ -56,22 +47,23 @@ object CaveBotFeature {
           case step :: rest =>
             step.run(current, json, settings) match {
               case Some((newState, task)) if task == NoOpTask =>
-                // Skip no-op task, continue with updated state
+                // ✅ keep the newState and keep going
                 loop(rest, newState)
 
               case Some((newState, task)) =>
-                // Emit real task
+                // ✅ return early with state AND task
                 (newState, Some(task))
 
               case None =>
-                // No update, move on
+                // ✅ no state change, continue with existing
                 loop(rest, current)
             }
         }
 
-
+      // ✅ always return the latest state, even if no task
       loop(allSteps, startState)
     }
+
   }
 
 
@@ -309,7 +301,7 @@ object CaveBotFeature {
           val finalState = updatedState.copy(caveBot = newCave, characterInfo = newChar)
 
           println(s"[WaypointLoader] Emitting marker task: $taskName")
-          Some(finalState -> MKTask(taskName, MKActions.empty))
+          Some(finalState -> NoOpTask)
         }
       }
     }
@@ -362,9 +354,7 @@ object CaveBotFeature {
 
   private object WrongFloorSaver extends Step {
     private val taskName = "WrongFloorSaver"
-    private val levelMovementEnablersIds = List(
-      414, 433, 369, 469, 1977, 1947, 1948, 386, 594
-    )
+    private val levelMovementEnablersIds = StaticGameInfo.LevelMovementEnablers.AllIds
 
     def run(
              state:    GameState,
@@ -384,14 +374,16 @@ object CaveBotFeature {
 
         // throttle to once per second
         if (now - state.caveBot.antiOverpassDelay < 1000) {
-          Some(baseState -> MKTask(taskName, MKActions(Nil, Nil)))
+          Some(baseState -> NoOpTask)
         } else {
           // update delay and character position
           val x = (json \ "characterInfo" \ "PositionX").as[Int]
           val y = (json \ "characterInfo" \ "PositionY").as[Int]
+          val newLoc = Vec(x, y)
+
           val withPos = baseState.copy(
             caveBot = baseState.caveBot.copy(antiOverpassDelay = now),
-            characterInfo     = baseState.characterInfo.copy(presentCharLocation = Vec(x, y))
+            characterInfo = baseState.characterInfo.copy(presentCharLocation = newLoc)
           )
 
           // collect all “stairs” tiles within manhattan distance ≤5
@@ -403,8 +395,11 @@ object CaveBotFeature {
               } =>
               val gx = tileId.take(5).toInt
               val gy = tileId.drop(5).take(5).toInt
-              (tileId, math.abs(gx - x) + math.abs(gy - y))
+              val dist = math.abs(gx - newLoc.x) + math.abs(gy - newLoc.y)
+              (tileId, dist)
           }.toList.filter(_._2 <= 5)
+
+
 
           // pick closest, then look up its screen coords
           val maybeScreenXY: Option[(Int, Int)] = potential
@@ -453,68 +448,89 @@ object CaveBotFeature {
     }
   }
 
+
   private object WaypointStuckSaver extends Step {
     private val taskName = "WaypointStuckSaver"
-
     override def run(
-                      state:    GameState,
-                      json:     JsValue,
+                      state: GameState,
+                      json: JsValue,
                       settings: UISettings
                     ): Option[(GameState, MKTask)] = {
-      // 1) only when not hunting
+      printInColor(ANSI_PURPLE, s"[WaypointStuckSaver] Entered step. Hunting=${state.caveBot.stateHunting}")
+
       if (state.caveBot.stateHunting != "free") return None
 
-      // 2) only when there are no monsters in your battle list
       val monsters = (json \ "battleList").asOpt[Seq[JsValue]].getOrElse(Nil)
       if (monsters.nonEmpty) return None
 
-      // 3) compute old vs new char position
       val x       = (json \ "characterInfo" \ "PositionX").as[Int]
       val y       = (json \ "characterInfo" \ "PositionY").as[Int]
       val newLoc  = Vec(x, y)
       val prevLoc = state.characterInfo.presentCharLocation
 
-      // pull out caveBot sub‐state for convenience
-      val cb = state.caveBot
+      val updatedCharInfo = state.characterInfo.copy(presentCharLocation = newLoc)
+      val cb              = state.caveBot
 
-      // 4) decide how to update antiCaveBotStuckStatus (and maybe waypoint index)
-      val updatedCB = if (prevLoc == newLoc) {
-        if (cb.antiCaveBotStuckStatus >= state.general.retryAttemptsVerLong) {
-          // stuck for too long → pick nearest waypoint and reset counter
-          printInColor(ANSI_BLUE, "[ANTI CAVEBOT STUCK] Character has been in one place for too long. Finding new waypoint")
+      val updatedCB =
+        if (prevLoc == newLoc) {
+          val stuckCount = cb.antiCaveBotStuckStatus + 1
 
-          val (closestIdx, _) = cb.fixedWaypoints
-            .zipWithIndex
-            .map { case (wp, idx) =>
-              idx -> newLoc.manhattanDistance(Vec(wp.waypointX, wp.waypointY))
-            }
-            .minBy(_._2)
+          if (stuckCount >= state.general.retryAttemptsVerLong) {
+            printInColor(ANSI_PURPLE, s"[WaypointStuckSaver] Character stuck for $stuckCount loops. Resetting to closest waypoint.")
 
-          cb.copy(
-            currentWaypointIndex     = closestIdx,
-            subWaypoints             = List.empty,
-            antiCaveBotStuckStatus   = 0
-          )
+            val newCB =
+              if (cb.fixedWaypoints.nonEmpty) {
+                val tiles      = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+                val tileCoords = tiles.keySet.map(k => Vec(k.take(5).toInt, k.drop(5).take(5).toInt))
+
+                val reachableWaypoints = cb.fixedWaypoints.zipWithIndex.collect {
+                  case (wp, idx) if tileCoords.contains(Vec(wp.waypointX, wp.waypointY)) =>
+                    val dist = newLoc.manhattanDistance(Vec(wp.waypointX, wp.waypointY))
+                    idx -> dist
+                }
+
+                val closestIdx = if (reachableWaypoints.nonEmpty) {
+                  reachableWaypoints.minBy(_._2)._1
+                } else {
+                  printInColor(ANSI_PURPLE, s"[WaypointStuckSaver] WARNING: No reachable waypoint found on screen — keeping current")
+                  cb.currentWaypointIndex
+                }
+
+                cb.copy(
+                  currentWaypointIndex   = closestIdx,
+                  subWaypoints           = List.empty,
+                  antiCaveBotStuckStatus = 0
+                )
+              } else {
+                printInColor(ANSI_PURPLE, s"[WaypointStuckSaver] ERROR: fixedWaypoints list is empty!")
+                cb.copy(antiCaveBotStuckStatus = 0)
+              }
+
+            newCB
+          } else {
+            if (stuckCount >= 5)
+              printInColor(ANSI_PURPLE, s"[WaypointStuckSaver] Still stuck: count = $stuckCount")
+            cb.copy(antiCaveBotStuckStatus = stuckCount)
+          }
+
         } else {
-          // still bumping the stuck counter
           if (cb.antiCaveBotStuckStatus >= 5)
-            printInColor(ANSI_BLUE, s"[ANTI CAVEBOT STUCK] COUNT STUCK ${cb.antiCaveBotStuckStatus}")
-
-          cb.copy(antiCaveBotStuckStatus = cb.antiCaveBotStuckStatus + 1)
+            printInColor(ANSI_PURPLE, s"[WaypointStuckSaver] Movement detected, stuck counter reset")
+          cb.copy(antiCaveBotStuckStatus = 0)
         }
-      } else {
-        // moved: reset counter
-        cb.copy(antiCaveBotStuckStatus = 0)
-      }
 
-      // 5) assemble the new overall state
       val updatedState = state.copy(
         caveBot       = updatedCB,
-        characterInfo = state.characterInfo.copy(presentCharLocation = newLoc)
+        characterInfo = updatedCharInfo
       )
 
-      // 6) always return a “marker” task (no mouse/keyboard) to block further steps this tick
-      Some(updatedState -> MKTask(taskName, MKActions.empty))
+      if (updatedCB.antiCaveBotStuckStatus != cb.antiCaveBotStuckStatus ||
+        updatedCB.currentWaypointIndex != cb.currentWaypointIndex) {
+        printInColor(ANSI_PURPLE, s"[WaypointStuckSaver] Returning update. stuckStatus=${updatedCB.antiCaveBotStuckStatus}")
+        Some(updatedState -> NoOpTask)
+      } else {
+        None
+      }
     }
   }
 
