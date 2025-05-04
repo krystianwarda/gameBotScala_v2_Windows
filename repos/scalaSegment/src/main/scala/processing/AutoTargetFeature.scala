@@ -129,8 +129,8 @@ object AutoTargetFeature {
     private val taskName = "CheckAttackRunes"
     def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
       val at = state.autoTarget
-      println(s"[CheckAttackRunes] Checking rune supplies in: ${at.autoTargetContainerMapping}")
-      println(s"statusOfAutoTarget: ${at.statusOfAutoTarget }")
+//      println(s"[CheckAttackRunes] Checking rune supplies in: ${at.autoTargetContainerMapping}")
+//      println(s"statusOfAutoTarget: ${at.statusOfAutoTarget }")
       if (at.statusOfAutoTarget != "ready") return None
 
       // find the first rune whose container is now empty
@@ -164,7 +164,7 @@ object AutoTargetFeature {
           Some(state.copy(autoTarget = newAT) -> MKTask(taskName, MKActions(actions, Nil)))
 
         case None =>
-          println("[CheckAttackRunes] All containers still have their runes.")
+//          println("[CheckAttackRunes] All containers still have their runes.")
           None
       }
     }

@@ -26,6 +26,17 @@ case class DirectionalKey(direction: String) extends KeyboardAction {
   val priority = 1
 }
 
+case object PressCtrl extends KeyboardAction {
+  val priority = 0
+}
+case object ReleaseCtrl extends KeyboardAction {
+  val priority = 0
+}
+
+case class HoldCtrlFor(duration: FiniteDuration) extends KeyboardAction {
+  val priority = 0
+}
+
 
 class KeyboardActionManager(
                              robot: Robot,
@@ -94,6 +105,20 @@ class KeyboardActionManager(
     case TextType(text) =>
       println(s"TextType - typing $text")
       typeString(text)
+
+    case PressCtrl =>
+      println("Pressing Ctrl key")
+      IO(robot.keyPress(KeyEvent.VK_CONTROL)) *> IO.sleep(20.millis)
+
+    case ReleaseCtrl =>
+      println("Releasing Ctrl key")
+      IO(robot.keyRelease(KeyEvent.VK_CONTROL)) *> IO.sleep(20.millis)
+
+    case HoldCtrlFor(duration) =>
+      println(s"Holding Ctrl for $duration")
+      IO(robot.keyPress(KeyEvent.VK_CONTROL)) *> IO.sleep(duration) *> IO(robot.keyRelease(KeyEvent.VK_CONTROL))
+
+
   }
 
 

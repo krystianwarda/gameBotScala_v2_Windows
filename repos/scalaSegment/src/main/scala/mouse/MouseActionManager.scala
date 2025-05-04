@@ -29,6 +29,7 @@ case class RightButtonRelease(x: Int, y: Int) extends MouseAction { val priority
 case class DragMouse(x: Int, y: Int) extends MouseAction { val priority = 1 }
 case class CrosshairMove(x: Int, y: Int) extends MouseAction { val priority = 1 }
 
+
 // Global mouse manager reference (will be initialized in MainApp)
 object GlobalMouseManager {
   var instance: Option[MouseActionManager] = None
@@ -66,8 +67,6 @@ class MouseActionManager(
       case MoveMouse(x, y) =>
         IO(println(s"🔧 Actually calling robot.mouseMove($x, $y)")) *>
           moveMouse(x, y) *> IO.sleep(40.millis)
-
-
 
       case LeftButtonPress(_, _) =>
         IO(robot.mousePress(InputEvent.BUTTON1_DOWN_MASK)) *> IO.sleep(10.millis)

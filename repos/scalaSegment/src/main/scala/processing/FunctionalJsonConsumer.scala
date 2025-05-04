@@ -37,11 +37,12 @@ class FunctionalJsonConsumer(
 
           (state1, fishTasks)   = FishingFeature.run(json, settings, state0)
           (state2, healTasks)   = HealingFeature.run(json, settings, state1)
-          (state3, targetTasks) = AutoTargetFeature.run(json, settings, state2)
-          (state4, caveTasks)   = CaveBotFeature.run(json, settings, state3)
-          _ <- stateRef.set(state4)
+          (state3, lootTasks)   = AutoLootFeature.run(json, settings, state2)
+          (state4, targetTasks) = AutoTargetFeature.run(json, settings, state3)
+          (state5, caveTasks)   = CaveBotFeature.run(json, settings, state4)
+          _ <- stateRef.set(state5)
 
-        } yield (state4, fishTasks ++ healTasks ++ targetTasks ++ caveTasks)
+        } yield (state5, fishTasks ++ healTasks ++ lootTasks ++ targetTasks ++ caveTasks)
     }
   }
 

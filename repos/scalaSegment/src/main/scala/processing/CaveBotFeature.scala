@@ -115,66 +115,76 @@ object CaveBotFeature {
     }
   }
 
-
   private object MovementToSubwaypoint extends Step {
     private val taskName = "MovementToSubwaypoint"
 
     override def run(
-                      state:    GameState,
-                      json:     JsValue,
+                      state: GameState,
+                      json: JsValue,
                       settings: UISettings
                     ): Option[(GameState, MKTask)] = {
-      val cb  = state.caveBot
+      val at = state.autoTarget
+      val cb = state.caveBot
       val idx = cb.currentWaypointIndex
 
-      println(s"[MovementToSubwaypoint] starting; idx=$idx, subWaypoints.size=${cb.subWaypoints.size}")
+      println(s"[$taskName] starting; idx=$idx, subWaypoints.size=${cb.subWaypoints.size}")
 
       val fixedWps = cb.fixedWaypoints
       if (!fixedWps.isDefinedAt(idx)) {
-        println(s"[MovementToSubwaypoint] no fixed WP at $idx → skipping")
+        println(s"[$taskName] no fixed WP at $idx → skipping")
         return None
       }
 
       val currentWp = fixedWps(idx)
-      println(s"[MovementToSubwaypoint] target fixed WP #$idx = (${currentWp.waypointX},${currentWp.waypointY})")
+      println(s"[$taskName] target fixed WP #$idx = (${currentWp.waypointX},${currentWp.waypointY})")
 
       // 1) read current character pos from JSON
-      val px  = (json \ "characterInfo" \ "PositionX").as[Int]
-      val py  = (json \ "characterInfo" \ "PositionY").as[Int]
+      val px = (json \ "characterInfo" \ "PositionX").as[Int]
+      val py = (json \ "characterInfo" \ "PositionY").as[Int]
       val loc = Vec(px, py)
 
       println(s"[TICK] Character pos = $loc, WP target = (${currentWp.waypointX}, ${currentWp.waypointY})")
 
-      println("[MovementToSubwaypoint] regenerating full path to target WP")
+      // If target is chosen, don't generate subwaypoints, only track waypoints
+      if (at.statusOfAutoTarget == "target chosen") {
+        println(s"[$taskName] target chosen → skipping movement generation")
+        return None
+      }
+
+      // Only proceed if caveBot is in 'free' state
+      if (cb.stateHunting != "free") {
+        println(s"[$taskName] caveBot status is '${cb.stateHunting}' → skipping")
+        return None
+      }
+
+      // Proceed to generate subwaypoints and move
+      println(s"[$taskName] generating path to target WP")
       val gen = generateSubwaypoints(currentWp, state, json)
-      println(s"[MovementToSubwaypoint] regenerated path length = ${gen.caveBot.subWaypoints.size}")
-      val baseState = gen
       val subs0 = gen.caveBot.subWaypoints
+      println(s"[$taskName] regenerated path length = ${subs0.size}")
 
-      // 4) take the head of subs0 as our next step
       subs0.headOption.map { nextWp =>
-        println(s"[MovementToSubwaypoint] moving from $loc to next subWP $nextWp")
+        println(s"[$taskName] moving from $loc to next subWP $nextWp")
 
-        val dirOpt = calculateDirection(loc, nextWp, baseState.characterInfo.lastDirection)
-        println(s"[MovementToSubwaypoint] calculateDirection → $dirOpt")
+        val dirOpt = calculateDirection(loc, nextWp, state.characterInfo.lastDirection)
+        println(s"[$taskName] calculateDirection → $dirOpt")
 
-        // ▶ 5) update both lastDirection AND presentCharLocation
-        val updatedCharInfo = baseState.characterInfo.copy(
-          lastDirection        = dirOpt,
-          presentCharLocation  = loc
+        val updatedCharInfo = state.characterInfo.copy(
+          lastDirection = dirOpt,
+          presentCharLocation = loc
         )
-        val updatedState = baseState.copy(characterInfo = updatedCharInfo)
 
-        val kbActions: List[KeyboardAction] = dirOpt.toList
-          .map(DirectionalKey(_))
-        println(s"[MovementToSubwaypoint] emitting movement task with ${kbActions.size} keyboard actions")
+        val kbActions: List[KeyboardAction] = dirOpt.toList.map(DirectionalKey(_))
+        println(s"[$taskName] emitting movement task with ${kbActions.size} keyboard actions")
 
-        // 7) drop the head we just consumed, keep the tail
-        val newCb = updatedState.caveBot.copy(
+        val updatedCaveBot = gen.caveBot.copy(
           subWaypoints = subs0.drop(1)
         )
 
-        val nextState = updatedState.copy(caveBot = newCb)
+        val nextState = gen.copy(
+          characterInfo = updatedCharInfo,
+          caveBot = updatedCaveBot
+        )
 
         nextState -> MKTask(
           taskName,
@@ -183,6 +193,7 @@ object CaveBotFeature {
       }
     }
   }
+
 
   def generateSubwaypoints(
                             currentWaypoint: WaypointInfo,

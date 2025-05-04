@@ -294,7 +294,7 @@
 //
 //    ProcessResult(actions, logs, updatedState)
 //  }
-//
+
 //
 //
 //
@@ -1162,7 +1162,7 @@
 //    // Return the ProcessResult with updated actions, logs, and state
 //    ProcessResult(actions, logs, updatedState)
 //  }
-//
+
 //
 //
 //

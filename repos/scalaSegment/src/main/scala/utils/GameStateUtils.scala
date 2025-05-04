@@ -120,7 +120,12 @@ case class AutoLootState(
                           lootCountToPlunder: Int = 0,
                           lootScreenPosToPlunder: Vec = Vec(0, 0),
                           lastAutoLootAction: Long = 0,
-                          lastEatFoodTime: Long = 0
+                          lastEatFoodTime: Long = 0,
+                          subWaypoints: List[Vec] = List(),
+                          gridBoundsState: (Int, Int, Int, Int) = (0, 0, 0, 0), // Example default value
+                          gridState: Array[Array[Boolean]] = Array.ofDim[Boolean](10, 10),
+                          currentWaypointLocation: Vec = Vec(0, 0),
+                          lastDirection: Option[String] = None,
                         )
 
 
