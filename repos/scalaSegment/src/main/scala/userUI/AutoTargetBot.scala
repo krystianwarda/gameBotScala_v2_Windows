@@ -15,22 +15,20 @@ import scala.collection.mutable.ListBuffer
 class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: ActorRef) {
 
 
-  val targetOnBattleLabel = new Label("Target on battle:")
-  val lootMonsterLabel = new Label("Loot monster:")
-  val chaseMonsterLabel = new Label("Chase monster:")
-  val keepDistanceLabel = new Label("Keep distance:")
-  val avoidWavesLabel = new Label("Avoid waves:")
+  val markTargetLabel = new Label("Mark targets on:")
+  val lootStrategyLabel = new Label("Loot strategy:")
+  val fightStrategyLabel = new Label("Fight strategy:")
   val useRunesOnLabel = new Label("Use runes on:")
-  val lureCreatureToTeamLabel = new Label("Lure creature to team:")
 
-  val targetMonstersOnBattleCheckbox = new CheckBox("Yes")
+  val targetMonstersOnBattleCheckbox = new CheckBox("Battle")
+  val targetMonstersOnScreenCheckbox = new CheckBox("Screen")
   val lootMonsterCheckbox = new CheckBox("Yes")
   val lootMonsterImmediatelyCheckbox = new CheckBox("Immediately")
   val lootMonsterAfterFightCheckbox = new CheckBox("After fight")
-  val chaseMonstersCheckbox = new CheckBox("Yes")
-  val keepDistanceCheckbox = new CheckBox("Yes")
-  val avoidWavesCheckbox = new CheckBox("Yes")
-  val lureCreatureToTeamCheckbox = new CheckBox("Yes")
+  val chaseMonstersCheckbox = new CheckBox("Chase creature")
+  val keepDistanceCheckbox = new CheckBox("Keep distance")
+  val avoidWavesCheckbox = new CheckBox("Avoid waves")
+  val lureCreatureToTeamCheckbox = new CheckBox("Lure creatures to team")
   val runesOnBattleCheckbox = new CheckBox("Battle")
   val runesOnScreenCheckbox = new CheckBox("Screen")
 
@@ -170,15 +168,15 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
     c.gridwidth = 1
     c.gridx = 4
     c.gridy += 1
-    add(targetOnBattleLabel.peer, c)
+    add(markTargetLabel.peer, c)
+    c.gridx += 1
+    add(targetMonstersOnScreenCheckbox.peer, c)
     c.gridx += 1
     add(targetMonstersOnBattleCheckbox.peer, c)
     c.gridx = 4
 
     c.gridy += 1
-    add(lootMonsterLabel.peer, c)
-    c.gridx += 1
-    add(lootMonsterCheckbox.peer, c)
+    add(lootStrategyLabel.peer, c)
     c.gridx += 1
     add(lootMonsterImmediatelyCheckbox.peer, c)
     c.gridx += 1
@@ -188,25 +186,14 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
 
     c.gridx = 4
     c.gridy += 1
-    add(chaseMonsterLabel.peer, c)
+    add(fightStrategyLabel.peer, c)
     c.gridx += 1
     add(chaseMonstersCheckbox.peer, c)
-
-    c.gridx = 4
-    c.gridy += 1
-    add(keepDistanceLabel.peer, c)
     c.gridx += 1
     add(keepDistanceCheckbox.peer, c)
-
-    c.gridx = 4
+    c.gridx = 5
     c.gridy += 1
-    add(lureCreatureToTeamLabel.peer, c)
-    c.gridx += 1
     add(lureCreatureToTeamCheckbox.peer, c)
-
-    c.gridx = 4
-    c.gridy += 1
-    add(avoidWavesLabel.peer, c)
     c.gridx += 1
     add(avoidWavesCheckbox.peer, c)
 
@@ -238,7 +225,7 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
       val hpRangeTo = healthRangeTo.text.trim
       val dangerLevel = creatureDangerDropdown.getSelectedItem.toString
       val targetOnBattle = if (targetMonstersOnBattleCheckbox.selected) "Yes" else "No"
-      val lootMonster = if (lootMonsterCheckbox.selected) "Yes" else "No"
+      val targetOnScreen = if (targetMonstersOnScreenCheckbox.selected) "Yes" else "No"
       val lootMonsterImmediately = if (lootMonsterImmediatelyCheckbox.selected) "Yes" else "No"
       val lootMonsterAfterFight = if (lootMonsterAfterFightCheckbox.selected) "Yes" else "No"
       val keepDistance = if (keepDistanceCheckbox.selected) "Yes" else "No"
@@ -251,7 +238,7 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
       val useRuneOnBattle = if (runesOnBattleCheckbox.selected) "Yes" else "No"
 
       // Concatenate all information into a single string
-      val creatureInfo = s"Name: $creatureName, Count: $count, HP: $hpRangeFrom-$hpRangeTo, Danger: $dangerLevel, Target in Battle: $targetOnBattle, Loot: $lootMonster, Loot Immediately: $lootMonsterImmediately, Loot after Fight: $lootMonsterAfterFight, Chase: $chaseMonster, Keep Distance: $keepDistance, Lure to Team: $lureCreatureToTeam, Avoid Waves: $avoidWaves, Use Rune: $useRune, Rune Type: $runeType, Runes on Screen: $useRuneOnScreen, Runes on Battle: $useRuneOnBattle"
+      val creatureInfo = s"Name: $creatureName, Count: $count, HP: $hpRangeFrom-$hpRangeTo, Danger: $dangerLevel, Target on Battle: $targetOnBattle, Target on screen: $targetOnScreen, Loot Immediately: $lootMonsterImmediately, Loot after Fight: $lootMonsterAfterFight, Chase: $chaseMonster, Keep Distance: $keepDistance, Lure to Team: $lureCreatureToTeam, Avoid Waves: $avoidWaves, Use Rune: $useRune, Rune Type: $runeType, Runes on Screen: $useRuneOnScreen, Runes on Battle: $useRuneOnBattle"
 
       if (creatureName.nonEmpty && !creatureListModel.contains(creatureInfo)) {
         creatureListModel.addElement(creatureInfo) // Add to the newly initialized model
@@ -263,8 +250,8 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
         healthRangeTo.text = "100"
         creaturesCountDropdown.setSelectedIndex(0) // Reset to default value if needed
         creatureDangerDropdown.setSelectedIndex(0) // Reset to default value if needed
+        targetMonstersOnScreenCheckbox.selected = false
         targetMonstersOnBattleCheckbox.selected = false
-        lootMonsterCheckbox.selected = false
         lootMonsterImmediatelyCheckbox.selected = false
         lootMonsterAfterFightCheckbox.selected = false
         keepDistanceCheckbox.selected = false
@@ -284,8 +271,8 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
         val count = parts(1).substring("Count: ".length).toInt
         val hpParts = parts(2).substring("HP: ".length).split("-")
         val danger = parts(3).substring("Danger: ".length).toInt
-        val targetInBattle = parts(4).substring("Target in Battle: ".length).equalsIgnoreCase("Yes")
-        val lootMonster = parts(5).substring("Loot: ".length).equalsIgnoreCase("Yes")
+        val targetOnBattle = parts(4).substring("Target on Battle: ".length).equalsIgnoreCase("Yes")
+        val targetOnScreen = parts(5).substring("Target on Screen: ".length).equalsIgnoreCase("Yes")
         val lootMonsterImmediately = parts(6).substring("Loot Immediately: ".length).equalsIgnoreCase("Yes")
         val lootMonsterAfterFight = parts(7).substring("Loot after Fight: ".length).equalsIgnoreCase("Yes")
         val chaseMonster = parts(8).substring("Chase: ".length).equalsIgnoreCase("Yes")
@@ -303,8 +290,8 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
         healthRangeFrom.text = hpParts(0)
         healthRangeTo.text = hpParts(1)
         creatureDangerDropdown.setSelectedItem(danger.asInstanceOf[Object])
-        targetMonstersOnBattleCheckbox.selected = targetInBattle
-        lootMonsterCheckbox.selected = lootMonster
+        targetMonstersOnBattleCheckbox.selected = targetOnBattle
+        targetMonstersOnScreenCheckbox.selected = targetOnScreen
         lootMonsterImmediatelyCheckbox.selected = lootMonsterImmediately
         lootMonsterAfterFightCheckbox.selected = lootMonsterAfterFight
         chaseMonstersCheckbox.selected = chaseMonster
@@ -341,7 +328,7 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
       creatureDangerDropdown.setSelectedIndex(0)
 
       targetMonstersOnBattleCheckbox.selected = false
-      lootMonsterCheckbox.selected = false
+      targetMonstersOnScreenCheckbox.selected = false
       lootMonsterImmediatelyCheckbox.selected = false
       lootMonsterAfterFightCheckbox.selected = false
       chaseMonstersCheckbox.selected = false
