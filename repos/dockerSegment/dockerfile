@@ -1,0 +1,15 @@
+FROM flink:1.17.2-scala_2.12-java8
+
+RUN mkdir -p /opt/flink/plugins/s3-fs-hadoop
+
+# Copy everything EXCEPT the S3 plugin
+COPY target/KafkaToIceberg.jar /opt/flink/usrlib/
+COPY jars/ /opt/flink/lib/
+COPY conf/core-site.xml /opt/flink/conf/core-site.xml
+COPY conf/flink-conf.yaml /opt/flink/conf/flink-conf.yaml
+
+# Remove the s3 plugin from lib folder (if it was copied)
+RUN rm -f /opt/flink/lib/flink-s3-fs-hadoop-1.17.2.jar
+
+# Copy it ONLY into the plugin directory
+COPY jars/flink-s3-fs-hadoop-1.17.2.jar /opt/flink/plugins/s3-fs-hadoop/
