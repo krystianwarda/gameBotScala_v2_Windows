@@ -2,14 +2,33 @@ FROM flink:1.17.2-scala_2.12-java8
 
 RUN mkdir -p /opt/flink/plugins/s3-fs-hadoop
 
-# Copy everything EXCEPT the S3 plugin
+# Copy job jar
 COPY target/KafkaToIceberg.jar /opt/flink/usrlib/
-COPY jars/ /opt/flink/lib/
+
+# Copy Flink and Iceberg related JARs individually
+COPY jars/aws-java-sdk-bundle-1.11.1026.jar /opt/flink/lib/
+COPY jars/commons-logging-1.2.jar /opt/flink/lib/
+COPY jars/flink-sql-connector-kafka-1.17.2.jar /opt/flink/lib/
+COPY jars/flink-table-api-scala-bridge_2.12-1.17.2.jar /opt/flink/lib/
+COPY jars/hadoop-auth-3.3.1.jar /opt/flink/lib/
+COPY jars/hadoop-aws-3.3.1.jar /opt/flink/lib/
+COPY jars/hadoop-client-3.3.1.jar /opt/flink/lib/
+COPY jars/hadoop-client-api-3.3.1.jar /opt/flink/lib/
+COPY jars/hadoop-client-runtime-3.3.1.jar /opt/flink/lib/
+COPY jars/hadoop-common-3.3.1.jar /opt/flink/lib/
+COPY jars/hadoop-hdfs-3.3.1.jar /opt/flink/lib/
+COPY jars/hadoop-hdfs-client-3.3.1.jar /opt/flink/lib/
+COPY jars/htrace-core4-4.2.0-incubating.jar /opt/flink/lib/
+COPY jars/iceberg-aws-1.4.2.jar /opt/flink/lib/
+COPY jars/iceberg-core-1.4.2.jar /opt/flink/lib/
+COPY jars/iceberg-flink-runtime-1.17-1.4.2.jar /opt/flink/lib/
+COPY jars/kafka-clients-2.8.1.jar /opt/flink/lib/
+
+
+# Copy config
 COPY conf/core-site.xml /opt/flink/conf/core-site.xml
 COPY conf/flink-conf.yaml /opt/flink/conf/flink-conf.yaml
 
-# Remove the s3 plugin from lib folder (if it was copied)
+# Handle S3 plugin
 RUN rm -f /opt/flink/lib/flink-s3-fs-hadoop-1.17.2.jar
-
-# Copy it ONLY into the plugin directory
 COPY jars/flink-s3-fs-hadoop-1.17.2.jar /opt/flink/plugins/s3-fs-hadoop/

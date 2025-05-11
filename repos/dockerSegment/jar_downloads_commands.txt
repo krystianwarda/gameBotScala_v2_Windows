@@ -22,3 +22,4 @@ Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/org/apache/flink/flink-ta
 
 Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/commons-logging/commons-logging/1.2/commons-logging-1.2.jar" -OutFile "$jarDir\commons-logging-1.2.jar"
 Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/org/apache/htrace/htrace-core4/4.2.0-incubating/htrace-core4-4.2.0-incubating.jar" -OutFile "$jarDir\htrace-core4-4.2.0-incubating.jar"
+Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/2.8.1/kafka-clients-2.8.1.jar" -OutFile ".\jars\kafka-clients-2.8.1.jar"
