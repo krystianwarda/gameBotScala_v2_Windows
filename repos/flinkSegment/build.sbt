@@ -1,14 +1,14 @@
+import sbt._
+import Keys._
 import sbtassembly.AssemblyPlugin.autoImport._
-import sbtassembly.MergeStrategy
-import sbtassembly.PathList
+import sbtassembly.{MergeStrategy, PathList}
 
-enablePlugins(AssemblyPlugin)
-
+// basic build settings
 ThisBuild / scalaVersion := "2.12.17"
 ThisBuild / version      := "0.1"
 
 lazy val flinkVersion   = "1.17.2"
-lazy val icebergVersion = "1.5.0"
+lazy val icebergVersion = "1.8.1"
 lazy val hadoopVersion  = "3.3.1"
 lazy val kafkaVersion   = "3.3.2"
 
@@ -18,37 +18,50 @@ resolvers ++= Seq(
 )
 
 libraryDependencies ++= Seq(
-  // Flink core & table APIs (provided by Flink runtime)
-  "org.apache.flink" %% "flink-scala"                   % flinkVersion,
-  "org.apache.flink" %% "flink-streaming-scala"         % flinkVersion,
-  "org.apache.flink" %% "flink-table-api-scala-bridge"  % flinkVersion,
-  "org.apache.flink" %  "flink-table-planner-loader" % flinkVersion,
+  // Flink core & table (provided by the cluster)
+  "org.apache.flink" %% "flink-scala"                  % flinkVersion % "provided",
+  "org.apache.flink" %% "flink-streaming-scala"        % flinkVersion % "provided",
+  "org.apache.flink" %% "flink-table-api-scala-bridge" % flinkVersion % "provided",
+  "org.apache.flink" %  "flink-table-planner-loader"    % flinkVersion % "provided",
 
-//  "org.apache.flink" % "flink-connector-kafka" % flinkVersion,
-//  "org.apache.kafka" % "kafka-clients" % kafkaVersion,
-//  "org.apache.flink" % "flink-sql-connector-kafka" % flinkVersion,
+  // Flink Kafka connector & client
+  "org.apache.flink" % "flink-connector-kafka" % flinkVersion,
+  "org.apache.kafka" % "kafka-clients"         % kafkaVersion,
 
-  // Iceberg runtime (included)
-  "org.apache.iceberg" % "iceberg-flink-runtime-1.17" % icebergVersion,
-//  "org.apache.kafka" % "kafka-clients" % kafkaVersion force(),
+  // Iceberg on Flink
+  "org.apache.iceberg" % "iceberg-flink-runtime-1.18" % icebergVersion,
+  "org.apache.iceberg" % "iceberg-core"              % icebergVersion,
+  "org.apache.iceberg" % "iceberg-gcp"               % icebergVersion,
 
+  // Hadoop filesystem support for IcebergCatalog
+  "org.apache.hadoop" % "hadoop-common"      % hadoopVersion,
+  "org.apache.hadoop" % "hadoop-auth"        % hadoopVersion,
+  "org.apache.hadoop" % "hadoop-hdfs"        % hadoopVersion,
+  "org.apache.hadoop" % "hadoop-hdfs-client" % hadoopVersion,
 
-// JSON parsing
-  "com.typesafe.play" %% "play-json" % "2.9.2",
+  // Google Cloud Storage connector for Hadoop
+  "com.google.cloud.bigdataoss" % "gcs-connector"       % "hadoop2-2.2.0",
+  "com.google.cloud"            % "google-cloud-storage" % "2.1.6",
 
-  // Hadoop (included)
-  "org.apache.hadoop" % "hadoop-common" % hadoopVersion
+  // Logging (if you need it)
+  "commons-logging" % "commons-logging" % "1.2",
+
+  "org.codehaus.woodstox" % "woodstox-core-asl" % "4.4.1"
 )
 
+// override Kafka client to match your Kafka version
 dependencyOverrides += "org.apache.kafka" % "kafka-clients" % kafkaVersion
 
-Compile / mainClass := Some("KafkaToIceberg")
+// Assembly (fat jar) settings
+assembly / mainClass := Some("KafkaToIceberg")
 assembly / assemblyJarName := "KafkaToIceberg.jar"
-
 assembly / assemblyMergeStrategy := {
   case PathList("META-INF", "services", xs @ _*) => MergeStrategy.concat
   case PathList("META-INF", xs @ _*)             => MergeStrategy.discard
   case PathList("reference.conf")                => MergeStrategy.concat
   case x if x.endsWith("module-info.class")      => MergeStrategy.discard
-  case _                                         => MergeStrategy.first
+  case _                                          => MergeStrategy.first
 }
+
+Compile / javacOptions ++= Seq("--release", "11")
+Compile / scalacOptions ++= Seq("-target:jvm-11")
