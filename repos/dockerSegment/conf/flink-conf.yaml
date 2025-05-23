@@ -1,22 +1,22 @@
+# flink-conf.yaml
+
+# Address where TaskManagers will look for the JobManager
 jobmanager.rpc.address: jobmanager
 
-taskmanager.numberOfTaskSlots: 2
+# How much memory to give the JM and TM processes
 jobmanager.memory.process.size: 1024m
 taskmanager.memory.process.size: 1024m
 
+# Parallelism & slots
+taskmanager.numberOfTaskSlots: 2
 parallelism.default: 2
 
-# S3 configuration
-s3.access.key: minio
-s3.secret.key: minio123
-s3.endpoint: http://minio:9000
-s3.path.style.access: true
-s3.region: us-east-1
+###############################################################################
+# GCS / Hadoop-GS Settings
+###############################################################################
+fs.gs.project.id: gamebot-460320
+fs.gs.auth.service.account.enable: true
+fs.gs.auth.service.account.json.keyfile: /opt/gcp/key.json
 
-# Hadoop S3A configuration
-fs.s3a.access.key: minio
-fs.s3a.secret.key: minio123
-fs.s3a.endpoint: http://minio:9000
-fs.s3a.path.style.access: true
-fs.s3a.region: us-east-1
-fs.s3a.aws.credentials.provider: org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider
+fs.gs.impl: com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem
+fs.AbstractFileSystem.gs.impl: com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS

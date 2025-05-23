@@ -1,27 +1,31 @@
-<?xml version="1.0"?>
 <configuration>
+  <!-- GCS connector settings -->
   <property>
-    <name>fs.s3a.access.key</name>
-    <value>minio</value>
+    <name>fs.gs.project.id</name>
+    <value>gamebot-460320</value>
   </property>
   <property>
-    <name>fs.s3a.secret.key</name>
-    <value>minio123</value>
-  </property>
-  <property>
-    <name>fs.s3a.endpoint</name>
-    <value>http://minio:9000</value>
-  </property>
-  <property>
-    <name>fs.s3a.path.style.access</name>
+    <name>google.cloud.auth.service.account.enable</name>
     <value>true</value>
   </property>
   <property>
-    <name>fs.s3a.region</name>
-    <value>us-east-1</value>
+    <name>google.cloud.auth.service.account.json.keyfile</name>
+    <value>/opt/gcp/key.json</value>
+  </property>
+
+  <!-- tell Hadoop how to handle gs:// URIs -->
+  <property>
+    <name>fs.gs.impl</name>
+    <value>com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem</value>
   </property>
   <property>
-    <name>fs.s3a.aws.credentials.provider</name>
-    <value>org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider</value>
+    <name>fs.AbstractFileSystem.gs.impl</name>
+    <value>com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS</value>
   </property>
+  <property><name>fs.gs.impl</name>
+  <value>com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem</value>
+</property>
+<property><name>fs.AbstractFileSystem.gs.impl</name>
+  <value>com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS</value>
+</property>
 </configuration>

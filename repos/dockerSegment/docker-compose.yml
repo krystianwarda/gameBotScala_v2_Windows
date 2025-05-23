@@ -1,7 +1,6 @@
-version: '3.8'
-
 services:
   zookeeper:
+    container_name: zookeeper
     image: confluentinc/cp-zookeeper:7.0.1
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
@@ -9,47 +8,55 @@ services:
       - "2181:2181"
 
   kafka:
+    container_name: kafka
     image: confluentinc/cp-kafka:7.5.0
     depends_on:
       - zookeeper
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
     ports:
       - "9092:9092"
-
-  minio:
-    image: minio/minio
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: minio
-      MINIO_ROOT_PASSWORD: minio123
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio-data:/data
+      - "29092:29092"
 
   jobmanager:
-    build: .
-    depends_on:
-      - kafka
-      - minio
+    container_name: jobmanager
+    build:
+      context: .            # where your Dockerfile lives
+      dockerfile: Dockerfile
+    image: flink-custom:1.17
     ports:
       - "8081:8081"
+      - "6123:6123"
+    volumes:
+      - ./gcp-key.json:/opt/gcp/key.json:ro
     environment:
-      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+      - GOOGLE_APPLICATION_CREDENTIALS=/opt/gcp/key.json
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
     command: jobmanager
 
   taskmanager:
-    build: .
+    container_name: taskmanager
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: flink-custom:1.17
     depends_on:
       - jobmanager
+    volumes:
+      - ./gcp-key.json:/opt/gcp/key.json:ro
     environment:
-      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+      - GOOGLE_APPLICATION_CREDENTIALS=/opt/gcp/key.json
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        taskmanager.numberOfTaskSlots: 4
+        taskmanager.memory.process.size: 1024m
     command: taskmanager
-
-volumes:
-  minio-data:

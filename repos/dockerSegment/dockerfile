@@ -1,34 +1,37 @@
-FROM flink:1.17.2-scala_2.12-java8
+FROM flink:1.17.2-scala_2.12-java11
 
-RUN mkdir -p /opt/flink/plugins/s3-fs-hadoop
+# 0) GCP key
+COPY gcp-key.json /opt/gcp/key.json
+RUN chmod 400 /opt/gcp/key.json
 
-# Copy job jar
-COPY target/KafkaToIceberg.jar /opt/flink/usrlib/
+# 1) Remove old S3/AWS jars
+RUN rm -f /opt/flink/lib/hadoop-aws-*.jar \
+           /opt/flink/lib/aws-java-sdk-*.jar \
+           /opt/flink/lib/flink-s3-*.jar
 
-# Copy Flink and Iceberg related JARs individually
-COPY jars/aws-java-sdk-bundle-1.11.1026.jar /opt/flink/lib/
-COPY jars/commons-logging-1.2.jar /opt/flink/lib/
-COPY jars/flink-sql-connector-kafka-1.17.2.jar /opt/flink/lib/
+# 2) GCS filesystem plugin (Hadoop2 + GCP)
+RUN mkdir -p /opt/flink/plugins/gcs
+COPY jars/flink-gs-fs-hadoop-1.17.2.jar            /opt/flink/plugins/gcs/
+COPY jars/gcs-connector-hadoop2-2.2.0.jar           /opt/flink/plugins/gcs/
+COPY jars/google-cloud-storage-2.1.6.jar            /opt/flink/plugins/gcs/
+COPY jars/google-auth-library-oauth2-http-1.3.0.jar /opt/flink/plugins/gcs/
+
+# 3) Iceberg 1.8.1 core + Flink runtime + Hadoop + GCP support
+COPY jars/iceberg-core-1.8.1.jar                    /opt/flink/lib/
+COPY jars/iceberg-flink-runtime-1.17-1.8.1.jar       /opt/flink/lib/
+COPY jars/iceberg-hadoop-1.8.1.jar                   /opt/flink/lib/
+COPY jars/iceberg-gcp-1.8.1.jar                      /opt/flink/lib/
+
+# 4) Your job JAR & Flink configs
+COPY target/KafkaToIceberg.jar                       /opt/flink/usrlib/
+COPY conf/core-site.xml                              /opt/flink/conf/core-site.xml
+COPY conf/flink-conf.yaml                            /opt/flink/conf/flink-conf.yaml
+
+# 5) Flink SQL ↔ Kafka connector & Scala bridge
+COPY jars/flink-connector-kafka-3.0.1-1.17.jar        /opt/flink/lib/
 COPY jars/flink-table-api-scala-bridge_2.12-1.17.2.jar /opt/flink/lib/
-COPY jars/hadoop-auth-3.3.1.jar /opt/flink/lib/
-COPY jars/hadoop-aws-3.3.1.jar /opt/flink/lib/
-COPY jars/hadoop-client-3.3.1.jar /opt/flink/lib/
-COPY jars/hadoop-client-api-3.3.1.jar /opt/flink/lib/
-COPY jars/hadoop-client-runtime-3.3.1.jar /opt/flink/lib/
-COPY jars/hadoop-common-3.3.1.jar /opt/flink/lib/
-COPY jars/hadoop-hdfs-3.3.1.jar /opt/flink/lib/
-COPY jars/hadoop-hdfs-client-3.3.1.jar /opt/flink/lib/
-COPY jars/htrace-core4-4.2.0-incubating.jar /opt/flink/lib/
-COPY jars/iceberg-aws-1.4.2.jar /opt/flink/lib/
-COPY jars/iceberg-core-1.4.2.jar /opt/flink/lib/
-COPY jars/iceberg-flink-runtime-1.17-1.4.2.jar /opt/flink/lib/
-COPY jars/kafka-clients-2.8.1.jar /opt/flink/lib/
+COPY jars/kafka-clients-2.8.1.jar                     /opt/flink/lib/
 
-
-# Copy config
-COPY conf/core-site.xml /opt/flink/conf/core-site.xml
-COPY conf/flink-conf.yaml /opt/flink/conf/flink-conf.yaml
-
-# Handle S3 plugin
-RUN rm -f /opt/flink/lib/flink-s3-fs-hadoop-1.17.2.jar
-COPY jars/flink-s3-fs-hadoop-1.17.2.jar /opt/flink/plugins/s3-fs-hadoop/
+# 6) Logging & tracing
+COPY jars/commons-logging-1.2.jar                     /opt/flink/lib/
+COPY jars/htrace-core4-4.2.0-incubating.jar           /opt/flink/lib/

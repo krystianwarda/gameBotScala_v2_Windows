@@ -1,25 +1,58 @@
-$jarDir = "$PSScriptRoot\jars"
+$jarDir = ".\jars"
 New-Item -ItemType Directory -Force -Path $jarDir | Out-Null
 
-Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/org/apache/flink/flink-s3-fs-hadoop/1.17.2/flink-s3-fs-hadoop-1.17.2.jar" -OutFile "$jarDir\flink-s3-fs-hadoop-1.17.2.jar"
+# ─── GCS filesystem plugin for Flink ────────────────────────────────────────────
+Invoke-WebRequest `
+  -Uri "https://repo1.maven.org/maven2/org/apache/flink/flink-gs-fs-hadoop/1.17.2/flink-gs-fs-hadoop-1.17.2.jar" `
+  -OutFile "$jarDir\flink-gs-fs-hadoop-1.17.2.jar"
 
-Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-core/1.4.2/iceberg-core-1.4.2.jar" -OutFile "$jarDir\iceberg-core-1.4.2.jar"
-Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-flink-runtime/1.17-1.4.2/iceberg-flink-runtime-1.17-1.4.2.jar" -OutFile "$jarDir\iceberg-flink-runtime-1.17-1.4.2.jar"
-Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-aws/1.4.2/iceberg-aws-1.4.2.jar" -OutFile "$jarDir\iceberg-aws-1.4.2.jar"
+Invoke-WebRequest `
+  -Uri "https://repo1.maven.org/maven2/com/google/cloud/bigdataoss/gcs-connector/hadoop2-2.2.0/gcs-connector-hadoop2-2.2.0.jar" `
+  -OutFile "$jarDir\gcs-connector-hadoop2-2.2.0.jar"
 
-Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.11.1026/aws-java-sdk-bundle-1.11.1026.jar" -OutFile "$jarDir\aws-java-sdk-bundle-1.11.1026.jar"
+Invoke-WebRequest `
+  -Uri "https://repo1.maven.org/maven2/com/google/cloud/google-cloud-storage/2.1.6/google-cloud-storage-2.1.6.jar" `
+  -OutFile "$jarDir\google-cloud-storage-2.1.6.jar"
 
-Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-common/3.3.1/hadoop-common-3.3.1.jar" -OutFile "$jarDir\hadoop-common-3.3.1.jar"
-Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-auth/3.3.1/hadoop-auth-3.3.1.jar" -OutFile "$jarDir\hadoop-auth-3.3.1.jar"
-Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-client-api/3.3.1/hadoop-client-api-3.3.1.jar" -OutFile "$jarDir\hadoop-client-api-3.3.1.jar"
-Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-client-runtime/3.3.1/hadoop-client-runtime-3.3.1.jar" -OutFile "$jarDir\hadoop-client-runtime-3.3.1.jar"
-Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-hdfs-client/3.3.1/hadoop-hdfs-client-3.3.1.jar" -OutFile "$jarDir\hadoop-hdfs-client-3.3.1.jar"
-Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-hdfs/3.3.1/hadoop-hdfs-3.3.1.jar" -OutFile "$jarDir\hadoop-hdfs-3.3.1.jar"
-Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.1/hadoop-aws-3.3.1.jar" -OutFile "$jarDir\hadoop-aws-3.3.1.jar"
+Invoke-WebRequest `
+  -Uri "https://repo1.maven.org/maven2/com/google/auth/google-auth-library-oauth2-http/1.3.0/google-auth-library-oauth2-http-1.3.0.jar" `
+  -OutFile "$jarDir\google-auth-library-oauth2-http-1.3.0.jar"
 
-Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/org/apache/flink/flink-connector-kafka/3.0.1-1.17/flink-connector-kafka-3.0.1-1.17.jar" -OutFile "$jarDir\flink-connector-kafka-3.0.1-1.17.jar"
-Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/org/apache/flink/flink-table-api-scala-bridge_2.12/1.17.2/flink-table-api-scala-bridge_2.12-1.17.2.jar" -OutFile "$jarDir\flink-table-api-scala-bridge_2.12-1.17.2.jar"
+# ─── Iceberg 1.8.1 core + Flink runtime + GCP support ─────────────────────────
+Invoke-WebRequest `
+  -Uri "https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-core/1.8.1/iceberg-core-1.8.1.jar" `
+  -OutFile "$jarDir\iceberg-core-1.8.1.jar"
 
-Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/commons-logging/commons-logging/1.2/commons-logging-1.2.jar" -OutFile "$jarDir\commons-logging-1.2.jar"
-Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/org/apache/htrace/htrace-core4/4.2.0-incubating/htrace-core4-4.2.0-incubating.jar" -OutFile "$jarDir\htrace-core4-4.2.0-incubating.jar"
-Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/2.8.1/kafka-clients-2.8.1.jar" -OutFile ".\jars\kafka-clients-2.8.1.jar"
+Invoke-WebRequest `
+  -Uri "https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-flink-runtime/1.17-1.8.1/iceberg-flink-runtime-1.17-1.8.1.jar" `
+  -OutFile "$jarDir\iceberg-flink-runtime-1.17-1.8.1.jar"
+
+Invoke-WebRequest `
+  -Uri "https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-hadoop/1.8.1/iceberg-hadoop-1.8.1.jar" `
+  -OutFile "$jarDir\iceberg-hadoop-1.8.1.jar"
+
+Invoke-WebRequest `
+  -Uri "https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-gcp/1.8.1/iceberg-gcp-1.8.1.jar" `
+  -OutFile "$jarDir\iceberg-gcp-1.8.1.jar"
+
+# ─── Flink’s Kafka connector & Scala bridge ────────────────────────────────────
+Invoke-WebRequest `
+  -Uri "https://repo1.maven.org/maven2/org/apache/flink/flink-connector-kafka/3.0.1-1.17/flink-connector-kafka-3.0.1-1.17.jar" `
+  -OutFile "$jarDir\flink-connector-kafka-3.0.1-1.17.jar"
+
+Invoke-WebRequest `
+  -Uri "https://repo1.maven.org/maven2/org/apache/flink/flink-table-api-scala-bridge_2.12/1.17.2/flink-table-api-scala-bridge_2.12-1.17.2.jar" `
+  -OutFile "$jarDir\flink-table-api-scala-bridge_2.12-1.17.2.jar"
+
+# ─── Logging, tracing & Kafka client ───────────────────────────────────────────
+Invoke-WebRequest `
+  -Uri "https://repo1.maven.org/maven2/commons-logging/commons-logging/1.2/commons-logging-1.2.jar" `
+  -OutFile "$jarDir\commons-logging-1.2.jar"
+
+Invoke-WebRequest `
+  -Uri "https://repo1.maven.org/maven2/org/apache/htrace/htrace-core4/4.2.0-incubating/htrace-core4-4.2.0-incubating.jar" `
+  -OutFile "$jarDir\htrace-core4-4.2.0-incubating.jar"
+
+Invoke-WebRequest `
+  -Uri "https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/2.8.1/kafka-clients-2.8.1.jar" `
+  -OutFile "$jarDir\kafka-clients-2.8.1.jar"
