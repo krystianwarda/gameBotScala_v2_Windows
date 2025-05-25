@@ -56,3 +56,7 @@ Invoke-WebRequest `
 Invoke-WebRequest `
   -Uri "https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/2.8.1/kafka-clients-2.8.1.jar" `
   -OutFile "$jarDir\kafka-clients-2.8.1.jar"
+
+Invoke-WebRequest `
+  -Uri "https://repo1.maven.org/maven2/org/apache/flink/flink-connector-kafka/3.0.1-1.17/flink-connector-kafka-3.0.1-1.17.jar" `
+  -OutFile "jars\flink-connector-kafka-3.0.1-1.17.jar"

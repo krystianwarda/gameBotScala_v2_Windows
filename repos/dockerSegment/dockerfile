@@ -1,37 +1,42 @@
 FROM flink:1.17.2-scala_2.12-java11
 
-# 0) GCP key
+# 0) Remove Flink's bundled Kafka connector + old clients
+RUN rm -f /opt/flink/lib/flink-connector-kafka* \
+          /opt/flink/lib/kafka-clients-*
+
+# 1) GCP key
 COPY gcp-key.json /opt/gcp/key.json
 RUN chmod 400 /opt/gcp/key.json
 
-# 1) Remove old S3/AWS jars
+# 2) Remove old S3/AWS jars
 RUN rm -f /opt/flink/lib/hadoop-aws-*.jar \
            /opt/flink/lib/aws-java-sdk-*.jar \
            /opt/flink/lib/flink-s3-*.jar
 
-# 2) GCS filesystem plugin (Hadoop2 + GCP)
+# 3) GCS plugin
 RUN mkdir -p /opt/flink/plugins/gcs
 COPY jars/flink-gs-fs-hadoop-1.17.2.jar            /opt/flink/plugins/gcs/
-COPY jars/gcs-connector-hadoop2-2.2.0.jar           /opt/flink/plugins/gcs/
-COPY jars/google-cloud-storage-2.1.6.jar            /opt/flink/plugins/gcs/
-COPY jars/google-auth-library-oauth2-http-1.3.0.jar /opt/flink/plugins/gcs/
+COPY jars/gcs-connector-hadoop3-2.2.8-shaded.jar   /opt/flink/plugins/gcs/
+COPY jars/google-api-services-storage-v1-rev20220705-1.32.1.jar /opt/flink/plugins/gcs/
+COPY jars/hadoop-auth-3.3.1.jar                     /opt/flink/plugins/gcs/
 
-# 3) Iceberg 1.8.1 core + Flink runtime + Hadoop + GCP support
+# 4) Iceberg core + runtime + GCP
 COPY jars/iceberg-core-1.8.1.jar                    /opt/flink/lib/
-COPY jars/iceberg-flink-runtime-1.17-1.8.1.jar       /opt/flink/lib/
-COPY jars/iceberg-hadoop-1.8.1.jar                   /opt/flink/lib/
+COPY jars/iceberg-flink-runtime-1.17-1.6.1.jar       /opt/flink/lib/
 COPY jars/iceberg-gcp-1.8.1.jar                      /opt/flink/lib/
 
-# 4) Your job JAR & Flink configs
+# 5) Your job + configs
 COPY target/KafkaToIceberg.jar                       /opt/flink/usrlib/
 COPY conf/core-site.xml                              /opt/flink/conf/core-site.xml
 COPY conf/flink-conf.yaml                            /opt/flink/conf/flink-conf.yaml
 
-# 5) Flink SQL ↔ Kafka connector & Scala bridge
-COPY jars/flink-connector-kafka-3.0.1-1.17.jar        /opt/flink/lib/
-COPY jars/flink-table-api-scala-bridge_2.12-1.17.2.jar /opt/flink/lib/
-COPY jars/kafka-clients-2.8.1.jar                     /opt/flink/lib/
+# 7) Install the Flink SQL Kafka connector (1.17.2) + Kafka client 2.8.1
+COPY jars/flink-sql-connector-kafka-1.17.2.jar /opt/flink/lib/
+COPY jars/kafka-clients-2.8.1.jar           /opt/flink/lib/
 
-# 6) Logging & tracing
+# 7) Logging & tracing
 COPY jars/commons-logging-1.2.jar                     /opt/flink/lib/
 COPY jars/htrace-core4-4.2.0-incubating.jar           /opt/flink/lib/
+
+# 8) Everything else
+COPY jars/*.jar                                       /opt/flink/lib/
