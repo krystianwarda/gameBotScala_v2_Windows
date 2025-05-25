@@ -1,0 +1,18 @@
+gamebot_iceberg:
+  target: dev
+  outputs:
+    dev:
+      type: spark
+      method: session
+      host: NA
+      spark_submit_path: "gcloud dataproc serverless spark submit --region europe-west4"
+      catalog: iceberg_cat
+      schema: appdb
+      connect_args:
+        - "--jars=gs://gamebot-460320-iceberg/iceberg-spark-runtime.jar"
+        - "--conf=spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
+        - "--conf=spark.sql.catalog.iceberg_cat=org.apache.iceberg.spark.SparkCatalog"
+        - "--conf=spark.sql.catalog.iceberg_cat.catalog-impl=org.apache.iceberg.hadoop.HadoopCatalog"
+        - "--conf=spark.sql.catalog.iceberg_cat.warehouse=gs://gamebot-460320-iceberg/iceberg-warehouse"
+        - "--conf=spark.hadoop.fs.gs.impl=com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem"
+        - "--conf=spark.hadoop.google.cloud.auth.service.account.enable=true"

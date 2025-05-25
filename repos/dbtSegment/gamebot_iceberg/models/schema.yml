@@ -1,0 +1,8 @@
+version: 2
+models:
+  - name: mytable
+    columns:
+      - name: screenInfo
+        tests: [not_null]
+      - name: battleInfo
+        tests: [not_null]
