@@ -5,20 +5,26 @@ import org.apache.flink.table.api.bridge.scala.StreamTableEnvironment
 
 object KafkaToIceberg {
   def main(args: Array[String]): Unit = {
+    println("[DEBUG] Starting KafkaToIceberg job...")
+
     // GCP bucket and path
     val outputPath = "gs://gamebot-460320-iceberg/iceberg-warehouse/appdb/mytable/"
+    println(s"[DEBUG] Output path set to: $outputPath")
 
     // 1) Streaming environment with 15s checkpointing
+    println("[DEBUG] Setting up StreamExecutionEnvironment with 15s checkpointing")
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     env.enableCheckpointing(15000, CheckpointingMode.EXACTLY_ONCE)
     env.getCheckpointConfig.setMinPauseBetweenCheckpoints(10000)
 
     // 2) Table environment in streaming mode
+    println("[DEBUG] Creating StreamTableEnvironment in streaming mode")
     val settings = EnvironmentSettings.newInstance().inStreamingMode().build()
     val tEnv = StreamTableEnvironment.create(env, settings)
     tEnv.getConfig.getConfiguration.setString("execution.checkpointing.interval", "15s")
 
-    // 3) Define Kafka source using RAW format
+    // 3) Define Kafka source table
+    println("[DEBUG] Executing DDL for kafka_input table")
     val createKafkaDdl =
       """
       CREATE TABLE kafka_input (
@@ -33,8 +39,10 @@ object KafkaToIceberg {
       )
       """
     tEnv.executeSql(createKafkaDdl)
+    println("[DEBUG] kafka_input table created")
 
     // 4) Create a view to parse top-level JSON keys via JSON_QUERY
+    println("[DEBUG] Creating view kafka_parsed")
     val createParsedView =
       """
       CREATE VIEW kafka_parsed AS
@@ -54,31 +62,10 @@ object KafkaToIceberg {
       FROM kafka_input
       """
     tEnv.executeSql(createParsedView)
+    println("[DEBUG] kafka_parsed view created")
 
-    // 5) Debug print parsed fields
-    tEnv.executeSql(
-      """
-      CREATE TABLE debug_print (
-        screenInfo STRING,
-        battleInfo STRING,
-        textTabsInfo STRING,
-        EqInfo STRING,
-        containersInfo STRING,
-        attackInfo STRING,
-        areaInfo STRING,
-        spyLevelInfo STRING,
-        lastAttackedCreatureInfo STRING,
-        lastKilledCreatures STRING,
-        characterInfo STRING,
-        focusedTabInfo STRING
-      ) WITH (
-        'connector' = 'print'
-      )
-      """
-    )
-    tEnv.executeSql("INSERT INTO debug_print SELECT * FROM kafka_parsed")
-
-    // 6) Define filesystem sink with 15s rollovers
+    // 5) Define filesystem sink with 15s rollovers
+    println("[DEBUG] Executing DDL for gcs_sink table")
     val createGcsSinkDdl = s"""
       CREATE TABLE gcs_sink (
         screenInfo STRING,
@@ -103,13 +90,14 @@ object KafkaToIceberg {
       )
       """
     tEnv.executeSql(createGcsSinkDdl)
+    println("[DEBUG] gcs_sink table created")
 
-    // 7) Submit the continuous INSERT into GCS
-    val tableResult = tEnv.executeSql(
-      "INSERT INTO gcs_sink SELECT * FROM kafka_parsed"
-    )
-    val jobClient = tableResult.getJobClient
-      .orElseThrow(() => new RuntimeException("JobClient not available"))
-    jobClient.getJobExecutionResult().get()
+    // 6) Submit the continuous INSERT into GCS
+    println("[DEBUG] Submitting INSERT INTO gcs_sink SELECT * FROM kafka_parsed")
+    val result = tEnv.executeSql("INSERT INTO gcs_sink SELECT * FROM kafka_parsed")
+    println("[DEBUG] Insert job submitted, awaiting result...")
+    val jobClient = result.getJobClient.orElseThrow(() => new RuntimeException("JobClient not available"))
+    val jobResult = jobClient.getJobExecutionResult().get()
+    println(s"[DEBUG] Job finished with result: $jobResult")
   }
 }
