@@ -5,9 +5,15 @@ gamebot_iceberg:
       type: spark
       method: session
       host: NA
-      spark_submit_path: "gcloud dataproc serverless spark submit --region europe-west4"
-      catalog: iceberg_cat
       schema: appdb
+
+      # this wrapper will actually run spark-submit in the cloud
+      spark_submit_path: >
+        gcloud dataproc serverless spark submit
+        --region europe-west4
+        --project gamebot-460320
+
+      # these flags get passed verbatim to spark-submit
       connect_args:
         - "--jars=gs://gamebot-460320-iceberg/iceberg-spark-runtime.jar"
         - "--conf=spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
@@ -16,3 +22,4 @@ gamebot_iceberg:
         - "--conf=spark.sql.catalog.iceberg_cat.warehouse=gs://gamebot-460320-iceberg/iceberg-warehouse"
         - "--conf=spark.hadoop.fs.gs.impl=com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem"
         - "--conf=spark.hadoop.google.cloud.auth.service.account.enable=true"
+        - "--conf=spark.hadoop.google.cloud.auth.service.account.json.keyfile=C:/Projects/gameBotScala_v2_Windows/repos/dbtSegment/gamebot_iceberg/gcp-key.json"
