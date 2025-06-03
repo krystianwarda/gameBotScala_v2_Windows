@@ -1,49 +1,41 @@
-import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
-import org.apache.flink.streaming.api.CheckpointingMode
-import org.apache.flink.table.api.EnvironmentSettings
-import org.apache.flink.table.api.bridge.scala.StreamTableEnvironment
+import org.apache.flink.table.api.{EnvironmentSettings, TableEnvironment}
 
 object KafkaToIceberg {
+
   def main(args: Array[String]): Unit = {
     println("[DEBUG] Starting KafkaToIceberg job...")
 
-    // GCP bucket and path
-    val outputPath = "gs://gamebot-460320-iceberg/iceberg-warehouse/appdb/mytable/"
-    println(s"[DEBUG] Output path set to: $outputPath")
+    // 1) Create a streaming TableEnvironment
+    println("[DEBUG] Creating TableEnvironment in streaming mode")
+    val settings = EnvironmentSettings
+      .newInstance()
+      .inStreamingMode()
+      .build()
+    val tEnv = TableEnvironment.create(settings)
 
-    // 1) Streaming environment with 15s checkpointing
-    println("[DEBUG] Setting up StreamExecutionEnvironment with 15s checkpointing")
-    val env = StreamExecutionEnvironment.getExecutionEnvironment
-    env.enableCheckpointing(15000, CheckpointingMode.EXACTLY_ONCE)
-    env.getCheckpointConfig.setMinPauseBetweenCheckpoints(10000)
-
-    // 2) Table environment in streaming mode
-    println("[DEBUG] Creating StreamTableEnvironment in streaming mode")
-    val settings = EnvironmentSettings.newInstance().inStreamingMode().build()
-    val tEnv = StreamTableEnvironment.create(env, settings)
-    tEnv.getConfig.getConfiguration.setString("execution.checkpointing.interval", "15s")
-
-    // 3) Define Kafka source table
-    println("[DEBUG] Executing DDL for kafka_input table")
-    val createKafkaDdl =
-      """
+    // 2) Define Kafka source in the default catalog
+    println("[DEBUG] Creating Kafka source table `kafka_input`")
+    tEnv.executeSql(
+      s"""
       CREATE TABLE kafka_input (
         raw_json STRING
       ) WITH (
         'connector'                    = 'kafka',
         'topic'                        = 'game-bot-events',
-        'properties.bootstrap.servers' = 'kafka:9092',
+        'properties.bootstrap.servers' = 'pkc-z1o60.europe-west1.gcp.confluent.cloud:9092',
         'properties.group.id'          = 'flink-raw-test',
         'scan.startup.mode'            = 'earliest-offset',
-        'format'                       = 'raw'
+        'format'                       = 'json',
+        'properties.security.protocol' = 'SASL_SSL',
+        'properties.sasl.mechanism'    = 'PLAIN',
+        'properties.sasl.jaas.config'  = 'org.apache.kafka.common.security.plain.PlainLoginModule required username="PSAH6XQLCFJU6P4J" password="/ZTbUorF0KSw67bDMhjNiQDaatB3xuiF9JjPe7qdBbgoEUEjaSU++IoVB2CTcbCe";'
       )
       """
-    tEnv.executeSql(createKafkaDdl)
-    println("[DEBUG] kafka_input table created")
+    )
 
-    // 4) Create a view to parse top-level JSON keys via JSON_QUERY
-    println("[DEBUG] Creating view kafka_parsed")
-    val createParsedView =
+    // 3) Create a parsed view
+    println("[DEBUG] Creating `kafka_parsed`")
+    tEnv.executeSql(
       """
       CREATE VIEW kafka_parsed AS
       SELECT
@@ -61,13 +53,29 @@ object KafkaToIceberg {
         JSON_QUERY(raw_json, '$.focusedTabInfo')           AS focusedTabInfo
       FROM kafka_input
       """
-    tEnv.executeSql(createParsedView)
-    println("[DEBUG] kafka_parsed view created")
+    )
 
-    // 5) Define filesystem sink with 15s rollovers
-    println("[DEBUG] Executing DDL for gcs_sink table")
-    val createGcsSinkDdl = s"""
-      CREATE TABLE gcs_sink (
+    // 4) Register Iceberg HadoopCatalog
+    println("[DEBUG] Registering Iceberg Hadoop catalog `iceberg_cat`")
+    tEnv.executeSql(
+      """
+        CREATE CATALOG iceberg_cat WITH (
+          'type' = 'iceberg',
+          'catalog-impl' = 'org.apache.iceberg.hadoop.HadoopCatalog',
+          'warehouse' = 'gs://gamebot-460320-iceberg/iceberg-warehouse',
+          'property-version' = '1'
+        )
+      """
+    )
+
+    // ✅ Switch to the Iceberg catalog
+    tEnv.executeSql("USE CATALOG iceberg_cat")
+
+    // 5) Create Iceberg sink table
+    println("[DEBUG] Ensuring Iceberg sink table `mytable` exists")
+    tEnv.executeSql(
+      """
+      CREATE TABLE mytable (
         screenInfo STRING,
         battleInfo STRING,
         textTabsInfo STRING,
@@ -80,24 +88,21 @@ object KafkaToIceberg {
         lastKilledCreatures STRING,
         characterInfo STRING,
         focusedTabInfo STRING
-      ) WITH (
-        'connector'                         = 'filesystem',
-        'path'                              = '$outputPath',
-        'format'                            = 'json',
-        'sink.rolling-policy.check-interval'  = '15s',
-        'sink.rolling-policy.rollover-interval' = '15s',
-        'sink.rolling-policy.file-size'       = '128mb'
       )
       """
-    tEnv.executeSql(createGcsSinkDdl)
-    println("[DEBUG] gcs_sink table created")
+    )
 
-    // 6) Submit the continuous INSERT into GCS
-    println("[DEBUG] Submitting INSERT INTO gcs_sink SELECT * FROM kafka_parsed")
-    val result = tEnv.executeSql("INSERT INTO gcs_sink SELECT * FROM kafka_parsed")
-    println("[DEBUG] Insert job submitted, awaiting result...")
-    val jobClient = result.getJobClient.orElseThrow(() => new RuntimeException("JobClient not available"))
-    val jobResult = jobClient.getJobExecutionResult().get()
-    println(s"[DEBUG] Job finished with result: $jobResult")
+    // 6) Perform streaming insert with .await()
+    println("[DEBUG] Inserting into iceberg_cat.default.mytable...")
+    val result = tEnv.executeSql(
+      """
+      INSERT INTO mytable
+      SELECT * FROM default_catalog.default_database.kafka_parsed
+      """
+    )
+
+    result.await() // ✅ This blocks the streaming job properly
+
+    println("[DEBUG] Job streaming execution completed.")
   }
 }
