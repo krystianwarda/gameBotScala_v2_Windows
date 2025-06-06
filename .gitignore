@@ -1,0 +1,36 @@
+# IntelliJ & VSCode
+.idea/
+.vscode/
+.metals/
+.bsp/
+
+# DBT
+**/.dbt/
+**/derby.log
+**/metastore_db/
+**/gcp-key.json
+repos/dbtSegment/gamebot_iceberg/analyses/
+repos/dbtSegment/gamebot_iceberg/macros/
+repos/dbtSegment/gamebot_iceberg/seeds/
+repos/dbtSegment/gamebot_iceberg/snapshots/
+repos/dbtSegment/gamebot_iceberg/tests/
+
+# Build artifacts
+target/
+project/
+jars/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+*.out
+.terraform.lock.hcl
+
+# Git
+repos/dbtSegment/gamebot_iceberg/.gitignore
+repos/dbtSegment/gamebot_iceberg/README.md
+
+# Misc
+repos/terraformSegment/repos/

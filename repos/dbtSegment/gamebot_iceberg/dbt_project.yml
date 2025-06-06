@@ -1,0 +1,27 @@
+# dbt_project.yml
+name: 'gamebot_iceberg'
+version: '1.0.0'
+config-version: 2
+
+# Which profiles.yml entry to use
+profile: 'gamebot_iceberg'
+
+# Where to look for resources
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+# What `dbt clean` should remove
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  # This key must match your `name:` above
+  gamebot_iceberg:
+    +database: iceberg_cat     # Spark catalog (Iceberg)
+    +schema: appdb             # Iceberg namespace (your “database”)
+    +materialized: view        # Build all models as views by default
