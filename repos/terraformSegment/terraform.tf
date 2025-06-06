@@ -18,13 +18,11 @@ terraform {
   }
 }
 
-
 provider "google" {
   project     = var.project_id
   region      = var.region
   credentials = file("gcp-key.json")
 }
-
 
 provider "confluent" {
   alias            = "cloud"
@@ -101,8 +99,6 @@ resource "google_dataproc_cluster" "flink_cluster" {
   project = var.project_id
 
   cluster_config {
-
-
     master_config {
       num_instances = 1
       machine_type  = "n1-standard-2"
@@ -119,5 +115,3 @@ resource "google_dataproc_cluster" "flink_cluster" {
     }
   }
 }
-
-

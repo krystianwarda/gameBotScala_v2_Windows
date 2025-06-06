@@ -45,7 +45,8 @@ libraryDependencies ++= Seq(
 
   // Logging
   "commons-logging" % "commons-logging"     % "1.2",
-  "org.codehaus.woodstox" % "woodstox-core-asl" % "4.4.1"
+  "org.codehaus.woodstox" % "woodstox-core-asl" % "4.4.1",
+  "org.apache.flink" % "flink-connector-files" % "1.17.2"
 )
 
 // Ensure Kafka version is aligned

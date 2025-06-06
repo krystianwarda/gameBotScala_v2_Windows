@@ -1,2 +1,2 @@
 -- models/mytable.sql
-select * from iceberg_cat.appdb.mytable
+SELECT * FROM iceberg_cat.appdb.mytable;

@@ -26,6 +26,9 @@ import cats.effect.unsafe.implicits.global
 
 case class StartSpecificPeriodicFunction(functionName: String)
 
+
+
+
 class PeriodicFunctionActor(
                              jsonProcessorActor: ActorRef,
                              jsonConsumer: FunctionalJsonConsumer
@@ -39,6 +42,19 @@ class PeriodicFunctionActor(
   var in: Option[DataInputStream] = None
   private var latestJson: Option[JsValue] = None
 
+//  private lazy val kafkaPublisher =
+//    new KafkaJsonPublisher("localhost:29092", "game-bot-events")
+
+private lazy val kafkaPublisher =
+  new KafkaJsonPublisher(
+    bootstrapServers = "pkc-z1o60.europe-west1.gcp.confluent.cloud:9092",
+    topic = "game-bot-events",
+    username = "IGBETL43ZEWQA6M4", // your Confluent Kafka API key
+    password = "QWr3RaJ+IsbMcZ72ySghVMbyLDGvjvUtrm8Y2NpQhwZ7Q44AlMNkRMqSbZvMM0cg" // your secret
+  )
+
+
+
   override def preStart(): Unit = {
 
   }
@@ -50,9 +66,9 @@ class PeriodicFunctionActor(
 
     case json: JsValue =>
       println(s"JSON: ${json}")
-//      jsonProcessorActor ! MainApp.JsonData(json)
-      latestJson = Some(json)
+      println(s"[DEBUG] Top-level keys: ${json.as[play.api.libs.json.JsObject].keys.mkString(", ")}")
       jsonConsumer.process(json).unsafeRunAndForget()
+      kafkaPublisher.send(json)
 
     case "fetchLatestJson" =>
       latestJson.foreach(sender() ! _)

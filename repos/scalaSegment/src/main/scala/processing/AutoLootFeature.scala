@@ -736,15 +736,15 @@ object AutoLootFeature {
       return Some((updated, NoOpTask))
     }
 
-    val areaInfo = (json \ "areaInfo").headOption.flatMap(_.asOpt[JsObject]).getOrElse(Json.obj())
+    val areaInfo = (json \ "areaInfo").as[JsObject]
     val possibleTiles = List("7x5", "7x6", "7x7", "8x5", "8x6", "8x7", "9x5", "9x6", "9x7")
     val walkableTileOpt = findRandomWalkableTile(areaInfo, possibleTiles.filterNot(excludedTiles.contains))
 
     walkableTileOpt.flatMap { tileIdx =>
-      val mapPanelMap = (json \ "screenInfo").headOption.flatMap(_.asOpt[JsObject]).flatMap(obj => (obj \ "mapPanelLoc").headOption.flatMap(_.asOpt[Map[String, JsObject]])).getOrElse(Map.empty)
+      val mapPanelMap = (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
       mapPanelMap.get(tileIdx).map { obj =>
-        val targetX = (obj \ "x").headOption.flatMap(_.asOpt[Int]).getOrElse(0)
-        val targetY = (obj \ "y").headOption.flatMap(_.asOpt[Int]).getOrElse(0)
+        val targetX = (obj \ "x").as[Int]
+        val targetY = (obj \ "y").as[Int]
 
         println(s"[handleMoveItemToGround] Selected tile $tileIdx → screen pos = ($targetX, $targetY)")
 

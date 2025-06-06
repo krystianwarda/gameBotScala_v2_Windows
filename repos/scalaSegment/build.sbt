@@ -27,6 +27,7 @@ libraryDependencies ++= Seq(
   "co.fs2" %% "fs2-core" % "3.9.2",
   "co.fs2" %% "fs2-io" % "3.9.2",
   "com.github.kwhat" % "jnativehook" % "2.2.2",
+  "org.apache.kafka" % "kafka-clients" % "3.5.1"
 
 )
 

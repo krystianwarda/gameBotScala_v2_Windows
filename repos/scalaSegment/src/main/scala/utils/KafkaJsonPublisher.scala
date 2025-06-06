@@ -1,10 +1,16 @@
 package utils
+
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, Callback, RecordMetadata}
 import play.api.libs.json.JsValue
 import java.util.Properties
 import scala.util.{Try, Success, Failure}
 
-class KafkaJsonPublisher(bootstrapServers: String, topic: String) {
+class KafkaJsonPublisher(
+                          bootstrapServers: String,
+                          topic: String,
+                          username: String,
+                          password: String
+                        ) {
 
   private lazy val producerOpt: Option[KafkaProducer[String, String]] = {
     val props = new Properties()
@@ -16,6 +22,13 @@ class KafkaJsonPublisher(bootstrapServers: String, topic: String) {
     props.put("linger.ms", "5")
     props.put("max.block.ms", "5000")
 
+    // ✅ SASL_SSL Auth for Confluent Cloud
+    props.put("security.protocol", "SASL_SSL")
+    props.put("sasl.mechanism", "PLAIN")
+    props.put(
+      "sasl.jaas.config",
+      s"""org.apache.kafka.common.security.plain.PlainLoginModule required username="$username" password="$password";"""
+    )
 
     Try(new KafkaProducer[String, String](props)) match {
       case Success(producer) =>
