@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 variable "confluent_cloud_api_key" {
   description = "API Key for Confluent Cloud"
   type        = string
@@ -56,6 +57,9 @@ variable "region" {
 
 variable "flink_jar_bucket_name" {
   description = "Bucket for storing Flink JAR files and init scripts"
+=======
+variable "bucket_name" {
+>>>>>>> 42d59caa47f5cf8d39d91f6a7d44b3023e508b1b
   type        = string
   default     = "gamebot-460320-flink-jars"
 }
