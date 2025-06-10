@@ -115,3 +115,53 @@ resource "google_dataproc_cluster" "flink_cluster" {
     }
   }
 }
+
+data "google_project" "current" {
+  project_id = var.project_id
+}
+
+# Grant the Dataproc VMs (Compute Engine default SA) permission to write objects
+resource "google_storage_bucket_iam_member" "iceberg_writer" {
+  bucket = google_storage_bucket.iceberg_data_bucket.name
+  role   = "roles/storage.objectCreator"
+  member = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+}
+
+# Access to JAR bucket
+resource "google_storage_bucket_iam_member" "jar_reader" {
+  bucket = google_storage_bucket.flink_jar_bucket.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+}
+
+# Full access to Iceberg bucket
+resource "google_storage_bucket_iam_member" "iceberg_rw" {
+  bucket = google_storage_bucket.iceberg_data_bucket.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+}
+
+resource "google_project_iam_member" "dataproc_logging" {
+  project = var.project_id
+  role    = "roles/logging.logWriter"
+  member  = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+}
+
+resource "google_bigquery_dataset" "raw_dataset" {
+  dataset_id = "gamebot_raw_staging"
+  location   = var.region  # likely "europe-west1"
+}
+
+resource "google_bigquery_table" "raw_game_snapshots" {
+  dataset_id          = google_bigquery_dataset.raw_dataset.dataset_id
+  table_id            = "raw_game_snapshots"
+  deletion_protection = false
+
+  schema = jsonencode([
+    {
+      name = "raw_json"
+      type = "STRING"
+      mode = "NULLABLE"
+    }
+  ])
+}
