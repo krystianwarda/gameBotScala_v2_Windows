@@ -1,0 +1,7 @@
+version: 2
+
+sources:
+  - name: gamebot_raw_staging
+    schema: gamebot_raw_staging   # <-- your BigQuery dataset name
+    tables:
+      - name: raw_game_snapshots
