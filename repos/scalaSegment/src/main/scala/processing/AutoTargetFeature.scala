@@ -263,6 +263,7 @@ object AutoTargetFeature {
       println(s"[UpdateAttackStatus] Character position: $characterPos")
 
       val battleInfo = (json \ "battleInfo").asOpt[Map[String, JsValue]].getOrElse(Map.empty)
+      println(s"[DEBUG] BattleInfo: ${battleInfo}")
 
       val lastInfo = (json \ "lastAttackedCreatureInfo").asOpt[JsObject].getOrElse(Json.obj())
       val lastId = (lastInfo \ "LastAttackedId").asOpt[Int].getOrElse(0)
@@ -272,6 +273,8 @@ object AutoTargetFeature {
       val creatureNotMarked = currentAttackId.isEmpty || currentAttackId.contains(0)
       val wrongTargetAttacked = currentAttackId.exists(id => id != 0 && id != at0.chosenTargetId)
       val inBattle = battleInfo.values.exists(obj => (obj \ "Id").asOpt[Int].contains(at0.chosenTargetId))
+
+      println(s"[DEBUG] autoTargetSettings: ${settings.autoTargetSettings.creatureList}")
 
       val chosenSettingsOpt = settings.autoTargetSettings.creatureList
         .map(parseCreature)
@@ -304,42 +307,83 @@ object AutoTargetFeature {
       } else at0
 
       val at2 = if (at1.chosenTargetId == 0) {
-        val allCreaturesSorted = battleInfo.values
-          .flatMap(bd => for {
-            id <- (bd \ "Id").asOpt[Int]
-            name <- (bd \ "Name").asOpt[String]
-            x <- (bd \ "PositionX").asOpt[Int]
-            y <- (bd \ "PositionY").asOpt[Int]
-            z <- (bd \ "PositionZ").asOpt[Int]
-          } yield CreatureInfo(id, name, 100, isShootable = true, isMonster = true, danger = 1, keepDistance = false,
-            isPlayer = false, x, y, z, lootMonsterImmediately = false, lootMonsterAfterFight = false, lureCreatureToTeam = false))
-          .toList
+        // 1) Pull out and lowercase all setting names
+        val parsedSettings     = settings.autoTargetSettings.creatureList.map(parseCreature)
+        val settingNamesLower  = parsedSettings.map(_.name.toLowerCase).toSet
 
-        println("[UpdateAttackStatus] Creatures in battle:")
+        println(s"[UpdateAttackStatus] Creatures from autoattack settings: ${settingNamesLower}")
+        // 2) Detect if we have an "All" entry
+        val considerAll = settingNamesLower.contains("all")
+
+        // 3) Filter battleInfo entries up‐front
+        val filteredBds: List[JsValue] = battleInfo.values.toList.filter { bd =>
+          if (considerAll) {
+            (bd \ "isCreature").asOpt[Boolean].getOrElse(false)
+          } else {
+            (bd \ "Name").asOpt[String]
+              .map(_.toLowerCase)
+              .exists(settingNamesLower.contains)
+          }
+        }
+        println(s"[UpdateAttackStatus] Creatures from filtered battle: ${filteredBds}")
+
+        // 4) Map filtered JSON to CreatureInfo, then sort by manhattan distance
+        val allCreaturesSorted: List[CreatureInfo] = filteredBds.flatMap { bd =>
+            for {
+              id   <- (bd \ "Id").asOpt[Int]
+              name <- (bd \ "Name").asOpt[String]
+              x    <- (bd \ "PositionX").asOpt[Int]
+              y    <- (bd \ "PositionY").asOpt[Int]
+              z    <- (bd \ "PositionZ").asOpt[Int]
+            } yield CreatureInfo(
+              id, name, 100,
+              isShootable            = (bd \ "IsShootable").asOpt[Boolean].getOrElse(true),
+              isMonster              = (bd \ "IsMonster").asOpt[Boolean].getOrElse(false),
+              danger                 = 1,
+              keepDistance           = false,
+              isPlayer               = (bd \ "IsPlayer").asOpt[Boolean].getOrElse(false),
+              posX                   = x,
+              posY                   = y,
+              posZ                   = z,
+              lootMonsterImmediately = false,
+              lootMonsterAfterFight  = false,
+              lureCreatureToTeam     = false
+            )
+          }
+          .sortBy(c => characterPos.manhattanDistance(Vec(c.posX, c.posY)))
+
+        println("[UpdateAttackStatus] Creatures considered:")
         allCreaturesSorted.foreach(c => println(s"  - ${c.name} (${c.id}) at (${c.posX},${c.posY})"))
 
+        // 5) Your existing distance+path check
         val maybeTarget = allCreaturesSorted
-          .sortBy(c => characterPos.manhattanDistance(Vec(c.posX, c.posY)))
           .find { creature =>
             val targetPos = Vec(creature.posX, creature.posY)
             val manhattan = characterPos.manhattanDistance(targetPos)
+            val newState  = generateSubwaypointsToCreature(targetPos, state, json)
+            val hasPath   = newState.autoTarget.subWaypoints.nonEmpty
+            val accepted  = hasPath || manhattan <= 3
 
-            val newState = generateSubwaypointsToCreature(targetPos, state, json)
-            val hasPath = newState.autoTarget.subWaypoints.nonEmpty
-
-            val accepted = hasPath || manhattan <= 3
-            println(s"[UpdateAttackStatus] Checking ${creature.name} (${creature.id}) at $targetPos, charPos at ${characterPos}, manhattan=$manhattan → hasPath=$hasPath → accepted=$accepted")
+            println(
+              s"[UpdateAttackStatus] Checking ${creature.name} (${creature.id}) at $targetPos, " +
+                s"manhattan=$manhattan → hasPath=$hasPath → accepted=$accepted"
+            )
             accepted
           }
 
         maybeTarget match {
           case Some(chosen) =>
             println(s"[UpdateAttackStatus] New target: ${chosen.name} (${chosen.id})")
-            at1.copy(chosenTargetId = chosen.id, chosenTargetName = chosen.name, statusOfAutoTarget = "target chosen")
+            at1.copy(
+              chosenTargetId   = chosen.id,
+              chosenTargetName = chosen.name,
+              statusOfAutoTarget = "target chosen"
+            )
           case None =>
             at1
         }
       } else at1
+
 
       Some(state.copy(autoTarget = at2) -> NoOpTask)
     }
