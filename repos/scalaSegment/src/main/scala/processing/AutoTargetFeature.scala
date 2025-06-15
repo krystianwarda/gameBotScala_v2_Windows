@@ -259,6 +259,16 @@ object AutoTargetFeature {
 
     override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
       val at0 = state.autoTarget
+
+      val hasPendingLoot =
+        state.autoLoot.carcassToLootImmediately.nonEmpty ||
+          state.autoLoot.carcassToLootAfterFight.nonEmpty
+
+      if (hasPendingLoot) {
+        println("[UpdateAttackStatus] Loot pending; skipping target-reset logic.")
+        return Some((state, NoOpTask))
+      }
+      
       val characterPos = extractCharPosition(json)
       println(s"[UpdateAttackStatus] Character position: $characterPos")
 
@@ -362,7 +372,7 @@ object AutoTargetFeature {
             val manhattan = characterPos.manhattanDistance(targetPos)
             val newState  = generateSubwaypointsToCreature(targetPos, state, json)
             val hasPath   = newState.autoTarget.subWaypoints.nonEmpty
-            val accepted  = hasPath || manhattan <= 3
+            val accepted  = hasPath || manhattan <= 1
 
             println(
               s"[UpdateAttackStatus] Checking ${creature.name} (${creature.id}) at $targetPos, " +
