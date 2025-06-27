@@ -8,8 +8,8 @@ object KafkaToIceberg {
   def main(args: Array[String]): Unit = {
 
     // Replace XXXX with your configuration
-    val kafkaApiKey = "IDF6HNFBXSDMN4GT"
-    val kafkaApiSecret = "LUfcrMNAzN7lBtslr+TfsP1QXA+x9E33zKPVZMqzR8kyvx1rXUjasty8RYnnWdxD"
+    val kafkaApiKey = "xxxx"
+    val kafkaApiSecret = "xxxx"
     val bootstrapServers = "pkc-619z3.us-east1.gcp.confluent.cloud:9092"
     val jaasConfig = s"""org.apache.kafka.common.security.plain.PlainLoginModule required username="$kafkaApiKey" password="$kafkaApiSecret";"""
     val gcsBucketName = "gamebot-460320-iceberg"
