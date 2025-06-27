@@ -1,62 +1,133 @@
+import org.apache.flink.configuration.Configuration
 import org.apache.flink.streaming.api.CheckpointingMode
-import org.apache.flink.streaming.api.scala._
-import org.apache.flink.table.api.EnvironmentSettings
-import org.apache.flink.table.api.bridge.scala.StreamTableEnvironment
-import java.util.UUID
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment
+import org.apache.flink.table.api.bridge.java.StreamTableEnvironment
 
 object KafkaToIceberg {
+
   def main(args: Array[String]): Unit = {
-    val env = StreamExecutionEnvironment.getExecutionEnvironment
-    env.enableCheckpointing(60000, CheckpointingMode.EXACTLY_ONCE)
-    env.getCheckpointConfig.setMinPauseBetweenCheckpoints(10000)
 
-    val settings = EnvironmentSettings.newInstance().inStreamingMode().build()
-    val tEnv = StreamTableEnvironment.create(env, settings)
-    tEnv.getConfig.getConfiguration.setString("execution.checkpointing.interval", "60s")
+    // Replace XXXX with your configuration
+    val kafkaApiKey = "IDF6HNFBXSDMN4GT"
+    val kafkaApiSecret = "LUfcrMNAzN7lBtslr+TfsP1QXA+x9E33zKPVZMqzR8kyvx1rXUjasty8RYnnWdxD"
+    val bootstrapServers = "pkc-619z3.us-east1.gcp.confluent.cloud:9092"
+    val jaasConfig = s"""org.apache.kafka.common.security.plain.PlainLoginModule required username="$kafkaApiKey" password="$kafkaApiSecret";"""
+    val gcsBucketName = "gamebot-460320-iceberg"
 
-    val randomGroup = "flink-debug-" + UUID.randomUUID().toString
+    val flinkConfig = new Configuration()
+    flinkConfig.setBoolean("fs.gs.impl.disable.cache", true)
+    flinkConfig.setBoolean("fs.gs.implicit.dir.repair.enable", true)
 
-    println(">> Creating Kafka source table...")
-    tEnv.executeSql(s"""
-      CREATE TABLE kafka_source (
-        raw_bytes BYTES
-      ) WITH (
-        'connector'                    = 'kafka',
-        'topic'                        = 'game-bot-events',
-        'properties.bootstrap.servers' = 'pkc-z1o60.europe-west1.gcp.confluent.cloud:9092',
-        'properties.group.id'          = '$randomGroup',
-        'scan.startup.mode'            = 'earliest-offset',
-        'format'                       = 'raw',
-        'properties.security.protocol' = 'SASL_SSL',
-        'properties.sasl.mechanism'    = 'PLAIN',
-        'properties.sasl.jaas.config'  = 'org.apache.kafka.common.security.plain.PlainLoginModule required username="ONCVZD5AX7IMSTOK" password="jBMXKSCE8VJZSzg4cRZWyc7V44zZC8QkSfegp62pY9MuLW6suhZoITom1GlOGDug";'
-      )
-    """)
+    val env = StreamExecutionEnvironment.getExecutionEnvironment(flinkConfig)
+    env.enableCheckpointing(60000)
 
-    println(">> Creating GCS JSON sink...")
-    tEnv.executeSql(
+    // checkpoint conf
+    val checkpointConfig = env.getCheckpointConfig
+    checkpointConfig.setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE)
+    checkpointConfig.setCheckpointTimeout(60000)
+    checkpointConfig.setMinPauseBetweenCheckpoints(500)
+    checkpointConfig.setMaxConcurrentCheckpoints(1)
+
+    // set to streaming mode
+    val tableEnv = StreamTableEnvironment.create(env)
+    tableEnv.getConfig.set("execution.runtime-mode", "streaming")
+
+    // Create Kafka Source Table
+    val createKafkaSourceSql =
+      s"""
+         |CREATE TABLE IF NOT EXISTS kafka_source (
+         |  screenInfo STRING,
+         |  battleInfo STRING,
+         |  textTabsInfo STRING,
+         |  EqInfo STRING,
+         |  containersInfo STRING,
+         |  attackInfo STRING,
+         |  areaInfo STRING,
+         |  spyLevelInfo STRING,
+         |  lastAttackedCreatureInfo STRING,
+         |  lastKilledCreatures STRING,
+         |  characterInfo STRING,
+         |  focusedTabInfo STRING,
+         |  processing_time AS PROCTIME()
+         |) WITH (
+         |  'connector' = 'kafka',
+         |  'topic' = 'game-bot-events',
+         |  'properties.bootstrap.servers' = '$bootstrapServers',
+         |  'properties.group.id' = 'sql-test-group-final',
+         |  'scan.startup.mode' = 'latest-offset',
+         |  'value.format' = 'json',
+         |  'properties.security.protocol' = 'SASL_SSL',
+         |  'properties.sasl.mechanism' = 'PLAIN',
+         |  'properties.sasl.jaas.config' = '$jaasConfig'
+         |)
+         |""".stripMargin
+
+    tableEnv.executeSql(createKafkaSourceSql)
+
+    // Create catalog
+    val createCatalogSql =
+      s"""
+         |CREATE CATALOG iceberg_catalog WITH (
+         |  'type'='iceberg',
+         |  'catalog-type'='hadoop',
+         |  'warehouse'='gs://$gcsBucketName/warehouse'
+         |)
+         |""".stripMargin
+
+    tableEnv.executeSql(createCatalogSql)
+    tableEnv.executeSql("USE CATALOG iceberg_catalog")
+    tableEnv.executeSql("CREATE DATABASE IF NOT EXISTS game")
+    tableEnv.executeSql("USE game")
+
+    // Create table
+    val createIcebergTableSql =
       """
-      CREATE TABLE gcs_sink (
-        raw_json STRING
-      ) WITH (
-        'connector'                          = 'filesystem',
-        'path'                               = 'gs://gamebot-460320-iceberg/raw-output/',
-        'format'                             = 'raw',
-        'sink.rolling-policy.file-size'      = '100KB',
-        'sink.rolling-policy.rollover-interval' = '10s',
-        'sink.rolling-policy.check-interval' = '5s'
-      )
-      """
-    )
+        |CREATE TABLE IF NOT EXISTS game_events (
+        |  screenInfo STRING,
+        |  battleInfo STRING,
+        |  textTabsInfo STRING,
+        |  eqInfo STRING,
+        |  containersInfo STRING,
+        |  attackInfo STRING,
+        |  areaInfo STRING,
+        |  spyLevelInfo STRING,
+        |  lastAttackedCreatureInfo STRING,
+        |  lastKilledCreatures STRING,
+        |  characterInfo STRING,
+        |  focusedTabInfo STRING,
+        |  processing_time TIMESTAMP_LTZ(3),
+        |  dt STRING
+        |) PARTITIONED BY (dt)
+        |""".stripMargin
 
+    tableEnv.executeSql(createIcebergTableSql)
 
-    println(">> Inserting into GCS sink (raw string from Kafka)...")
-    tEnv.executeSql(
+    // insert data
+    val insertSql =
       """
-      INSERT INTO gcs_sink
-      SELECT CAST(raw_bytes AS STRING) AS raw_json
-      FROM kafka_source
-      """
-    )
+        |INSERT INTO game_events
+        |SELECT
+        |  screenInfo,
+        |  battleInfo,
+        |  textTabsInfo,
+        |  EqInfo AS eqInfo,
+        |  containersInfo,
+        |  attackInfo,
+        |  areaInfo,
+        |  spyLevelInfo,
+        |  lastAttackedCreatureInfo,
+        |  lastKilledCreatures,
+        |  characterInfo,
+        |  focusedTabInfo,
+        |  processing_time,
+        |  DATE_FORMAT(CAST(processing_time AS TIMESTAMP), 'yyyy-MM-dd') as dt
+        |FROM default_catalog.default_database.kafka_source
+        |""".stripMargin
+
+    val tableResult = tableEnv.executeSql(insertSql)
+
+    tableResult.await()
+
+    println("Flink job submitted. Waiting for data from Kafka and writing to Iceberg...")
   }
 }
