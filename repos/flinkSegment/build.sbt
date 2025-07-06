@@ -1,37 +1,44 @@
-lazy val scalaV        = "2.12.17"
-lazy val flinkVersion  = "1.15.4"
-lazy val icebergVersion = "1.4.3"
+ThisBuild / version := "0.1.0-SNAPSHOT"
+ThisBuild / scalaVersion := "2.12.18"
+ThisBuild / organization := "com.example"
 
-ThisBuild / scalaVersion := scalaV
-ThisBuild / version      := "0.1"
+val flinkVersion = "1.17.0"
+val icebergVersion = "1.5.1"
 
-libraryDependencies ++= Seq(
-  // — your existing Flink, Kafka, GCS connectors —
-  "org.apache.flink" %% "flink-scala"                   % flinkVersion,
-  "org.apache.flink" %% "flink-streaming-scala"         % flinkVersion,
-  "org.apache.flink" %  "flink-connector-kafka"         % flinkVersion,
-  "org.apache.flink" %  "flink-connector-files"         % flinkVersion,
-  "org.apache.flink" %  "flink-json"                    % flinkVersion,
+lazy val root = (project in file("."))
+  .settings(
+    name := "flink-gcp-scala",
 
-  "org.apache.flink" %  "flink-table-api-java-bridge" % flinkVersion % "provided",
-  "org.apache.flink" %  "flink-table-planner-loader"   % flinkVersion % "provided",
+    // ✅ Define the main class
+    assembly / mainClass := Some("com.example.KafkaToIceberg"),
 
-  "org.apache.kafka"  %  "kafka-clients"                % "3.3.2",
-  "com.google.cloud.bigdataoss" % "gcs-connector"       % "hadoop3-2.2.5",
+    libraryDependencies ++= Seq(
+      "org.apache.flink" %% "flink-scala" % flinkVersion % "provided",
+      "org.apache.flink" %% "flink-streaming-scala" % flinkVersion % "provided",
+      "org.apache.flink" % "flink-clients" % flinkVersion % "provided",
 
-  // — Iceberg Flink runtime for Flink 1.15 —
-  "org.apache.iceberg" % "iceberg-flink-1.15" % icebergVersion,
-  // for Parquet file format support (optional: or ORC, AVRO, etc.)
-  "org.apache.iceberg" % "iceberg-parquet"   % icebergVersion
-)
+      "org.apache.flink" %% "flink-table-api-scala-bridge" % flinkVersion % "compile",
+      "org.apache.flink" % "flink-sql-connector-kafka" % flinkVersion % "compile",
+      "org.apache.flink" % "flink-table-planner-loader" % flinkVersion % "runtime",
 
-// Assembly settings
-assembly / mainClass           := Some("KafkaToIceberg")
-assembly / assemblyJarName     := "KafkaToIceberg.jar"
-assembly / assemblyMergeStrategy := {
-  case PathList("META-INF", "services", xs @ _*) => MergeStrategy.concat
-  case PathList("reference.conf")                => MergeStrategy.concat
-  case PathList("META-INF", xs @ _*)             => MergeStrategy.discard
-  case x if x.endsWith("module-info.class")      => MergeStrategy.discard
-  case _                                         => MergeStrategy.first
-}
+      "org.apache.iceberg" % "iceberg-flink-runtime-1.17" % icebergVersion % "compile",
+      "org.apache.flink" % "flink-connector-files" % "1.15.4" % "provided",
+
+      "com.typesafe" % "config" % "1.4.2" % "compile",
+
+      "org.apache.logging.log4j" % "log4j-api" % "2.20.0" % "runtime",
+      "org.apache.logging.log4j" % "log4j-core" % "2.20.0" % "runtime",
+      "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.20.0" % "runtime"
+    ),
+
+    assembly / assemblyJarName := s"${name.value}-assembly-${version.value}.jar",
+
+    assembly / assemblyMergeStrategy := {
+      case PathList("META-INF", "services", _*) => MergeStrategy.concat
+      case PathList("META-INF", ps @ _*) if ps.lastOption.exists(_.endsWith(".SF")) => MergeStrategy.discard
+      case PathList("META-INF", ps @ _*) if ps.lastOption.exists(_.endsWith(".DSA")) => MergeStrategy.discard
+      case PathList("META-INF", ps @ _*) if ps.lastOption.exists(_.endsWith(".RSA")) => MergeStrategy.discard
+      case "reference.conf" | "application.conf" => MergeStrategy.concat
+      case _ => MergeStrategy.first
+    }
+  )
