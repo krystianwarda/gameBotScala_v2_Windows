@@ -69,6 +69,8 @@ case class AutoHealState(
 
 case class GeneralState(
                          initialSettingsSet: Boolean = false,
+                         areInitialContainerSet: Boolean = false,
+                         initialContainersList: List[String] = List(),
                          retryCounters: Map[String, Int] = Map.empty,
                          timestamps: Map[String, Long] = Map.empty,
                          flags: Map[String, Boolean] = Map.empty,
@@ -112,13 +114,17 @@ case class AutoLootState(
                           stateLooting: String = "free",
                           stateLootPlunder: String = "free",
                           carsassToLoot: List[(String, Long)] = List(),
+                          lastItemActionCommandSend: Long = 0,
                           carcassTileToLoot: Option[(String, Long)] = None,
                           lastLootedCarcassTile: Option[(String, Long)] = None,
-                          carcassToLootImmediately: List[(String, Long)] = List(),
-                          carcassToLootAfterFight: List[(String, Long)] = List(),
+                          carcassToLootImmediately: List[(String, Long, String)] = List(),
+                          carcassToLootAfterFight: List[(String, Long, String)] = List(),
+
                           lootIdToPlunder: Int = 0,
                           lootCountToPlunder: Int = 0,
                           lootScreenPosToPlunder: Vec = Vec(0, 0),
+                          dropScreenPosToPlunder: Vec = Vec(0, 0),
+
                           lastAutoLootAction: Long = 0,
                           lastEatFoodTime: Long = 0,
                           subWaypoints: List[Vec] = List(),
@@ -144,13 +150,15 @@ case class Creature(
                    )
 
 case class AutoTargetState(
+                            updateAttackChangeTime: Long = 0,
+                            updateAttackThrottleTime: Long = 1500L,
                             dangerLevelHealing: String = "low",
                             lastRuneUseTime: Long = 0,
                             dangerCreaturesList: Seq[Creature] = Seq.empty,
                             creatureTarget: Int = 0,
                             lastTargetName: String = "",
                             lastTargetPos: (Int, Int, Int) = (0,0,0),
-                            statusOfAutoTarget: String = "not_set",
+                            stateAutoTarget: String = "not_set",
                             autoTargetContainerMapping: Map[Int, String] = Map.empty[Int, String],
                             currentAutoAttackContainerName: String = "",
                             isUsingAmmo: String = "not_set",

@@ -72,6 +72,132 @@ object AutoTargetFeature {
     }
   }
 
+  private object UpdateAttackStatus extends Step {
+    private val taskName = "UpdateAttackStatus"
+
+    override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
+      val at0 = state.autoTarget
+      val now = System.currentTimeMillis()
+
+      // Throttle updates to once per ThrottleMs
+      if (now - at0.updateAttackChangeTime < at0.updateAttackThrottleTime) {
+        println(s"[UpdateAttackStatus] Skipping update; only ${(now - at0.updateAttackChangeTime)}ms since last change.")
+        return Some((state, NoOpTask))
+      }
+
+      if (state.caveBot.stateHunting == "looting in progress") {
+        println("[UpdateAttackStatus] Loot pending; skipping target-reset logic.")
+        return Some((state, NoOpTask))
+      }
+
+      val characterPos = extractCharPosition(json)
+      println(s"[UpdateAttackStatus] Character position: $characterPos")
+
+      val battleInfo = (json \ "battleInfo").asOpt[Map[String, JsValue]].getOrElse(Map.empty)
+      println(s"[DEBUG] BattleInfo: ${battleInfo}")
+
+      val lastInfo = (json \ "lastAttackedCreatureInfo").asOpt[JsObject].getOrElse(Json.obj())
+      val lastId = (lastInfo \ "LastAttackedId").asOpt[Int].getOrElse(0)
+      val isDead = (lastInfo \ "IsDead").asOpt[Boolean].getOrElse(false)
+
+      val currentAttackId = (json \ "attackInfo" \ "Id").asOpt[Int]
+      val creatureNotMarked = currentAttackId.isEmpty || currentAttackId.contains(0)
+      val wrongTargetAttacked = currentAttackId.exists(id => id != 0 && id != at0.chosenTargetId)
+      val actualWrongTarget = wrongTargetAttacked && currentAttackId.forall(_ != at0.chosenTargetId)
+      val inBattle = battleInfo.values.exists(obj => (obj \ "Id").asOpt[Int].contains(at0.chosenTargetId))
+
+      println(s"[DEBUG] autoTargetSettings: ${settings.autoTargetSettings.creatureList}")
+
+      val chosenSettingsOpt = settings.autoTargetSettings.creatureList
+        .map(parseCreature)
+        .find(_.name.equalsIgnoreCase(at0.chosenTargetName))
+      val wantsToMark = chosenSettingsOpt.exists(cs => cs.targetBattle || cs.targetScreen)
+
+      val targetGoneOrDead = lastId == at0.chosenTargetId && isDead
+      val markRetryCooldown = 1000L
+      val markRecentlyTried = (now - at0.lastTargetMarkCommandSend) < markRetryCooldown
+
+      println(s"[UpdateAttackStatus] currentAttackId: $currentAttackId, chosenTargetId: ${at0.chosenTargetId}")
+      println(s"[UpdateAttackStatus] creatureNotMarked: $creatureNotMarked, wrongTargetAttacked: $wrongTargetAttacked")
+
+      val shouldResetTarget =
+        targetGoneOrDead ||
+          (!inBattle && !markRecentlyTried) ||
+          (at0.stateAutoTarget == "fight" && (creatureNotMarked || actualWrongTarget) && wantsToMark && !markRecentlyTried)
+
+      val at1 = if (shouldResetTarget) {
+        println("[UpdateAttackStatus] Resetting due to:")
+        if (targetGoneOrDead) println("  ➤ Target gone or dead")
+        if (!inBattle && !markRecentlyTried) println("  ➤ Not in battle and retry cooldown expired")
+        if ((creatureNotMarked || actualWrongTarget) && !markRecentlyTried)
+          println("  ➤ Mark failed or wrong target")
+        at0.copy(stateAutoTarget = "ready", chosenTargetId = 0, chosenTargetName = "")
+      } else at0
+
+      val at2 = if (at1.chosenTargetId == 0) {
+        val parsedSettings = settings.autoTargetSettings.creatureList.map(parseCreature)
+        val settingNamesLower = parsedSettings.map(_.name.toLowerCase).toSet
+
+        println(s"[UpdateAttackStatus] Creatures from autoattack settings: ${settingNamesLower}")
+        val considerAll = settingNamesLower.contains("all")
+
+        val filteredBds = battleInfo.values.toList.filter { bd =>
+          if (considerAll) (bd \ "isCreature").asOpt[Boolean].getOrElse(false)
+          else (bd \ "Name").asOpt[String].map(_.toLowerCase).exists(settingNamesLower.contains)
+        }
+        println(s"[UpdateAttackStatus] Creatures from filtered battle: ${filteredBds}")
+
+        val allCreaturesSorted = filteredBds.flatMap { bd =>
+          for {
+            id   <- (bd \ "Id").asOpt[Int]
+            name <- (bd \ "Name").asOpt[String]
+            x    <- (bd \ "PositionX").asOpt[Int]
+            y    <- (bd \ "PositionY").asOpt[Int]
+            z    <- (bd \ "PositionZ").asOpt[Int]
+          } yield CreatureInfo(
+            id, name, 100,
+            (bd \ "IsShootable").asOpt[Boolean].getOrElse(true),
+            (bd \ "IsMonster").asOpt[Boolean].getOrElse(false),
+            1, keepDistance = false,
+            (bd \ "IsPlayer").asOpt[Boolean].getOrElse(false),
+            x, y, z, lootMonsterImmediately = false,
+            lootMonsterAfterFight = false, lureCreatureToTeam = false
+          )
+        }.sortBy(c => characterPos.manhattanDistance(Vec(c.posX, c.posY)))
+
+        println("[UpdateAttackStatus] Creatures considered:")
+        allCreaturesSorted.foreach(c => println(s"  - ${c.name} (${c.id}) at (${c.posX},${c.posY})"))
+
+        allCreaturesSorted.find { creature =>
+          val targetPos = Vec(creature.posX, creature.posY)
+          val manhattan = characterPos.manhattanDistance(targetPos)
+          val newState = generateSubwaypointsToCreature(targetPos, state, json)
+          val hasPath = newState.autoTarget.subWaypoints.nonEmpty
+          manhattan <= 1 || hasPath
+        } match {
+          case Some(chosen) if chosen.id != at1.chosenTargetId =>
+            println(s"[UpdateAttackStatus] New target: ${chosen.name} (${chosen.id})")
+            at1.copy(chosenTargetId = chosen.id, chosenTargetName = chosen.name, stateAutoTarget = "target chosen")
+          case _ => at1
+        }
+      } else at1
+
+      // Update the timestamp only if autoTarget state changed
+      val atFinal = if (at2 != at0) at2.copy(updateAttackChangeTime = now) else at2
+
+      Some(state.copy(autoTarget = atFinal) -> NoOpTask)
+    }
+
+    private def extractCharPosition(json: JsValue): Vec = {
+      for {
+        x <- (json \ "characterInfo" \ "PositionX").asOpt[Int]
+        y <- (json \ "characterInfo" \ "PositionY").asOpt[Int]
+      } yield Vec(x, y)
+    }.getOrElse(Vec(0, 0))
+  }
+
+
+
 
   private object SetUpAttackSupplies extends Step {
     private val taskName = "SetUpAttackSupplies"
@@ -82,7 +208,7 @@ object AutoTargetFeature {
       val at = state.autoTarget
 
       // only on first pass (mapping empty & still in "init")
-      if (at.autoTargetContainerMapping.nonEmpty || at.statusOfAutoTarget != "not_set")
+      if (at.autoTargetContainerMapping.nonEmpty || at.stateAutoTarget != "not_set")
         None
       else {
         // 1) build rune→container mapping
@@ -112,7 +238,7 @@ object AutoTargetFeature {
         val newAT = at.copy(
           autoTargetContainerMapping     = mapping,
           currentAutoAttackContainerName = firstCont,
-          statusOfAutoTarget             = "ready",
+          stateAutoTarget             = "ready",
           isUsingAmmo                    = isUsingAmmoStr,
           ammoId                         = ammoIdVal,
           ammoCountForNextResupply       = ammoCountVal
@@ -130,8 +256,8 @@ object AutoTargetFeature {
     def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
       val at = state.autoTarget
 //      println(s"[CheckAttackRunes] Checking rune supplies in: ${at.autoTargetContainerMapping}")
-//      println(s"statusOfAutoTarget: ${at.statusOfAutoTarget }")
-      if (at.statusOfAutoTarget != "ready") return None
+//      println(s"stateAutoTarget: ${at.stateAutoTarget }")
+      if (at.stateAutoTarget != "ready") return None
 
       // find the first rune whose container is now empty
       at.autoTargetContainerMapping.collectFirst {
@@ -159,7 +285,7 @@ object AutoTargetFeature {
           val actions = upSeqOpt.getOrElse(Nil)
           val newAT = at.copy(
             currentAutoAttackContainerName = cont,
-            statusOfAutoTarget       = "remove_backpack"
+            stateAutoTarget       = "remove_backpack"
           )
           Some(state.copy(autoTarget = newAT) -> MKTask(taskName, MKActions(actions, Nil)))
 
@@ -171,268 +297,52 @@ object AutoTargetFeature {
   }
 
 
-  private object RefillAmmo extends Step {
-    private val taskName = "RefillAmmo"
-
-    override def run(
-                      state:    GameState,
-                      json:     JsValue,
-                      settings: UISettings
-                    ): Option[(GameState, MKTask)] = {
-      val at = state.autoTarget
-
-      // only if we’re set to use ammo
-      if (at.isUsingAmmo != "true") return None
-
-      // 1) count total stacks of this ammoId across all backpacks
-      val containerInfo = (json \ "containersInfo").asOpt[JsObject].getOrElse(Json.obj())
-      val stacksCount = containerInfo.fields.flatMap {
-        case (_, contData) =>
-          (contData \ "items").asOpt[JsObject].toList.flatMap(_.fields).collect {
-            case (_, slotData)
-              if ( (slotData \ "itemId").asOpt[Int].contains(at.ammoId) ) => 1
-          }
-      }.sum
-
-      // update suppliesLeftMap
-      val atWithCounts = at.copy(
-        AttackSuppliesLeftMap = at.AttackSuppliesLeftMap.updated(at.ammoId, stacksCount)
-      )
-
-      // 2) check current arrow count in equipment slot 10
-      val ammoCount = (json \ "EqInfo" \ "10" \ "itemCount").asOpt[Int].getOrElse(0)
-
-      println(s"[RefillAmmo] AmmoId=${at.ammoId}, totalStacks=$stacksCount")
-      println(s"[RefillAmmo] Current ammo in slot 10: $ammoCount")
-      println(s"[RefillAmmo] Refill threshold = ${atWithCounts.ammoCountForNextResupply}")
-      // 3) only refill if we have stacks and are below threshold
-      if (stacksCount > 0 && ammoCount < atWithCounts.ammoCountForNextResupply) {
-        // pick the first backpack containing arrows
-        val maybeSourceCont = containerInfo.fields.collectFirst {
-          case (contName, contData)
-            if ( (contData \ "items").asOpt[JsObject]
-              .exists(_.values.exists(i => (i \ "itemId").asOpt[Int].contains(at.ammoId))) ) =>
-            contName
-        }
-
-        // screen coords for backpack slot & eq slot
-        val maybeCoords = for {
-          cont     <- maybeSourceCont
-          invPanel <- (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
-          slotKey  <- invPanel.keys.find(_.contains(cont))
-          sx       <- (invPanel \ slotKey \ "x").asOpt[Int]
-          sy       <- (invPanel \ slotKey \ "y").asOpt[Int]
-          eqPanel  <- (json \ "screenInfo" \ "equipmentPanelLoc" \ "10").asOpt[JsObject]
-          ex       <- (eqPanel \ "x").asOpt[Int]
-          ey       <- (eqPanel \ "y").asOpt[Int]
-        } yield (sx, sy, ex, ey)
-
-        maybeCoords.map { case (sx, sy, ex, ey) =>
-          val actions = List(
-            MoveMouse(sx, sy),
-            RightButtonPress(sx, sy),
-            RightButtonRelease(sx, sy),
-            MoveMouse(ex, ey),
-            LeftButtonPress(ex, ey),
-            LeftButtonRelease(ex, ey)
-          )
-          // leave statusOfAutoTarget as “ready” so future refills can occur
-          val newAT = atWithCounts
-          val newState = state.copy(autoTarget = newAT)
-          newState -> MKTask(taskName, MKActions(actions, Nil))
-        }.orElse {
-          // coords missing? just update the counts in state, no clicks
-          Some(state.copy(autoTarget = atWithCounts) -> NoOpTask)
-        }
-      } else {
-        println("[RefillAmmo] Ammo sufficient, no refill.")
-        // no refill needed—just persist the updated counts if they changed
-        if (state.autoTarget.AttackSuppliesLeftMap.getOrElse(at.ammoId, -1) != stacksCount) {
-          Some(state.copy(autoTarget = atWithCounts) -> NoOpTask)
-        } else None
-      }
-    }
-  }
-
-  private object UpdateAttackStatus extends Step {
-    private val taskName = "UpdateAttackStatus"
-
-    override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
-      val at0 = state.autoTarget
-
-      val hasPendingLoot =
-        state.autoLoot.carcassToLootImmediately.nonEmpty ||
-          state.autoLoot.carcassToLootAfterFight.nonEmpty
-
-      if (hasPendingLoot) {
-        println("[UpdateAttackStatus] Loot pending; skipping target-reset logic.")
-        return Some((state, NoOpTask))
-      }
-      
-      val characterPos = extractCharPosition(json)
-      println(s"[UpdateAttackStatus] Character position: $characterPos")
-
-      val battleInfo = (json \ "battleInfo").asOpt[Map[String, JsValue]].getOrElse(Map.empty)
-      println(s"[DEBUG] BattleInfo: ${battleInfo}")
-
-      val lastInfo = (json \ "lastAttackedCreatureInfo").asOpt[JsObject].getOrElse(Json.obj())
-      val lastId = (lastInfo \ "LastAttackedId").asOpt[Int].getOrElse(0)
-      val isDead = (lastInfo \ "IsDead").asOpt[Boolean].getOrElse(false)
-
-      val currentAttackId = (json \ "attackInfo" \ "Id").asOpt[Int]
-      val creatureNotMarked = currentAttackId.isEmpty || currentAttackId.contains(0)
-      val wrongTargetAttacked = currentAttackId.exists(id => id != 0 && id != at0.chosenTargetId)
-      val inBattle = battleInfo.values.exists(obj => (obj \ "Id").asOpt[Int].contains(at0.chosenTargetId))
-
-      println(s"[DEBUG] autoTargetSettings: ${settings.autoTargetSettings.creatureList}")
-
-      val chosenSettingsOpt = settings.autoTargetSettings.creatureList
-        .map(parseCreature)
-        .find(_.name.equalsIgnoreCase(at0.chosenTargetName))
-
-      val wantsToMark = chosenSettingsOpt.exists(cs => cs.targetBattle || cs.targetScreen)
-
-      val targetGoneOrDead = lastId == at0.chosenTargetId && isDead
-      val markRetryCooldown = 1000L
-      val markRecentlyTried = (System.currentTimeMillis() - at0.lastTargetMarkCommandSend) < markRetryCooldown
-
-      println(s"[UpdateAttackStatus] currentAttackId: $currentAttackId, chosenTargetId: ${at0.chosenTargetId}")
-      println(s"[UpdateAttackStatus] creatureNotMarked: $creatureNotMarked, wrongTargetAttacked: $wrongTargetAttacked")
-
-      val shouldResetTarget =
-        targetGoneOrDead ||
-          (!inBattle && !markRecentlyTried) ||
-          (at0.statusOfAutoTarget == "fight" &&
-            (creatureNotMarked || wrongTargetAttacked) &&
-            wantsToMark &&
-            !markRecentlyTried)
-
-      val at1 = if (shouldResetTarget) {
-        println("[UpdateAttackStatus] Resetting due to:")
-        if (targetGoneOrDead) println("  ➤ Target gone or dead")
-        if (!inBattle && !markRecentlyTried) println("  ➤ Not in battle and retry cooldown expired")
-        if ((creatureNotMarked || wrongTargetAttacked) && !markRecentlyTried)
-          println("  ➤ Mark failed or wrong target")
-        at0.copy(statusOfAutoTarget = "ready", chosenTargetId = 0, chosenTargetName = "")
-      } else at0
-
-      val at2 = if (at1.chosenTargetId == 0) {
-        // 1) Pull out and lowercase all setting names
-        val parsedSettings     = settings.autoTargetSettings.creatureList.map(parseCreature)
-        val settingNamesLower  = parsedSettings.map(_.name.toLowerCase).toSet
-
-        println(s"[UpdateAttackStatus] Creatures from autoattack settings: ${settingNamesLower}")
-        // 2) Detect if we have an "All" entry
-        val considerAll = settingNamesLower.contains("all")
-
-        // 3) Filter battleInfo entries up‐front
-        val filteredBds: List[JsValue] = battleInfo.values.toList.filter { bd =>
-          if (considerAll) {
-            (bd \ "isCreature").asOpt[Boolean].getOrElse(false)
-          } else {
-            (bd \ "Name").asOpt[String]
-              .map(_.toLowerCase)
-              .exists(settingNamesLower.contains)
-          }
-        }
-        println(s"[UpdateAttackStatus] Creatures from filtered battle: ${filteredBds}")
-
-        // 4) Map filtered JSON to CreatureInfo, then sort by manhattan distance
-        val allCreaturesSorted: List[CreatureInfo] = filteredBds.flatMap { bd =>
-            for {
-              id   <- (bd \ "Id").asOpt[Int]
-              name <- (bd \ "Name").asOpt[String]
-              x    <- (bd \ "PositionX").asOpt[Int]
-              y    <- (bd \ "PositionY").asOpt[Int]
-              z    <- (bd \ "PositionZ").asOpt[Int]
-            } yield CreatureInfo(
-              id, name, 100,
-              isShootable            = (bd \ "IsShootable").asOpt[Boolean].getOrElse(true),
-              isMonster              = (bd \ "IsMonster").asOpt[Boolean].getOrElse(false),
-              danger                 = 1,
-              keepDistance           = false,
-              isPlayer               = (bd \ "IsPlayer").asOpt[Boolean].getOrElse(false),
-              posX                   = x,
-              posY                   = y,
-              posZ                   = z,
-              lootMonsterImmediately = false,
-              lootMonsterAfterFight  = false,
-              lureCreatureToTeam     = false
-            )
-          }
-          .sortBy(c => characterPos.manhattanDistance(Vec(c.posX, c.posY)))
-
-        println("[UpdateAttackStatus] Creatures considered:")
-        allCreaturesSorted.foreach(c => println(s"  - ${c.name} (${c.id}) at (${c.posX},${c.posY})"))
-
-        // 5) Your existing distance+path check
-        val maybeTarget = allCreaturesSorted
-          .find { creature =>
-            val targetPos = Vec(creature.posX, creature.posY)
-            val manhattan = characterPos.manhattanDistance(targetPos)
-            val newState  = generateSubwaypointsToCreature(targetPos, state, json)
-            val hasPath   = newState.autoTarget.subWaypoints.nonEmpty
-            val accepted  = hasPath || manhattan <= 1
-
-            println(
-              s"[UpdateAttackStatus] Checking ${creature.name} (${creature.id}) at $targetPos, " +
-                s"manhattan=$manhattan → hasPath=$hasPath → accepted=$accepted"
-            )
-            accepted
-          }
-
-        maybeTarget match {
-          case Some(chosen) =>
-            println(s"[UpdateAttackStatus] New target: ${chosen.name} (${chosen.id})")
-            at1.copy(
-              chosenTargetId   = chosen.id,
-              chosenTargetName = chosen.name,
-              statusOfAutoTarget = "target chosen"
-            )
-          case None =>
-            at1
-        }
-      } else at1
-
-
-      Some(state.copy(autoTarget = at2) -> NoOpTask)
-    }
-
-    private def extractCharPosition(json: JsValue): Vec = {
-      val maybeVec = for {
-        x <- (json \ "characterInfo" \ "PositionX").asOpt[Int]
-        y <- (json \ "characterInfo" \ "PositionY").asOpt[Int]
-      } yield Vec(x, y)
-      maybeVec.getOrElse(Vec(0, 0))
-    }
-  }
-
-
-
   private object TargetMarking extends Step {
     private val taskName = "TargetMarking"
 
     override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
+      println(s"[TargetMarking] run() invoked. state.autoTarget=${state.autoTarget}, json=$json")
       val at = state.autoTarget
-      if (at.statusOfAutoTarget != "target chosen") return None
+
+      val now = System.currentTimeMillis()
+      val elapsed = now - at.lastTargetMarkCommandSend
+
+      if (at.lastTargetMarkCommandSend > 0 && elapsed < 1500) {
+        println(s"[TargetMarking] last mark was sent $elapsed ms ago — skipping to avoid spamming")
+        return None
+      }
+
+
+      if (at.stateAutoTarget != "target chosen") {
+        println(s"[TargetMarking] skipping because stateAutoTarget=${at.stateAutoTarget}")
+        return None
+      }
 
       val chosenId = at.chosenTargetId
       val chosenName = at.chosenTargetName
+      println(s"[TargetMarking] chosenId=$chosenId, chosenName=$chosenName")
 
-      val currentAttackId = (json \ "attackInfo" \ "Id").asOpt[Int]
+      val currentAttackId = (json \"attackInfo\" \"Id").asOpt[Int]
       val alreadyMarked = currentAttackId.contains(chosenId)
+      println(s"[TargetMarking] currentAttackId=$currentAttackId, alreadyMarked=$alreadyMarked")
 
       def findCreatureSettingsByName(creatureName: String, creatureSettingsList: Seq[String]): Option[CreatureSettings] = {
+        println(s"[TargetMarking] looking up settings for creature '$creatureName'")
         val parsedSettings = creatureSettingsList.map(parseCreature)
-        parsedSettings.find(_.name.equalsIgnoreCase(creatureName))
+        val found = parsedSettings.find(_.name.equalsIgnoreCase(creatureName))
           .orElse(parsedSettings.find(_.name.equalsIgnoreCase("All")))
+        println(s"[TargetMarking] settings lookup result=$found")
+        found
       }
 
       val csOpt = findCreatureSettingsByName(chosenName, settings.autoTargetSettings.creatureList)
       val (markOnBattle, markOnScreen) = csOpt.map(cs => (cs.targetBattle, cs.targetScreen)).getOrElse((false, false))
+      println(s"[TargetMarking] markOnBattle=$markOnBattle, markOnScreen=$markOnScreen")
 
-      val now = System.currentTimeMillis()
+
+      // add check lastTargetMarkCommandSend here
       val clickActions: List[MouseAction] = if (!alreadyMarked) {
+        println(s"[TargetMarking] will attempt to mark target")
         (markOnBattle, markOnScreen) match {
           case (true, true) =>
             if (scala.util.Random.nextBoolean()) {
@@ -449,63 +359,89 @@ object AutoTargetFeature {
             println(s"[TargetMarking] marking $chosenName on SCREEN")
             markOnScreenUI(chosenId, json)
           case _ =>
-            println(s"[TargetMarking] No mark setting enabled for $chosenName")
+            println(s"[TargetMarking] no marking enabled for $chosenName")
             Nil
         }
       } else {
-        println(s"[TargetMarking] already marked on battle")
+        println(s"[TargetMarking] target $chosenName is already marked, skipping UI actions")
         Nil
       }
+      println(s"[TargetMarking] clickActions generated: $clickActions")
 
       val newAT = at.copy(
-        statusOfAutoTarget = "fight",
+        stateAutoTarget = "fight",
         lastTargetMarkCommandSend = if (clickActions.nonEmpty) now else at.lastTargetMarkCommandSend,
         targetFreezeCreatureId = chosenId
       )
+      println(s"[TargetMarking] updated autoTarget: $newAT")
 
       Some(state.copy(autoTarget = newAT) -> MKTask(taskName, MKActions(clickActions, Nil)))
     }
 
-    private def markOnBattleUI(chosenId: Int, json: JsValue): List[MouseAction] =
-      (for {
+    private def markOnBattleUI(chosenId: Int, json: JsValue): List[MouseAction] = {
+      println(s"[TargetMarking] markOnBattleUI() called for id=$chosenId")
+      val result = for {
         posObj <- (json \ "screenInfo" \ "battlePanelLoc" \ chosenId.toString).asOpt[JsObject]
-        x <- (posObj \ "PosX").asOpt[Int]
-        y <- (posObj \ "PosY").asOpt[Int]
-      } yield List(
-        MoveMouse(x, y),
-        LeftButtonPress(x, y),
-        LeftButtonRelease(x, y)
-      )).getOrElse {
+          x <- (posObj \"PosX").asOpt[Int]
+        y <- (posObj \"PosY").asOpt[Int]
+      } yield {
+        println(s"[TargetMarking] battle UI position x=$x, y=$y")
+        List(
+          MoveMouse(x, y),
+          LeftButtonPress(x, y),
+          LeftButtonRelease(x, y)
+        )
+      }
+      val actions = result.getOrElse {
         println(s"[TargetMarking] failed to find battle UI position for $chosenId")
         Nil
       }
+      println(s"[TargetMarking] markOnBattleUI actions: $actions")
+      actions
+    }
 
     private def markOnScreenUI(chosenId: Int, json: JsValue): List[MouseAction] = {
-      val battleInfo = (json \ "battleInfo").as[Map[String, JsValue]]
-      val tileIdOpt = battleInfo.values.find(obj => (obj \ "Id").asOpt[Int].contains(chosenId)).flatMap { obj =>
-        for {
-          x <- (obj \ "PositionX").asOpt[Int]
-          y <- (obj \ "PositionY").asOpt[Int]
-          z <- (obj \ "PositionZ").asOpt[Int]
-        } yield s"$x$y$z"
-      }
+      println(s"[TargetMarking] markOnScreenUI() called for id=$chosenId")
+      val battleInfo = (json \"battleInfo").as[Map[String, JsValue]]
+      val tileIdOpt = battleInfo.values
+        .find(obj => (obj \ "Id").asOpt[Int].contains(chosenId))
+        .flatMap { obj =>
+          for {
+            x <- (obj \ "PositionX").asOpt[Int]
+            y <- (obj \ "PositionY").asOpt[Int]
+            z <- (obj \ "PositionZ").asOpt[Int]
+          } yield {
+            // pad Z to 2 digits if needed
+            val zStr = f"$z%02d"
+            s"$x$y$zStr"
+          }
+        }
 
-      val mapTiles = (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
-      val targetOpt = mapTiles.values.find(obj => (obj \ "id").asOpt[String] == tileIdOpt)
 
-      targetOpt.flatMap { obj =>
+      println(s"[TargetMarking] computed tileIdOpt=$tileIdOpt")
+
+      val mapTiles = (json \"screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
+      val targetOpt = mapTiles.values.find(obj => (obj \"id").asOpt[String] == tileIdOpt)
+      println(s"[TargetMarking] found map panel tile object: $targetOpt")
+
+      val actions = targetOpt.flatMap { obj =>
         for {
-          x <- (obj \ "x").asOpt[Int]
-          y <- (obj \ "y").asOpt[Int]
-        } yield List(
-          MoveMouse(x, y),
-          RightButtonPress(x, y),
-          RightButtonRelease(x, y)
-        )
+          x <- (obj \"x").asOpt[Int]
+          y <- (obj \"y").asOpt[Int]
+        } yield {
+          println(s"[TargetMarking] screen UI position x=$x, y=$y")
+          List(
+            MoveMouse(x, y),
+            RightButtonPress(x, y),
+            RightButtonRelease(x, y)
+          )
+        }
       }.getOrElse {
         println(s"[TargetMarking] failed to find screen position for $chosenId")
         Nil
       }
+      println(s"[TargetMarking] markOnScreenUI actions: $actions")
+      actions
     }
   }
 
@@ -515,7 +451,8 @@ object AutoTargetFeature {
     private val taskName = "AttackStep"
 
     override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
-      if (state.autoTarget.statusOfAutoTarget != "fight") return None
+
+      if ((state.autoTarget.stateAutoTarget != "fight")  || (state.caveBot.stateHunting == "looting in progress")) return None
 
       val at = state.autoTarget
       val chosenId = at.chosenTargetId
@@ -790,7 +727,7 @@ object AutoTargetFeature {
     override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
       val at = state.autoTarget
 
-      if (!Set("target chosen", "fight").contains(at.statusOfAutoTarget)) return None
+      if (!Set("target chosen", "fight").contains(at.stateAutoTarget)) return None
 
       val presentLoc = Vec(
         (json \ "characterInfo" \ "PositionX").as[Int],
@@ -1060,7 +997,7 @@ object AutoTargetFeature {
       val at       = state.autoTarget
       val cont     = at.currentAutoAttackContainerName
 
-      at.statusOfAutoTarget match {
+      at.stateAutoTarget match {
 
         // 1) remove the (now empty) backpack
         case "remove_backpack" =>
@@ -1085,7 +1022,7 @@ object AutoTargetFeature {
           )
 
           val actions = removeSeq.getOrElse(Nil)
-          val newAT = at.copy(statusOfAutoTarget = "open_new_backpack")
+          val newAT = at.copy(stateAutoTarget = "open_new_backpack")
           Some(state.copy(autoTarget = newAT) ->
             MKTask(s"$taskName - remove_backpack", MKActions(actions, Nil)))
 
@@ -1104,7 +1041,7 @@ object AutoTargetFeature {
           )
 
           val actions    = openSeq.getOrElse(Nil)
-          val newAT = at.copy(statusOfAutoTarget = "verifying")
+          val newAT = at.copy(stateAutoTarget = "verifying")
           Some(state.copy(autoTarget = newAT) ->
             MKTask(s"$taskName - open_new_backpack", MKActions(actions, Nil)))
 
@@ -1120,7 +1057,7 @@ object AutoTargetFeature {
 
           if (hasRune) {
             printInColor(ANSI_BLUE, s"[HandleAttackBackpacks] '$cont' now has runes → READY")
-            val newAT = at.copy(statusOfAutoTarget = "ready")
+            val newAT = at.copy(stateAutoTarget = "ready")
             Some(state.copy(autoTarget = newAT) ->
               MKTask(s"$taskName - verifying", MKActions.empty))
           } else {
@@ -1137,14 +1074,14 @@ object AutoTargetFeature {
                 printInColor(ANSI_BLUE, s"[HandleAttackBackpacks] switching to next container '$nextCont'")
                 val newAT = at.copy(
                   currentAutoAttackContainerName = nextCont,
-                  statusOfAutoTarget       = "remove_backpack"
+                  stateAutoTarget       = "remove_backpack"
                 )
                 Some(state.copy(autoTarget = newAT) ->
                   MKTask(s"$taskName - verifying", MKActions.empty))
 
               case None =>
                 printInColor(ANSI_BLUE, s"[HandleAttackBackpacks] no more rune containers → READY")
-                val newAT = at.copy(statusOfAutoTarget = "ready")
+                val newAT = at.copy(stateAutoTarget = "ready")
                 Some(state.copy(autoTarget = newAT) ->
                   MKTask(s"$taskName - verifying", MKActions.empty))
             }
@@ -1176,7 +1113,7 @@ object AutoTargetFeature {
         val zPos = (json \ "attackInfo" \ "Position" \ "z").asOpt[Int].getOrElse(0)
 
         printInColor(ANSI_BLUE,
-          s"[GetAttackInfo] New target: $targetName ($targetId) at [$xPos,$yPos,$zPos]")
+          s"[GetAttackInfo] Current target: $targetName ($targetId) at [$xPos,$yPos,$zPos]")
         val newCaveBotState = state.caveBot.copy(stateHunting = "attacking")
         val newAutoTargetState = state.autoTarget.copy(
           lastTargetName  = targetName,
@@ -1579,6 +1516,91 @@ object AutoTargetFeature {
 //        CreatureInfo(id, name, healthPercent, isShootable, isMonster, danger, keepDistance, isPlayer, posX, posY, posZ, lootMonsterImmediately, lootMonsterAfterFight, lureCreatureToTeam)
 //    }
 //  }
+
+
+  private object RefillAmmo extends Step {
+    private val taskName = "RefillAmmo"
+
+    override def run(
+                      state:    GameState,
+                      json:     JsValue,
+                      settings: UISettings
+                    ): Option[(GameState, MKTask)] = {
+      val at = state.autoTarget
+
+      // only if we’re set to use ammo
+      if (at.isUsingAmmo != "true") return None
+
+      // 1) count total stacks of this ammoId across all backpacks
+      val containerInfo = (json \ "containersInfo").asOpt[JsObject].getOrElse(Json.obj())
+      val stacksCount = containerInfo.fields.flatMap {
+        case (_, contData) =>
+          (contData \ "items").asOpt[JsObject].toList.flatMap(_.fields).collect {
+            case (_, slotData)
+              if ( (slotData \ "itemId").asOpt[Int].contains(at.ammoId) ) => 1
+          }
+      }.sum
+
+      // update suppliesLeftMap
+      val atWithCounts = at.copy(
+        AttackSuppliesLeftMap = at.AttackSuppliesLeftMap.updated(at.ammoId, stacksCount)
+      )
+
+      // 2) check current arrow count in equipment slot 10
+      val ammoCount = (json \ "EqInfo" \ "10" \ "itemCount").asOpt[Int].getOrElse(0)
+
+      println(s"[RefillAmmo] AmmoId=${at.ammoId}, totalStacks=$stacksCount")
+      println(s"[RefillAmmo] Current ammo in slot 10: $ammoCount")
+      println(s"[RefillAmmo] Refill threshold = ${atWithCounts.ammoCountForNextResupply}")
+      // 3) only refill if we have stacks and are below threshold
+      if (stacksCount > 0 && ammoCount < atWithCounts.ammoCountForNextResupply) {
+        // pick the first backpack containing arrows
+        val maybeSourceCont = containerInfo.fields.collectFirst {
+          case (contName, contData)
+            if ( (contData \ "items").asOpt[JsObject]
+              .exists(_.values.exists(i => (i \ "itemId").asOpt[Int].contains(at.ammoId))) ) =>
+            contName
+        }
+
+        // screen coords for backpack slot & eq slot
+        val maybeCoords = for {
+          cont     <- maybeSourceCont
+          invPanel <- (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
+          slotKey  <- invPanel.keys.find(_.contains(cont))
+          sx       <- (invPanel \ slotKey \ "x").asOpt[Int]
+          sy       <- (invPanel \ slotKey \ "y").asOpt[Int]
+          eqPanel  <- (json \ "screenInfo" \ "equipmentPanelLoc" \ "10").asOpt[JsObject]
+          ex       <- (eqPanel \ "x").asOpt[Int]
+          ey       <- (eqPanel \ "y").asOpt[Int]
+        } yield (sx, sy, ex, ey)
+
+        maybeCoords.map { case (sx, sy, ex, ey) =>
+          val actions = List(
+            MoveMouse(sx, sy),
+            RightButtonPress(sx, sy),
+            RightButtonRelease(sx, sy),
+            MoveMouse(ex, ey),
+            LeftButtonPress(ex, ey),
+            LeftButtonRelease(ex, ey)
+          )
+          // leave stateAutoTarget as “ready” so future refills can occur
+          val newAT = atWithCounts
+          val newState = state.copy(autoTarget = newAT)
+          newState -> MKTask(taskName, MKActions(actions, Nil))
+        }.orElse {
+          // coords missing? just update the counts in state, no clicks
+          Some(state.copy(autoTarget = atWithCounts) -> NoOpTask)
+        }
+      } else {
+        println("[RefillAmmo] Ammo sufficient, no refill.")
+        // no refill needed—just persist the updated counts if they changed
+        if (state.autoTarget.AttackSuppliesLeftMap.getOrElse(at.ammoId, -1) != stacksCount) {
+          Some(state.copy(autoTarget = atWithCounts) -> NoOpTask)
+        } else None
+      }
+    }
+  }
+
 
   private def findCreatureInfoById(
                                     creatureId: Long,

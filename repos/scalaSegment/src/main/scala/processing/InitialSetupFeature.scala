@@ -7,54 +7,108 @@ import mouse.MouseAction
 import keyboard.KeyboardAction
 import utils.SettingsUtils.UISettings
 import utils.GameState
-import utils.ProcessingUtils.{MKActions, MKTask, Step}
+import utils.ProcessingUtils.{MKActions, MKTask, NoOpTask, Step}
 
 
 
 object InitialSetupFeature {
 
-  def run(
-           json:     JsValue,
-           settings: UISettings,
-           state:    GameState
-         ): (GameState, List[MKTask]) = {
+  import cats.syntax.all._
 
-    val (s, maybeTask) = Steps.runFirst(json, settings, state)
-    (s, maybeTask.toList)
-  }
+  def run(json: JsValue, settings: UISettings, state: GameState): (GameState, List[MKTask]) =
+    (!settings.autoLootSettings.enabled).guard[Option]
+      .as((state, Nil))
+      .getOrElse {
+        val (s, maybeTask) = Steps.runFirst(json, settings, state)
+        (s, maybeTask.toList)
+      }
 
   private object Steps {
 
     // ordered list of steps
     val allSteps: List[Step] = List(
+      CheckingOpenBackpack,
       SortCarcassesByDistanceAndTime,
       CheckDynamicHealing,
     )
 
 
+
     def runFirst(
-                  json:     JsValue,
+                  json: JsValue,
                   settings: UISettings,
-                  startState:    GameState
+                  startState: GameState
                 ): (GameState, Option[MKTask]) = {
       @annotation.tailrec
-      def loop(
-                remaining: List[Step],
-                current:   GameState
-              ): (GameState, Option[MKTask]) = remaining match {
-        case Nil => (current, None)
-        case step :: rest =>
-          step.run(current, json, settings) match {
-            case Some((newState, task)) =>
-              (newState, Some(task))
-            case None =>
-              loop(rest, current)
-          }
-      }
+      def loop(remaining: List[Step], current: GameState): (GameState, Option[MKTask]) =
+        remaining match {
+          case Nil => (current, None)
+          case step :: rest =>
+            step.run(current, json, settings) match {
+              case Some((newState, task)) if task == NoOpTask =>
+                // ✅ keep the newState and keep going
+                loop(rest, newState)
 
+              case Some((newState, task)) =>
+                // ✅ return early with state AND task
+                (newState, Some(task))
+
+              case None =>
+                // ✅ no state change, continue with existing
+                loop(rest, current)
+            }
+        }
+
+      // ✅ always return the latest state, even if no task
       loop(allSteps, startState)
     }
   }
+
+
+  import play.api.libs.json._
+
+
+  private object CheckingOpenBackpack extends Step {
+    private val taskName = "CheckingOpenBackpack"
+
+    override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
+      val gen = state.general
+
+      // Only run once when we haven't yet initialized our container list
+      if (gen.areInitialContainerSet || gen.initialContainersList.nonEmpty) {
+        None
+      } else {
+        // Extract the containersInfo object directly
+        val containersInfo = (json \ "containersInfo").asOpt[JsObject].getOrElse(Json.obj())
+
+        // Filter keys by container name containing bag, backpack, or ring
+        val containerKeys = containersInfo.fields.collect {
+          case (key, details: JsObject)
+            if (details.value.get("name").exists {
+              case JsString(n) =>
+                val lower = n.toLowerCase
+                lower.contains("bag") || lower.contains("backpack") || lower.contains("ring")
+              case _ => false
+            }) =>
+            key
+        }.toList
+
+        // Debug output
+        println(s"[$taskName] Found static containers: $containerKeys")
+
+        // Update general state
+        val newGeneral = gen.copy(
+          areInitialContainerSet      = true,
+          initialContainersList   = containerKeys
+        )
+        val newState = state.copy(general = newGeneral)
+
+        // No-op task, merely a marker
+        Some(newState -> NoOpTask)
+      }
+    }
+  }
+
 
   private object SortCarcassesByDistanceAndTime extends Step {
     private val taskName = "sortCarcasses"
@@ -84,7 +138,7 @@ object InitialSetupFeature {
       }
     }
 
-    private def sortCarcass(carcassList: List[(String, Long)], json: JsValue) = {
+    private def sortCarcass(carcassList: List[(String, Long, String)], json: JsValue) = {
       // extract character pos
       val (cx, cy, cz) = (json \ "characterInfo").asOpt[JsObject].map { info =>
         (
@@ -108,7 +162,7 @@ object InitialSetupFeature {
             math.pow(a._3 - b._3, 2)
         )
 
-      carcassList.sortBy { case (tile, time) =>
+      carcassList.sortBy { case (tile, time, id) =>
         val pt = extract(tile)
         (dist(pt, (cx, cy, cz)), time)
       }

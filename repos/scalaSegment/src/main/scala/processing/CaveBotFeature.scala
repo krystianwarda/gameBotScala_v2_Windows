@@ -146,7 +146,7 @@ object CaveBotFeature {
       println(s"[TICK] Character pos = $loc, WP target = (${currentWp.waypointX}, ${currentWp.waypointY})")
 
       // If target is chosen, don't generate subwaypoints, only track waypoints
-      if (at.statusOfAutoTarget == "target chosen") {
+      if (at.stateAutoTarget == "target chosen") {
         println(s"[$taskName] target chosen → skipping movement generation")
         return None
       }

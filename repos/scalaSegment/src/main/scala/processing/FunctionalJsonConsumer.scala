@@ -33,8 +33,9 @@ class FunctionalJsonConsumer(
         // 1) normal processing
         for {
           settings <- settingsRef.get
-          state0   <- stateRef.get
+          startState   <- stateRef.get
 
+          (state0, generalTasks)   = InitialSetupFeature.run(json, settings, startState)
           (state1, fishTasks)   = FishingFeature.run(json, settings, state0)
           (state2, healTasks)   = HealingFeature.run(json, settings, state1)
           (state3, lootTasks)   = AutoLootFeature.run(json, settings, state2)

@@ -76,11 +76,10 @@ object AutoLootFeature {
     private val taskName = "DetectDeadCreatures"
 
     override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
-      val currentTime = System.currentTimeMillis()
+      val currentTime     = System.currentTimeMillis()
       val killedCreatures = (json \ "lastKilledCreatures").asOpt[JsObject].getOrElse(Json.obj())
 
-
-      // If only placeholder entry (e.g. {"Creature":{"None":true}}), skip processing
+      // skip the placeholder-only case
       if (killedCreatures.fields.size == 1 && {
         val only = killedCreatures.fields.head._2
         (only \ "None").asOpt[Boolean].contains(true)
@@ -88,7 +87,6 @@ object AutoLootFeature {
         println(s"[$taskName] No real kills detected, skipping.")
         return Some((state, NoOpTask))
       }
-
 
       println(s"[$taskName] ENTER: stateHunting = ${state.caveBot.stateHunting}")
       println(s"[$taskName] Running DetectDeadCreatures… Found ${killedCreatures.fields.size} entries.")
@@ -98,34 +96,52 @@ object AutoLootFeature {
 
       killedCreatures.fields.foreach { case (creatureId, creatureInfo) =>
         val name   = (creatureInfo \ "Name").asOpt[String].getOrElse("<unknown>")
-        val x      = (creatureInfo \ "LastPositionX").asOpt[Int].getOrElse(0)
-        val y      = (creatureInfo \ "LastPositionY").asOpt[Int].getOrElse(0)
-        val z      = (creatureInfo \ "LastPositionZ").asOpt[Int].getOrElse(0)
+
+        // try both new and old keys for backwards-compatibility
+        val x = (creatureInfo \ "X").asOpt[Int]
+          .orElse((creatureInfo \ "LastPositionX").asOpt[Int])
+          .getOrElse(0)
+        val y = (creatureInfo \ "Y").asOpt[Int]
+          .orElse((creatureInfo \ "LastPositionY").asOpt[Int])
+          .getOrElse(0)
+        val z = (creatureInfo \ "Z").asOpt[Int]
+          .orElse((creatureInfo \ "LastPositionZ").asOpt[Int])
+          .getOrElse(0)
+
         val isDead = (creatureInfo \ "IsDead").asOpt[Boolean].getOrElse(false)
 
         println(s"[$taskName] Creature: $name at ($x,$y,$z), isDead=$isDead")
 
         if (isDead) {
-          val tileKey = generatePositionKey(x,y,z)
-          val lootImmediateExists = state.autoLoot.carcassToLootImmediately.exists(_._3 == creatureId)
-          val lootAfterFightExists = state.autoLoot.carcassToLootAfterFight.exists(_._3 == creatureId)
+          val tileKey = generatePositionKey(x, y, z)
+          val lootImmediateExists =
+            state.autoLoot.carcassToLootImmediately.exists(_._3 == creatureId)
+          val lootAfterFightExists =
+            state.autoLoot.carcassToLootAfterFight.exists(_._3 == creatureId)
 
           if (!lootImmediateExists && !lootAfterFightExists) {
+            settings.autoTargetSettings.creatureList
+              .map(parseCreature)
+              .find(_.name.equalsIgnoreCase(name)) match {
 
-            val csOpt   = settings.autoTargetSettings.creatureList.map(parseCreature).find(_.name.equalsIgnoreCase(name))
-
-            csOpt match {
               case Some(cs) if cs.lootMonsterImmediately =>
-                println(s"[$taskName] Queuing immediate loot for $name at $tileKey (id: $creatureId)")
-                updatedState = updatedState.copy(autoLoot = updatedState.autoLoot.copy(
-                  carcassToLootImmediately = updatedState.autoLoot.carcassToLootImmediately :+ (tileKey, currentTime, creatureId)
-                ))
+                println(s"[$taskName] Queuing immediate loot for $name at $tileKey (id: $creatureId), switching to looting…")
+                updatedState = updatedState
+                  // mark that we’re now looting so UpdateAttackStatus will skip its reset logic
+                  .copy(caveBot = updatedState.caveBot.copy(stateHunting = "looting in progress"))
+                  .copy(autoLoot = updatedState.autoLoot.copy(
+                    carcassToLootImmediately =
+                      updatedState.autoLoot.carcassToLootImmediately :+ (tileKey, currentTime, creatureId)
+                  ))
 
               case Some(cs) if cs.lootMonsterAfterFight =>
-                println(s"[$taskName] Queuing post-fight loot for $name at $tileKey (id: $creatureId)")
-                updatedState = updatedState.copy(autoLoot = updatedState.autoLoot.copy(
-                  carcassToLootAfterFight = updatedState.autoLoot.carcassToLootAfterFight :+ (tileKey, currentTime, creatureId)
-                ))
+                println(s"[$taskName] Queuing post‐fight loot for $name at $tileKey (id: $creatureId)")
+                updatedState = updatedState.copy(autoLoot =
+                  updatedState.autoLoot.copy(
+                    carcassToLootAfterFight =
+                      updatedState.autoLoot.carcassToLootAfterFight :+ (tileKey, currentTime, creatureId)
+                  )
+                )
 
               case Some(_) =>
                 println(s"[$taskName] Loot disabled for $name")
@@ -134,8 +150,6 @@ object AutoLootFeature {
                 println(s"[$taskName] No autoTargetSettings for $name")
             }
           }
-
-
         }
       }
 
@@ -143,7 +157,8 @@ object AutoLootFeature {
       Some((updatedState, NoOpTask))
     }
 
-    def generatePositionKey(x: Int, y: Int, z: Int): String = f"$x$y${z}%02d"
+    private def generatePositionKey(x: Int, y: Int, z: Int): String =
+      f"$x$y$z"  // or keep your previous f"$x$y${z}%02d" if that’s what your map key expects
   }
 
 
@@ -164,7 +179,7 @@ object AutoLootFeature {
 
       // Handle attack end or free state
       var updated = state
-      if ((state.caveBot.stateHunting == "attacking" && attackId.isEmpty) || state.caveBot.stateHunting == "free") {
+      if ((state.caveBot.stateHunting == "attacking" && attackId.isEmpty) || state.caveBot.stateHunting == "free")  {
         println(s"[ProcessLootingInformation] Evaluating loot queues: immediate=${state.autoLoot.carcassToLootImmediately}, postFight=${state.autoLoot.carcassToLootAfterFight}")
 
         if (state.autoLoot.carcassToLootImmediately.nonEmpty) {
@@ -235,128 +250,8 @@ object AutoLootFeature {
         Some((state, NoOpTask))
         }
 
-
-
-//      state.caveBot.stateHunting match {
-//        case "attacking" => handleAttackingState(json, settings, state)
-//        case "creature killed" => handleCreatureKilledState(json, settings, state)
-//        case "loot or fight or free" => handleLootOrFightOrFreeState(json, settings, state)
-////        case "looting in progress" => handleLooting(json, settings, state)
-//        case "free"               =>
-//          println(s"[$taskName] FREE: nothing to do")
-//          Some((state, NoOpTask))
-//        case other =>
-//          println(s"[$taskName] Unknown state '$other' → NoOp")
-//          Some((state, NoOpTask))
-//      }
     }
-
-
-//    def handleLooting(json: JsValue, settings: UISettings, currentState: GameState): Option[(GameState, MKTask)] = {
-//      println(s"Start stateLooting: ${currentState.autoLoot.stateLooting}, stateLootPlunder: ${currentState.autoLoot.stateLootPlunder}.")
-//
-//      currentState.autoLoot.stateLooting match {
-//        case "free" => handleLootOrMoveCarcass(json, settings, currentState)
-//        case "moving carcass" => handleMovingOldCarcass(json, settings, currentState)
-//        case "opening carcass" => handleOpeningCarcass(json, settings, currentState)
-//        case "clicking open button" => handleClickingOpen(json, settings, currentState)
-//        case "loot plunder" => handleLootPlunder(json, settings, currentState)
-//        case _ => Some((currentState, NoOpTask))
-//      }
-//    }
-
-//    private def handleLootOrFightOrFreeState(json: JsValue, settings: UISettings, state: GameState): Option[(GameState, MKTask)] = {
-//      println("[handleLootOrFightOrFreeState] Entered handler")
-//      println(s"[handleLootOrFightOrFreeState] autoLoot.immediate=${state.autoLoot.carcassToLootImmediately}, postFight=${state.autoLoot.carcassToLootAfterFight}")
-//      val shootable = getBattleShootableCreaturesList(json)
-//      println(s"[handleLootOrFightOrFreeState] shootable now = $shootable")
-//
-//      var updatedState = state
-//      val now = System.currentTimeMillis()
-//
-//      def sortByDistance(list: List[(String, Long)]): List[(String, Long)] =
-//        sortTileListByCharacterProximity(json, list)
-//
-//      if (state.autoLoot.carcassToLootImmediately.nonEmpty) {
-//        println(s"[handleLootOrFightOrFreeState] Found ${state.autoLoot.carcassToLootImmediately.size} carcasses to loot immediately")
-//        val sorted = if (state.autoLoot.carcassToLootImmediately.length > 1)
-//          sortByDistance(state.autoLoot.carcassToLootImmediately)
-//        else
-//          state.autoLoot.carcassToLootImmediately
-//
-//        val (tile, time) = sorted.head
-//        println(s"[handleLootOrFightOrFreeState] Looting immediately from tile: $tile")
-//        updatedState = updatedState.copy(
-//          autoLoot = state.autoLoot.copy(
-//            carcassToLootImmediately = sorted.tail,
-//            carcassTileToLoot = Some((tile, time))
-//          ),
-//          caveBot = state.caveBot.copy(stateHunting = "looting in progress")
-//        )
-//      } else if (state.autoLoot.carcassToLootAfterFight.nonEmpty && shootable.isEmpty) {
-//        println(s"[handleLootOrFightOrFreeState] Found ${state.autoLoot.carcassToLootAfterFight.size} carcasses to loot after fight and no shootable creatures.")
-//        val sorted = if (state.autoLoot.carcassToLootAfterFight.length > 1)
-//          sortByDistance(state.autoLoot.carcassToLootAfterFight)
-//        else
-//          state.autoLoot.carcassToLootAfterFight
-//
-//        val (tile, time) = sorted.head
-//        println(s"[handleLootOrFightOrFreeState] Looting after fight from tile: $tile")
-//        updatedState = updatedState.copy(
-//          autoLoot = state.autoLoot.copy(
-//            carcassToLootAfterFight = sorted.tail,
-//            carcassTileToLoot = Some((tile, time))
-//          ),
-//          caveBot = state.caveBot.copy(stateHunting = "looting in progress")
-//        )
-//      } else {
-//        println("[handleLootOrFightOrFreeState] No lootable carcasses or still in battle → setting stateHunting to 'free'")
-//        updatedState = state.copy(caveBot = state.caveBot.copy(stateHunting = "free"))
-//      }
-//
-//      Some((updatedState, NoOpTask))
-//    }
-//
-//
-//    private def handleAttackingState(json: JsValue, settings: UISettings, state: GameState): Option[(GameState, MKTask)] = {
-//      val lastAttacked = (json \ "lastAttackedCreatureInfo").asOpt[JsObject].getOrElse(Json.obj())
-//      val lastId = (lastAttacked \ "LastAttackedId").asOpt[Int].getOrElse(0)
-//      val isDead = (lastAttacked \ "IsDead").asOpt[Boolean].getOrElse(false)
-//
-//      val attackId = (json \ "attackInfo" \ "Id").asOpt[Int]
-//
-//      val updatedState = attackId match {
-//        case None =>
-//          val pending = state.autoLoot.carcassToLootImmediately.nonEmpty ||
-//            state.autoLoot.carcassToLootAfterFight.nonEmpty
-//
-//          if (isDead) {
-//            state.copy(caveBot = state.caveBot.copy(stateHunting = "creature killed"))
-//          } else if (!pending) {
-//            // truly nothing to do: no current fight, no loot
-//            state.copy(caveBot = state.caveBot.copy(stateHunting = "free"))
-//          } else {
-//            // still have to loot → remain in “attacking”
-//            println("[handleAttackingState] Attack ended but loot still pending → stay in 'attacking'")
-//            state
-//          }
-//
-//        case Some(_) =>
-//          state
-//      }
-//
-//      Some((updatedState, NoOpTask))
-//    }
-//
-//    private def handleCreatureKilledState(json: JsValue, settings: UISettings, state: GameState): Option[(GameState, MKTask)] = {
-//      println(s"[Hunting] Last target '${state.autoTarget.lastTargetName}' is killed. Switching to 'loot or fight or free'.")
-//      val updatedState = state.copy(caveBot = state.caveBot.copy(stateHunting = "loot or fight or free"))
-//      Some((updatedState, NoOpTask))
-//    }
-
-
-  }
-
+    }
 
 
   private def sortTileListByCharacterProximity(
@@ -702,9 +597,8 @@ object AutoLootFeature {
 
     state.autoLoot.stateLootPlunder match {
       case "free" => handleAssessLoot(json, settings, state)
-      case "move item to backpack" => handleMoveItemToBackpack(json, settings, state)
-      case "move item to ground" => handleMoveItemToGround(json, settings, state)
-      case "handle food" => handleHandleFood(json, settings, state)
+      case "move item" => handleMoveItem(json, settings, state)
+      case "handle food" => handleEatingFood(json, settings, state)
       case "open subcontainer" => handleOpenSubcontainer(json, settings, state)
       case _ =>
         Some((state.copy(autoLoot = state.autoLoot.copy(
@@ -715,18 +609,21 @@ object AutoLootFeature {
   }
 
   def handleAssessLoot(json: JsValue, settings: UISettings, state: GameState): Option[(GameState, MKTask)] = {
-
+    val gen                = state.general
+    val ignoreContainers   = gen.initialContainersList.toSet
     val containersInfoOpt = (json \ "containersInfo").asOpt[JsObject]
     val screenInfoOpt     = (json \ "screenInfo").asOpt[JsObject]
 
     for {
       containersInfo   <- containersInfoOpt
       screenInfo       <- screenInfoOpt
-      lastContainerKey <- containersInfo.keys.toList.sorted.lastOption
+      newKeys           = containersInfo.keys.toList.filterNot(ignoreContainers.contains).sorted
+      lastContainerKey <- newKeys.lastOption
       lastContainer    <- (containersInfo \ lastContainerKey).asOpt[JsObject]
       itemsValue       <- (lastContainer \ "items").toOption
     } yield {
-      println(s"[handleAssessLoot] Found lastContainerKey: $lastContainerKey with items: $itemsValue")
+      println(s"[handleAssessLoot] Ignoring initialContainers: $ignoreContainers")
+      println(s"[handleAssessLoot] Found new lastContainerKey: $lastContainerKey with items: $itemsValue")
       println(s"[handleAssessLoot] Loot settings: ${settings.autoLootSettings.lootList}")
 
 
@@ -770,24 +667,31 @@ object AutoLootFeature {
               val itemCount = (info \ "itemCount").as[Int]
               val itemSlot  = slot.replace("slot", "item")
 
-              // dump all of the screenInfo keys so we can see what we're matching against
-              val screenKeys = screenInfo.keys.toList
-              println(s"[DEBUG] screenInfo keys: $screenKeys")
+
+              val invPanelLoc = (screenInfo \ "inventoryPanelLoc").asOpt[JsObject].getOrElse {
+                println("[handleAssessLoot] ❗️ inventoryPanelLoc is missing or not an object")
+                JsObject.empty
+              }
+              val invKeys = invPanelLoc.keys.toList
+              println(s"[handleAssessLoot] invPanelLoc keys: $invKeys")
 
               // find the one whose key begins with your containerX prefix
-              val sourceKey = screenKeys
+              val matchedContainerKey = invKeys
                 .find(_.startsWith(lastContainerKey))
                 .getOrElse {
-                  println(s"[DEBUG] ❗️ No screenInfo key startsWith '$lastContainerKey', defaulting to literal")
+                  println(s"[handleAssessLoot] ❗️ No inventoryPanelLoc key startsWith '$lastContainerKey', defaulting to literal")
                   lastContainerKey
                 }
-              println(s"[DEBUG] matched pickup container key = '$sourceKey'")
 
-              val pickupPos = (screenInfo \ sourceKey \ "contentsPanel" \ itemSlot)
+              println(s"[handleAssessLoot] matched pickup container key = '$matchedContainerKey'")
+              println(s"[handleAssessLoot] itemSlot = '$itemSlot'")
+
+              // now grab the contentsPanel→itemN under that matched key
+              val pickupPos = (screenInfo \ "inventoryPanelLoc" \ matchedContainerKey \ "contentsPanel" \ itemSlot)
                 .asOpt[JsObject]
                 .map(s => Vec((s \ "x").as[Int], (s \ "y").as[Int]))
                 .getOrElse {
-                  println(s"[DEBUG] ❗️ Couldn't find contentsPanel→$itemSlot under '$sourceKey'")
+                  println(s"[DEBUG] ❗️ Couldn't find contentsPanel→$itemSlot under inventoryPanelLoc→'$matchedContainerKey'")
                   Vec(0,0)
                 }
               println(s"[DEBUG] Pickup at $pickupPos, action = '$action'")
@@ -810,30 +714,32 @@ object AutoLootFeature {
                   }.getOrElse(Vec(0,0))
 
                 }  else if (action.matches("\\d+")) {
-                  // find the matching "containerN ..." key
+                  // figure out drop-position
                   val targetPrefix = s"container$action"
-                  val destKey = screenKeys
+                  val destKey = invKeys
                     .find(_.startsWith(targetPrefix))
                     .getOrElse {
-                      println(s"[DEBUG] ❗️ No screenInfo key startsWith '$targetPrefix', defaulting to '$targetPrefix'")
+                      println(s"[DEBUG] ❗️ No inventoryPanelLoc key startsWith '$targetPrefix', defaulting to literal")
                       targetPrefix
                     }
                   println(s"[DEBUG] matched drop container key = '$destKey'")
 
-                  (screenInfo \ destKey \ "contentsPanel" \ "item0")
+                  val dropPos = (invPanelLoc \ destKey \ "contentsPanel" \ "item0")
                     .asOpt[JsObject]
                     .map(s => Vec((s \ "x").as[Int], (s \ "y").as[Int]))
                     .getOrElse {
-                      println(s"[DEBUG] ❗️ Couldn't find contentsPanel→item0 under '$destKey'")
+                      println(s"[DEBUG] ❗️ Couldn't find contentsPanel→item0 under inventoryPanelLoc→'$destKey'")
                       Vec(0,0)
                     }
+                  println(s"[handleAssessLoot] Drop at $dropPos")
+
+                  dropPos
                 }
                 else {
                   println(s"[DEBUG] Unknown action '$action' → dropPos = Vec(0,0)")
                   Vec(0,0)
                 }
 
-              println(s"[handleAssessLoot] Drop at $dropPos")
 
               val newState = state.copy(autoLoot = state.autoLoot.copy(
                 stateLootPlunder          = "move item",
@@ -855,8 +761,28 @@ object AutoLootFeature {
               foundFood match {
                 case Some((slot, foodInfo)) =>
                   val itemSlot = slot.replace("slot", "item")
-                  val screenPosOpt = (screenInfo \ "inventoryPanelLoc" \ lastContainerKey \ "contentsPanel" \ itemSlot).asOpt[JsObject]
-                  val lootScreenPos = screenPosOpt.map(s => Vec((s \ "x").as[Int], (s \ "y").as[Int])).getOrElse(Vec(0, 0))
+
+                  // reuse invPanelLoc & invKeys
+                  val invPanelLoc = (screenInfo \ "inventoryPanelLoc").asOpt[JsObject].getOrElse(JsObject.empty)
+                  val invKeys     = invPanelLoc.keys.toList
+
+                  // find the full container key
+                  val matchedContainerKey = invKeys
+                    .find(_.startsWith(lastContainerKey))
+                    .getOrElse {
+                      println(s"[handleAssessLoot] ❗️ No inventoryPanelLoc key startsWith '$lastContainerKey', defaulting to literal")
+                      lastContainerKey
+                    }
+                  println(s"[handleAssessLoot] Using container key = '$matchedContainerKey' for food")
+
+                  // pull out the item’s coords
+                  val lootScreenPos = (invPanelLoc \ matchedContainerKey \ "contentsPanel" \ itemSlot)
+                    .asOpt[JsObject]
+                    .map(s => Vec((s \ "x").as[Int], (s \ "y").as[Int]))
+                    .getOrElse {
+                      println(s"[handleAssessLoot] ❗️ Couldn't find contentsPanel→$itemSlot under '$matchedContainerKey'")
+                      Vec(0,0)
+                    }
                   println(s"[handleAssessLoot] Food screen position: $lootScreenPos")
 
                   val newState = state.copy(autoLoot = state.autoLoot.copy(
@@ -879,8 +805,28 @@ object AutoLootFeature {
                   foundContainer match {
                     case Some((slot, containerInfo)) =>
                       val itemSlot = slot.replace("slot", "item")
-                      val screenPosOpt = (screenInfo \ "inventoryPanelLoc" \ lastContainerKey \ "contentsPanel" \ itemSlot).asOpt[JsObject]
-                      val lootScreenPos = screenPosOpt.map(s => Vec((s \ "x").as[Int], (s \ "y").as[Int])).getOrElse(Vec(0, 0))
+
+                      // reuse invPanelLoc & invKeys
+                      val invPanelLoc = (screenInfo \ "inventoryPanelLoc").asOpt[JsObject].getOrElse(JsObject.empty)
+                      val invKeys     = invPanelLoc.keys.toList
+
+                      // full key lookup
+                      val matchedContainerKey = invKeys
+                        .find(_.startsWith(lastContainerKey))
+                        .getOrElse {
+                          println(s"[handleAssessLoot] ❗️ No inventoryPanelLoc key startsWith '$lastContainerKey', defaulting to literal")
+                          lastContainerKey
+                        }
+                      println(s"[handleAssessLoot] Using container key = '$matchedContainerKey' for subcontainer")
+
+                      // get coords
+                      val lootScreenPos = (invPanelLoc \ matchedContainerKey \ "contentsPanel" \ itemSlot)
+                        .asOpt[JsObject]
+                        .map(s => Vec((s \ "x").as[Int], (s \ "y").as[Int]))
+                        .getOrElse {
+                          println(s"[handleAssessLoot] ❗️ Couldn't find contentsPanel→$itemSlot under '$matchedContainerKey'")
+                          Vec(0,0)
+                        }
                       println(s"[handleAssessLoot] Subcontainer screen position: $lootScreenPos")
 
                       val newState = state.copy(autoLoot = state.autoLoot.copy(
@@ -924,74 +870,89 @@ object AutoLootFeature {
   }
 
 
+    def handleMoveItem(json: JsValue, settings: UISettings, state: GameState)
+    : Option[(GameState, MKTask)] = {
 
-  def handleMoveItemToBackpack(json: JsValue, settings: UISettings, state: GameState): Option[(GameState, MKTask)] = {
-    println("[handleMoveItemToBackpack] Entered")
-    val pickup = state.autoLoot.lootScreenPosToPlunder
-    val drop   = state.autoLoot.dropScreenPosToPlunder
-    val count  = state.autoLoot.lootCountToPlunder
+      println(s"[handleMoveItem] Entered for '${state.autoLoot.stateLootPlunder}'")
+      val now     = System.currentTimeMillis()
+      val last    = state.autoLoot.lastItemActionCommandSend
+      val elapsed = now - last
 
-    if (pickup == Vec(0,0) || drop == Vec(0,0)) {
-      println("[handleMoveItemToBackpack] Invalid pickup or drop → abort")
-      val reset = state.copy(autoLoot = state.autoLoot.copy(stateLootPlunder = "free"))
-      return Some((reset, NoOpTask))
+      // ─────────── debouncing ───────────
+      if (last > 0 && elapsed < 1000) {
+        println(s"[handleMoveItem] last item action sent $elapsed ms ago — skipping to avoid spamming")
+        return None
+      }
+      // ───────────────────────────────────
+
+      val pickup = state.autoLoot.lootScreenPosToPlunder
+      val drop   = state.autoLoot.dropScreenPosToPlunder
+      val count  = state.autoLoot.lootCountToPlunder
+
+      // guard against missing positions
+      if (pickup == Vec(0,0) || drop == Vec(0,0)) {
+        println("[handleMoveItem] Invalid pickup or drop → abort")
+        val reset = state.copy(autoLoot = state.autoLoot.copy(stateLootPlunder = "free"))
+        return Some((reset, NoOpTask))
+      }
+
+      // always the same mouse actions (we’re just dragging one slot)
+      val mouseActions = moveSingleItem(pickup.x, pickup.y, drop.x, drop.y)
+
+      // ctrl‐hold for stacks
+      val keyboardActions =
+        if (count > 1) List(PressCtrl, HoldCtrlFor(1.second), ReleaseCtrl)
+        else Nil
+
+      // build the MKTask name straight from stateLootPlunder
+      val taskName = state.autoLoot.stateLootPlunder
+
+      // reset all the autoLoot fields and stamp the new timestamp
+      val updatedState = state.copy(autoLoot = state.autoLoot.copy(
+        stateLootPlunder            = "free",
+        lootIdToPlunder             = 0,
+        lootCountToPlunder          = 0,
+        lootScreenPosToPlunder      = Vec(0,0),
+        dropScreenPosToPlunder      = Vec(0,0),
+        lastItemActionCommandSend   = now
+      ))
+
+      println(s"[handleMoveItem] issuing '$taskName'")
+      Some((updatedState,
+        MKTask(taskName, MKActions(mouse = mouseActions, keyboard = keyboardActions))
+      ))
     }
 
-    val mouseActions =
-      if (count == 1) moveSingleItem(pickup.x, pickup.y, drop.x, drop.y)
-      else moveSingleItem(pickup.x, pickup.y, drop.x, drop.y)
 
-    val keyboardActions =
-      if (count > 1) List(PressCtrl, HoldCtrlFor(1.second), ReleaseCtrl)
-      else Nil
+  def handleEatingFood(json: JsValue, settings: UISettings, state: GameState): Option[(GameState, MKTask)] = {
+    println("[handleEatingFood] Entered")
+    val pos = state.autoLoot.lootScreenPosToPlunder
 
-    val updated = state.copy(autoLoot = state.autoLoot.copy(
-      stateLootPlunder        = "free",
-      lootIdToPlunder         = 0,
-      lootCountToPlunder      = 0,
-      lootScreenPosToPlunder  = Vec(0,0),
-      dropScreenPosToPlunder  = Vec(0,0)
-    ))
-
-    println("[handleMoveItemToBackpack] issuing move to backpack")
-    Some((updated, MKTask("move item to backpack", MKActions(mouse = mouseActions, keyboard = keyboardActions))))
-  }
-
-
-  def handleMoveItemToGround(json: JsValue, settings: UISettings, state: GameState): Option[(GameState, MKTask)] = {
-    println("[handleMoveItemToGround] Entered")
-    val pickup = state.autoLoot.lootScreenPosToPlunder
-    val drop   = state.autoLoot.dropScreenPosToPlunder
-    val count  = state.autoLoot.lootCountToPlunder
-
-    if (pickup == Vec(0,0) || drop == Vec(0,0)) {
-      println("[handleMoveItemToGround] Invalid pickup or drop → abort")
-      val reset = state.copy(autoLoot = state.autoLoot.copy(stateLootPlunder = "free"))
-      return Some((reset, NoOpTask))
+    // if we never got a valid food position, bail out
+    if (pos == Vec(0, 0)) {
+      println("[handleEatingFood] Invalid food position → abort")
+      val updated = state.copy(autoLoot = state.autoLoot.copy(stateLootPlunder = "free"))
+      return Some((updated, NoOpTask))
     }
 
-    val mouseActions =
-      if (count == 1) moveSingleItem(pickup.x, pickup.y, drop.x, drop.y)
-      else moveSingleItem(pickup.x, pickup.y, drop.x, drop.y)
+    // right-click on the food
+    val mouseActions = List(
+      MoveMouse(pos.x, pos.y),
+      RightButtonPress(pos.x, pos.y),
+      RightButtonRelease(pos.x, pos.y)
+    )
 
-    val keyboardActions =
-      if (count > 1) List(PressCtrl, HoldCtrlFor(1.second), ReleaseCtrl)
-      else Nil
-
-    val updated = state.copy(autoLoot = state.autoLoot.copy(
-      stateLootPlunder        = "free",
-      lootIdToPlunder         = 0,
-      lootCountToPlunder      = 0,
-      lootScreenPosToPlunder  = Vec(0,0),
-      dropScreenPosToPlunder  = Vec(0,0)
+    // reset our autoLoot state
+    val updatedState = state.copy(autoLoot = state.autoLoot.copy(
+      stateLootPlunder       = "free",
+      lootIdToPlunder        = 0,
+      lootCountToPlunder     = 0,
+      lootScreenPosToPlunder = Vec(0, 0)
     ))
 
-    println("[handleMoveItemToGround] issuing move to ground")
-    Some((updated, MKTask("move item to ground", MKActions(mouse = mouseActions, keyboard = keyboardActions))))
+    println(s"[handleEatingFood] issuing eat food at $pos")
+    Some((updatedState, MKTask("eat food", MKActions(mouse = mouseActions, keyboard = Nil))))
   }
-
-  def handleHandleFood(json: JsValue, settings: UISettings, state: GameState): Option[(GameState, MKTask)] = ???
-
   def handleOpenSubcontainer(json: JsValue, settings: UISettings, state: GameState): Option[(GameState, MKTask)] = {
     val pos = state.autoLoot.lootScreenPosToPlunder
 

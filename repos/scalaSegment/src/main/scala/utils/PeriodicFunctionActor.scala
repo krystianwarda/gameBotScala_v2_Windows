@@ -26,6 +26,24 @@ import cats.effect.unsafe.implicits.global
 
 case class StartSpecificPeriodicFunction(functionName: String)
 
+case class KafkaConfig(api_key: String, api_secret: String, rest_endpoint: String)
+
+object KafkaConfigLoader {
+  def loadFromFile(path: String): KafkaConfig = {
+    val source = scala.io.Source.fromFile(path)
+    try {
+      val content = source.getLines().mkString
+      val json = Json.parse(content)
+      KafkaConfig(
+        (json \ "api_key").as[String],
+        (json \ "api_secret").as[String],
+        (json \ "rest_endpoint").as[String]
+      )
+    } finally {
+      source.close()
+    }
+  }
+}
 
 
 
@@ -42,16 +60,20 @@ class PeriodicFunctionActor(
   var in: Option[DataInputStream] = None
   private var latestJson: Option[JsValue] = None
 
+
 //  private lazy val kafkaPublisher =
 //    new KafkaJsonPublisher("localhost:29092", "game-bot-events")
-
-private lazy val kafkaPublisher =
-  new KafkaJsonPublisher(
-    bootstrapServers = "pkc-z1o60.europe-west1.gcp.confluent.cloud:9092",
-    topic = "game-bot-events",
-    username = "IGBETL43ZEWQA6M4", // your Confluent Kafka API key
-    password = "QWr3RaJ+IsbMcZ72ySghVMbyLDGvjvUtrm8Y2NpQhwZ7Q44AlMNkRMqSbZvMM0cg" // your secret
+private lazy val kafkaPublisher = {
+  val kafkaConfig = KafkaConfigLoader.loadFromFile(
+    "C:\\Projects\\gameBotScala_v2_Windows\\repos\\terraformSegment\\kafka-key.json"
   )
+  new KafkaJsonPublisher(
+    bootstrapServers = kafkaConfig.rest_endpoint.replace(":443", ":9092"),
+    topic = "game-bot-events",
+    username = kafkaConfig.api_key,
+    password = kafkaConfig.api_secret
+  )
+}
 
 
 
@@ -65,10 +87,12 @@ private lazy val kafkaPublisher =
 
 
     case json: JsValue =>
-      println(s"JSON: ${json}")
-      println(s"[DEBUG] Top-level keys: ${json.as[play.api.libs.json.JsObject].keys.mkString(", ")}")
+//      println(s"JSON: ${json}")
+//      println(s"[DEBUG] Top-level keys: ${json.as[play.api.libs.json.JsObject].keys.mkString(", ")}")
       jsonConsumer.process(json).unsafeRunAndForget()
-      kafkaPublisher.send(json)
+//      val cleanedJson = cleanJson(json)
+//      println(s"clean JSON: ${json}")
+//      kafkaPublisher.send(cleanedJson)
 
     case "fetchLatestJson" =>
       latestJson.foreach(sender() ! _)
@@ -485,6 +509,22 @@ private lazy val kafkaPublisher =
     }
   }
 
+  def cleanJson(js: JsValue): JsValue = js match {
+    case JsObject(fields) =>
+      val cleanedFields = fields.flatMap {
+        case (k, v) =>
+          cleanJson(v) match {
+            case JsObject(obj) if obj.isEmpty => None // remove empty objects
+            case cleaned => Some(k -> cleaned)
+          }
+      }
+      JsObject(cleanedFields)
+
+    case JsArray(values) =>
+      JsArray(values.map(cleanJson))
+
+    case other => other
+  }
 
   override def postStop(): Unit = {
     println("PeriodicFunctionActor stopping...")
