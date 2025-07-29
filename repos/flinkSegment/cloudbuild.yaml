@@ -1,0 +1,21 @@
+steps:
+  # Step 1: Build JAR with sbt using valid image
+  - name: hseeberger/scala-sbt:11.0.12_1.5.5_2.12.15
+    id: "Build JAR with sbt"
+    entrypoint: sbt
+    args: ["clean", "assembly"]
+    dir: flinkSegment
+
+  # Step 2: Upload the JAR to GCS
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: "Upload JAR to GCS"
+    args:
+      [
+        "gsutil",
+        "cp",
+        "target/scala-2.12/flink-gcp-scala-assembly-0.1.0-SNAPSHOT.jar",
+        "gs://flink_jar_bucket/"
+      ]
+    dir: flinkSegment
+
+timeout: "1200s"

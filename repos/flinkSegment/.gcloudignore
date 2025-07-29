@@ -1,0 +1,20 @@
+# Ignore everything in target directories (build artifacts)
+target/
+**/target/
+
+# Ignore IntelliJ and Metals metadata
+.idea/
+.metals/
+.bsp/
+.vscode/
+
+# Ignore sbt project build metadata
+project/target/
+project/project/
+
+# Ignore OS-specific trash
+.DS_Store
+Thumbs.db
+
+# Ignore Git files (if you're using Git)
+.git/

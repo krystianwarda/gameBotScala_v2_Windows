@@ -24,11 +24,16 @@ lazy val root = (project in file("."))
       "org.apache.iceberg" % "iceberg-flink-runtime-1.17" % icebergVersion % "compile",
       "org.apache.flink" % "flink-connector-files" % "1.15.4" % "provided",
 
-      "com.typesafe" % "config" % "1.4.2" % "compile",
+//      "com.typesafe" % "config" % "1.4.2" % "compile",
 
       "org.apache.logging.log4j" % "log4j-api" % "2.20.0" % "runtime",
       "org.apache.logging.log4j" % "log4j-core" % "2.20.0" % "runtime",
-      "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.20.0" % "runtime"
+      "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.20.0" % "runtime",
+
+      "com.typesafe" % "config" % "1.4.2",
+      "io.circe" %% "circe-core" % "0.14.6",
+      "io.circe" %% "circe-parser" % "0.14.6"
+
     ),
 
     assembly / assemblyJarName := s"${name.value}-assembly-${version.value}.jar",
