@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  airflow-webserver:
+    image: airflow-custom:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      AIRFLOW_CONN_GOOGLE_CLOUD_DEFAULT: >  # ✅ GCP connection added
+        google-cloud://?key_path=/opt/airflow/gcp-key.json&project=gamebot-460320
+    volumes:
+      - airflow_data:/opt/airflow
+      - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/dags:/opt/airflow/dags
+      - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/plugins:/opt/airflow/plugins
+      - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/settings:/opt/airflow/settings
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment:/opt/airflow/terraformSegment
+      - C:/Projects/gameBotScala_v2_Windows/repos/flinkSegment:/opt/airflow/flinkSegment
+      - C:\Projects\gameBotScala_v2_Windows\repos\terraformSegment\gcp-key.json:/opt/airflow/gcp-key.json
+    ports:
+      - "8080:8080"
+    command: webserver
+
+  airflow-scheduler:
+    image: airflow-custom:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      AIRFLOW_CONN_GOOGLE_CLOUD_DEFAULT: >  # ✅ GCP connection added
+        google-cloud://?key_path=/opt/airflow/gcp-key.json&project=gamebot-460320
+    volumes:
+      - airflow_data:/opt/airflow
+      - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/dags:/opt/airflow/dags
+      - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/plugins:/opt/airflow/plugins
+      - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/settings:/opt/airflow/settings
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment:/opt/airflow/terraformSegment
+      - C:/Projects/gameBotScala_v2_Windows/repos/flinkSegment:/opt/airflow/flinkSegment
+      - C:\Projects\gameBotScala_v2_Windows\repos\terraformSegment\gcp-key.json:/opt/airflow/gcp-key.json
+    command: scheduler
+
+  airflow-init:
+    image: airflow-custom:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      AIRFLOW_CONN_GOOGLE_CLOUD_DEFAULT: >  # ✅ GCP connection added
+        google-cloud://?key_path=/opt/airflow/gcp-key.json&project=gamebot-460320
+    volumes:
+      - airflow_data:/opt/airflow
+      - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/dags:/opt/airflow/dags
+      - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/plugins:/opt/airflow/plugins
+      - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/settings:/opt/airflow/settings
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment:/opt/airflow/terraformSegment
+      - C:/Projects/gameBotScala_v2_Windows/repos/flinkSegment:/opt/airflow/flinkSegment
+      - C:\Projects/gameBotScala_v2_Windows\repos\terraformSegment\gcp-key.json:/opt/airflow/gcp-key.json
+    command: bash -c "airflow db init && airflow users create \
+      --username admin \
+      --firstname Admin \
+      --lastname User \
+      --role Admin \
+      --email admin@example.com \
+      --password admin"
+
+volumes:
+  airflow_data:
