@@ -114,7 +114,9 @@ case class AutoLootState(
                           stateLooting: String = "free",
                           stateLootPlunder: String = "free",
                           carsassToLoot: List[(String, Long)] = List(),
-                          lastItemActionCommandSend: Long = 0,
+                          lastAutoLootActionTime: Long = 0,
+                          autoLootActionThrottle: Long = 600L,
+//                          lastItemActionCommandSend: Long = 0,
                           carcassTileToLoot: Option[(String, Long)] = None,
                           lastLootedCarcassTile: Option[(String, Long)] = None,
                           carcassToLootImmediately: List[(String, Long, String)] = List(),
@@ -125,7 +127,7 @@ case class AutoLootState(
                           lootScreenPosToPlunder: Vec = Vec(0, 0),
                           dropScreenPosToPlunder: Vec = Vec(0, 0),
 
-                          lastAutoLootAction: Long = 0,
+
                           lastEatFoodTime: Long = 0,
                           subWaypoints: List[Vec] = List(),
                           gridBoundsState: (Int, Int, Int, Int) = (0, 0, 0, 0), // Example default value
@@ -151,8 +153,9 @@ case class Creature(
 
 case class AutoTargetState(
                             updateAttackChangeTime: Long = 0,
-                            updateAttackThrottleTime: Long = 1500L,
+                            updateAttackThrottleTime: Long = 4000L,
                             dangerLevelHealing: String = "low",
+                            lastMarkingAttemptedId: Int = 0,
                             lastRuneUseTime: Long = 0,
                             dangerCreaturesList: Seq[Creature] = Seq.empty,
                             creatureTarget: Int = 0,
@@ -173,6 +176,7 @@ case class AutoTargetState(
                             runeUseCooldown: Long = 2000,
                             runeUseRandomness: Long = 0,
                             runeUseTimeRange:  (Int, Int) = (500,1000),
+                            stopReason: Option[String] = None
                           )
 
 case class GuardianState(

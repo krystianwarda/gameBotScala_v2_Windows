@@ -11,8 +11,9 @@ import cats.effect.IO
 import play.api.libs.json.JsValue
 import cats.syntax.all._
 import utils.ProcessingUtils.MKTask
-import cats.syntax.traverse._     // for traverse & traverse_
-import cats.syntax.applicative._  // for .pure/Applicative if you ever need it
+import cats.syntax.traverse._
+import cats.syntax.applicative._
+import utils.consoleColorPrint.{ANSI_RED, printInColor}  // for .pure/Applicative if you ever need it
 
 // 2) FunctionalJsonConsumer.scala
 class FunctionalJsonConsumer(
@@ -32,16 +33,26 @@ class FunctionalJsonConsumer(
       case _ =>
         // 1) normal processing
         for {
+          
+          startTime <- IO(System.nanoTime())
+          _ <- IO(printInColor(ANSI_RED, "[PIPELINE] Starting JSON processing"))
+
+
           settings <- settingsRef.get
           startState   <- stateRef.get
 
           (state0, generalTasks)   = InitialSetupFeature.run(json, settings, startState)
           (state1, fishTasks)   = FishingFeature.run(json, settings, state0)
           (state2, healTasks)   = HealingFeature.run(json, settings, state1)
-          (state3, lootTasks)   = AutoLootFeature.run(json, settings, state2)
-          (state4, targetTasks) = AutoTargetFeature.run(json, settings, state3)
+          (state3, targetTasks) = AutoTargetFeature.run(json, settings, state2)
+          (state4, lootTasks)   = AutoLootFeature.run(json, settings, state3)
           (state5, caveTasks)   = CaveBotFeature.run(json, settings, state4)
           _ <- stateRef.set(state5)
+
+          endTime <- IO(System.nanoTime())
+          duration = (endTime - startTime) / 1e9d
+          _ <- IO(printInColor(ANSI_RED, f"[PIPELINE] Finished JSON processing in $duration%.3f seconds"))
+
 
         } yield (state5, fishTasks ++ healTasks ++ lootTasks ++ targetTasks ++ caveTasks)
     }
