@@ -69,16 +69,16 @@ class MouseActionManager(
           moveMouse(x, y) *> IO.sleep(40.millis)
 
       case LeftButtonPress(_, _) =>
-        IO(robot.mousePress(InputEvent.BUTTON1_DOWN_MASK)) *> IO.sleep(100.millis)
+        IO(robot.mousePress(InputEvent.BUTTON1_DOWN_MASK)) *> IO.sleep(50.millis)
 
       case LeftButtonRelease(_, _) =>
-        IO(robot.mouseRelease(InputEvent.BUTTON1_DOWN_MASK)) *> IO.sleep(100.millis)
+        IO(robot.mouseRelease(InputEvent.BUTTON1_DOWN_MASK)) *> IO.sleep(50.millis)
 
       case RightButtonPress(_, _) =>
-        IO(robot.mousePress(InputEvent.BUTTON3_DOWN_MASK)) *> IO.sleep(100.millis)
+        IO(robot.mousePress(InputEvent.BUTTON3_DOWN_MASK)) *> IO.sleep(50.millis)
 
       case RightButtonRelease(_, _) =>
-        IO(robot.mouseRelease(InputEvent.BUTTON3_DOWN_MASK)) *> IO.sleep(100.millis)
+        IO(robot.mouseRelease(InputEvent.BUTTON3_DOWN_MASK)) *> IO.sleep(50.millis)
 
       case DragMouse(x, y) =>
         IO(robot.mousePress(InputEvent.BUTTON1_DOWN_MASK)) *> moveMouse(x, y) *> IO(robot.mouseRelease(InputEvent.BUTTON1_DOWN_MASK))

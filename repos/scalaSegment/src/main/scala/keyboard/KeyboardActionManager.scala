@@ -34,7 +34,7 @@ case object ReleaseCtrl extends KeyboardAction {
 }
 
 case class HoldCtrlFor(duration: FiniteDuration) extends KeyboardAction {
-  val priority = 0
+  val priority = 1
 }
 
 

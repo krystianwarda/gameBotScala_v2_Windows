@@ -1,12 +1,11 @@
 package utils
 
-import play.api.libs.json.JsValue
-
+import play.api.libs.json.{JsObject, JsValue}
 import processing.CaveBotFeature.{Vec, WaypointInfo}
-
 import utils.SettingsUtils.UISettings
 
 import scala.collection.mutable
+
 
 
 case class GameState(
@@ -17,8 +16,15 @@ case class GameState(
                       autoTarget: AutoTargetState = AutoTargetState(),
                       autoHeal: AutoHealState = AutoHealState(),
                       guardian: GuardianState = GuardianState(),
-                      fishing: FishingState = FishingState()
+                      fishing: FishingState = FishingState(),
+                      jsonProcessing: JsonProcessingState = JsonProcessingState()
                     )
+
+case class JsonProcessingState(
+                                isProcessing: Boolean = false,
+                                processingStartTime: Long = 0L,
+                                processingTimeout: Long = 5000L // 5 seconds timeout
+                              )
 
 case class CharacterInfoState(
                          presentCharLocation: Vec = Vec(0, 0),
@@ -115,6 +121,7 @@ case class AutoLootState(
                           stateLootPlunder: String = "free",
                           carsassToLoot: List[(String, Long)] = List(),
                           lastAutoLootActionTime: Long = 0,
+
                           autoLootActionThrottle: Long = 600L,
 //                          lastItemActionCommandSend: Long = 0,
                           carcassTileToLoot: Option[(String, Long)] = None,
@@ -127,6 +134,8 @@ case class AutoLootState(
                           lootScreenPosToPlunder: Vec = Vec(0, 0),
                           dropScreenPosToPlunder: Vec = Vec(0, 0),
 
+                          // Add container state tracking
+                          lastItemIdAndCountEngaged: (Int, Int) = (0, 0),
 
                           lastEatFoodTime: Long = 0,
                           subWaypoints: List[Vec] = List(),
@@ -156,6 +165,7 @@ case class AutoTargetState(
                             updateAttackThrottleTime: Long = 4000L,
                             dangerLevelHealing: String = "low",
                             lastMarkingAttemptedId: Int = 0,
+                            lastTargetLookoutTime: Long = 0,
                             lastRuneUseTime: Long = 0,
                             dangerCreaturesList: Seq[Creature] = Seq.empty,
                             creatureTarget: Int = 0,

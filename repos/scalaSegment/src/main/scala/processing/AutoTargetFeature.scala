@@ -115,6 +115,94 @@ object AutoTargetFeature {
     }
   }
 
+
+//  private object DetectDeadCreatures extends Step {
+//    private val taskName = "DetectDeadCreatures"
+//
+//    override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
+//
+//      // Skip if AutoTarget is already stopped
+//      if (state.autoTarget.stateAutoTarget == "stop") {
+//        return Some((state, NoOpTask))
+//      }
+//
+//      println(s"[$taskName] Entered the function.")
+//
+//      val currentTime = System.currentTimeMillis()
+//      val killedCreatures = (json \ "lastKilledCreatures").asOpt[JsObject].getOrElse(Json.obj())
+//
+//      println(s"[$taskName] KilledCreatures JSON: $killedCreatures")
+//      println(s"[$taskName] KilledCreatures fields count: ${killedCreatures.fields.size}")
+//
+//      // Skip placeholder-only case
+//      if (killedCreatures.fields.size == 1 && {
+//        val only = killedCreatures.fields.head._2
+//        val isPlaceholder = (only \ "None").asOpt[Boolean].contains(true)
+//        println(s"[$taskName] Checking placeholder: field=${killedCreatures.fields.head._1}, isPlaceholder=$isPlaceholder")
+//        isPlaceholder
+//      }) {
+//        println(s"[$taskName] EXIT: Only placeholder creature found")
+//        return None
+//      }
+//
+//      var updatedState = state
+//      var shouldStopAutoTarget = false
+//
+//      killedCreatures.fields.foreach { case (creatureId, creatureInfo) =>
+//        val name = (creatureInfo \ "Name").asOpt[String].getOrElse("<unknown>")
+//        val (x, y, z) = state.autoTarget.lastTargetPos
+//        val isDead = (creatureInfo \ "IsDead").asOpt[Boolean].getOrElse(false)
+//
+//
+//        println(s"[$taskName] Creature name: '$name'")
+//        println(s"[$taskName] Last target position: ($x, $y, $z)")
+//        println(s"[$taskName] Is dead: $isDead")
+//
+//        if (isDead) {
+//          println(s"[$taskName] Creature $name is dead - checking loot settings")
+//          println(s"[$taskName] Available creature settings: ${settings.autoTargetSettings.creatureList}")
+//
+//          // Check if this creature has loot settings
+//          settings.autoTargetSettings.creatureList
+//            .map(parseCreature)
+//            .find(_.name.equalsIgnoreCase(name)) match {
+//
+//            case Some(cs) if cs.lootMonsterImmediately =>
+//              println(s"[$taskName] Creature $name died with immediate loot setting - stopping AutoTarget")
+//
+//              // Add to loot queue
+//              val tileKey = generatePositionKey(x, y, z)
+//              updatedState = updatedState.copy(
+//                autoLoot = updatedState.autoLoot.copy(
+//                  carcassToLootImmediately = updatedState.autoLoot.carcassToLootImmediately :+ (tileKey, currentTime, creatureId)
+//                ),
+//                autoTarget = updatedState.autoTarget.copy(
+//                  stateAutoTarget = "stop",
+//                  chosenTargetId = 0,
+//                )
+//              )
+//
+//
+//            case Some(cs) if cs.lootMonsterAfterFight =>
+//              println(s"[$taskName] Creature $name died with post-fight loot setting")
+//              val tileKey = generatePositionKey(x, y, z)
+//              updatedState = updatedState.copy(autoLoot = updatedState.autoLoot.copy(
+//                carcassToLootAfterFight = updatedState.autoLoot.carcassToLootAfterFight :+ (tileKey, currentTime, creatureId)
+//              ))
+//              return Some((updatedState, NoOpTask))
+//
+//            case _ =>
+//              println(s"[$taskName] Creature $name died with no loot settings")
+//              return Some((state, NoOpTask))
+//          }
+//        }
+//      }
+//      println(s"[$taskName] Finished processing all creatures")
+//      // If we get here, no dead creatures required action
+//      None
+//    }
+
+
   private object DetectDeadCreatures extends Step {
     private val taskName = "DetectDeadCreatures"
 
@@ -125,143 +213,67 @@ object AutoTargetFeature {
       }
 
       val currentTime = System.currentTimeMillis()
-      val killedCreatures = (json \ "lastKilledCreatures").asOpt[JsObject].getOrElse(Json.obj())
+      val lastAttackedInfo = (json \ "lastAttackedCreatureInfo").asOpt[JsObject].getOrElse(Json.obj())
 
-      // Skip placeholder-only case
-      if (killedCreatures.fields.size == 1 && {
-        val only = killedCreatures.fields.head._2
-        (only \ "None").asOpt[Boolean].contains(true)
-      }) {
+      // Check if there's a valid last attacked creature ID and if it's dead
+      val lastAttackedIdOpt = (lastAttackedInfo \ "LastAttackedId").asOpt[Long]
+      val isDead = (lastAttackedInfo \ "IsDead").asOpt[Boolean].getOrElse(false)
+
+      if (!isDead || lastAttackedIdOpt.isEmpty) {
         return None
       }
 
-      var updatedState = state
-      var shouldStopAutoTarget = false
+      val lastAttackedId = lastAttackedIdOpt.get
+      val creatureName = state.autoTarget.lastTargetName
+      val (x, y, z) = state.autoTarget.lastTargetPos
 
-      killedCreatures.fields.foreach { case (creatureId, creatureInfo) =>
-        val name = (creatureInfo \ "Name").asOpt[String].getOrElse("<unknown>")
-        val x = (creatureInfo \ "X").asOpt[Int].getOrElse(0)
-        val y = (creatureInfo \ "Y").asOpt[Int].getOrElse(0)
-        val z = (creatureInfo \ "Z").asOpt[Int].getOrElse(0)
-        val isDead = (creatureInfo \ "IsDead").asOpt[Boolean].getOrElse(false)
-
-        if (isDead) {
-          // Check if this creature has loot settings
-          settings.autoTargetSettings.creatureList
-            .map(parseCreature)
-            .find(_.name.equalsIgnoreCase(name)) match {
-
-            case Some(cs) if cs.lootMonsterImmediately =>
-              println(s"[$taskName] Creature $name died with immediate loot setting - stopping AutoTarget")
-
-              // Add to loot queue
-              val tileKey = generatePositionKey(x, y, z)
-              updatedState = updatedState.copy(
-                autoLoot = updatedState.autoLoot.copy(
-                  carcassToLootImmediately = updatedState.autoLoot.carcassToLootImmediately :+ (tileKey, currentTime, creatureId)
-                ),
-                autoTarget = updatedState.autoTarget.copy(
-                  stateAutoTarget = "stop",
-                  chosenTargetId = 0,
-                )
-              )
-
-
-            case Some(cs) if cs.lootMonsterAfterFight =>
-              println(s"[$taskName] Creature $name died with post-fight loot setting")
-              val tileKey = generatePositionKey(x, y, z)
-              updatedState = updatedState.copy(autoLoot = updatedState.autoLoot.copy(
-                carcassToLootAfterFight = updatedState.autoLoot.carcassToLootAfterFight :+ (tileKey, currentTime, creatureId)
-              ))
-
-            case _ =>
-              println(s"[$taskName] Creature $name died with no loot settings")
-          }
-        }
+      // **ADDED CHECK**: Only process if we have a valid chosen target and it matches the dead creature
+      if (state.autoTarget.chosenTargetId == 0 || state.autoTarget.chosenTargetId != lastAttackedId.toInt) {
+        return None
       }
 
-      Some((updatedState, NoOpTask))
+      // Only process if the dead creature matches our current/last target
+      if (state.autoTarget.chosenTargetId == lastAttackedId.toInt || creatureName.nonEmpty) {
+        // Check if this creature has loot settings
+        settings.autoTargetSettings.creatureList
+          .map(parseCreature)
+          .find(_.name.equalsIgnoreCase(creatureName)) match {
+
+          case Some(cs) if cs.lootMonsterImmediately =>
+            println(s"[$taskName] Creature $creatureName died with immediate loot setting - stopping AutoTarget")
+
+            // Add to loot queue
+            val tileKey = generatePositionKey(x, y, z)
+            val updatedState = state.copy(
+              autoLoot = state.autoLoot.copy(
+                carcassToLootImmediately = state.autoLoot.carcassToLootImmediately :+ (tileKey, currentTime, lastAttackedId.toString)
+              ),
+              autoTarget = state.autoTarget.copy(
+                stateAutoTarget = "stop",
+                chosenTargetId = 0,
+              )
+            )
+            Some((updatedState, NoOpTask))
+
+          case Some(cs) if cs.lootMonsterAfterFight =>
+            println(s"[$taskName] Creature $creatureName died with post-fight loot setting")
+            val tileKey = generatePositionKey(x, y, z)
+            val updatedState = state.copy(autoLoot = state.autoLoot.copy(
+              carcassToLootAfterFight = state.autoLoot.carcassToLootAfterFight :+ (tileKey, currentTime, lastAttackedId.toString)
+            ))
+            Some((updatedState, NoOpTask))
+
+          case _ =>
+            println(s"[$taskName] Creature $creatureName died with no loot settings")
+            None
+        }
+      } else {
+        None
+      }
     }
 
     private def generatePositionKey(x: Int, y: Int, z: Int): String = f"$x$y$z"
-    
-    private def findCreatureSettings(creatureId: Int, json: JsValue, settings: UISettings): Option[CreatureSettings] = {
-      println(s"[$taskName] Looking for settings for creature ID: $creatureId")
-      
-      // First, try to get creature name from lastAttackedCreatureInfo (more reliable when creature is dead)
-      val creatureNameOpt = (json \ "lastAttackedCreatureInfo" \ "Name").asOpt[String]
-        .orElse {
-          // Fallback: try to get from battle info
-          val battleInfo = (json \ "battleInfo").asOpt[Map[String, JsValue]].getOrElse(Map.empty)
-          battleInfo.values.collectFirst {
-            case creatureData if (creatureData \ "Id").asOpt[Int].contains(creatureId) =>
-              (creatureData \ "Name").as[String]
-          }
-        }
-        
-      println(s"[$taskName] Found creature name: $creatureNameOpt")
-      
-      creatureNameOpt.flatMap { name =>
-        // Parse settings to find matching creature
-        val settingMap: Map[String, CreatureSettings] = settings.autoTargetSettings.creatureList
-          .map(parseCreature)  // Parse each string into CreatureSettings
-          .map(cs => cs.name.toLowerCase -> cs)  // Use lowercase for case-insensitive matching
-          .toMap
-          
-        println(s"[$taskName] Available settings: ${settingMap.keys}")
-        
-        val result = settingMap.get(name.toLowerCase).orElse(settingMap.get("all"))
-        println(s"[$taskName] Matched settings for '$name': $result")
-        result
-      }
-    }
-    
-    private def queueCreatureForLooting(state: GameState, json: JsValue, creatureId: Int, settings: CreatureSettings): GameState = {
-      println(s"[$taskName] Queuing creature $creatureId for looting")
-      
-      // Try to get position from lastAttackedCreatureInfo first (more reliable)
-      val positionOpt = (json \ "lastAttackedCreatureInfo").asOpt[JsObject].flatMap { info =>
-        for {
-          x <- (info \ "LastPositionX").asOpt[Int]
-          y <- (info \ "LastPositionY").asOpt[Int]
-          z <- (info \ "LastPositionZ").asOpt[Int]
-        } yield (x, y, z)
-      }.orElse {
-        // Fallback: try battle info
-        val battleInfo = (json \ "battleInfo").asOpt[Map[String, JsValue]].getOrElse(Map.empty)
-        battleInfo.values.collectFirst {
-          case creatureData if (creatureData \ "Id").asOpt[Int].contains(creatureId) =>
-            val posX = (creatureData \ "PositionX").as[Int]
-            val posY = (creatureData \ "PositionY").as[Int] 
-            val posZ = (creatureData \ "PositionZ").as[Int]
-            (posX, posY, posZ)
-        }
-      }
-      
-      positionOpt match {
-        case Some((posX, posY, posZ)) =>
-          val currentTime = System.currentTimeMillis()
-          val tileKey = f"$posX$posY$posZ"
-          
-          println(s"[$taskName] Creature position: ($posX, $posY, $posZ), tileKey: $tileKey")
-          
-          if (settings.lootMonsterImmediately) {
-            println(s"[$taskName] Adding to immediate loot queue")
-            state.copy(autoLoot = state.autoLoot.copy(
-              carcassToLootImmediately = state.autoLoot.carcassToLootImmediately :+ (tileKey, currentTime, creatureId.toString)
-            ))
-          } else {
-            println(s"[$taskName] Adding to after-fight loot queue")
-            state.copy(autoLoot = state.autoLoot.copy(
-              carcassToLootAfterFight = state.autoLoot.carcassToLootAfterFight :+ (tileKey, currentTime, creatureId.toString)
-            ))
-          }
-          
-        case None =>
-          println(s"[$taskName] ⚠️ Could not find position for creature $creatureId")
-          state
-      }
-    }
+
   }
 
 
@@ -271,6 +283,8 @@ object AutoTargetFeature {
 
 
     override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
+      val currentTime = System.currentTimeMillis()
+
 
       if (state.autoTarget.stateAutoTarget == "stop") {
         return Some(state -> NoOpTask)
@@ -287,6 +301,16 @@ object AutoTargetFeature {
         val updatedState = state.copy(caveBot = updatedCaveBot)
         return Some(updatedState -> NoOpTask)
       }
+
+
+      val chosenTargetStillInBattle = battleInfo.values.exists { creature =>
+        (creature \ "Id").asOpt[Int].contains(state.autoTarget.chosenTargetId)
+      }
+      if (chosenTargetStillInBattle) {
+        println(s"[UpdateAttackStatus] Chosen target ${state.autoTarget.chosenTargetId} still in battle - keeping current target")
+        return Some(state -> NoOpTask)
+      }
+
 
       val currentAttackId = (json \ "attackInfo" \ "Id").asOpt[Int]
 
@@ -306,6 +330,12 @@ object AutoTargetFeature {
       }
 
       val characterPos = extractCharPosition(json)
+
+      if (currentTime - at0.lastTargetLookoutTime > 1000 ) {
+        println(s"[UpdateAttackStatus] Freezeing picking new target for a while.")
+        val updatedState = state.copy(autoTarget = state.autoTarget.copy(lastTargetLookoutTime = currentTime))
+        return Some(updatedState -> NoOpTask)
+      }
 
       println(s"[UpdateAttackStatus] Looking for a new target")
 
@@ -343,6 +373,9 @@ object AutoTargetFeature {
           lureCreatureToTeam = false
         )
       }.sortBy(c => characterPos.manhattanDistance(Vec(c.posX, c.posY)))
+
+      println(s"[UpdateAttackStatus] AutoTarget settings: $parsedSettings")
+      println(s"[UpdateAttackStatus] Creatures list: $sortedCreatures")
 
       sortedCreatures.find { creature =>
         val targetPos = Vec(creature.posX, creature.posY)
@@ -478,7 +511,7 @@ object AutoTargetFeature {
 
   private object TargetMarking extends Step {
     private val taskName = "TargetMarking"
-    private val markRetryIntervalMs = 1500L // Retry marking every 7 seconds
+    private val markRetryIntervalMs = 2000L // Retry marking every 7 seconds
 
     override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
 
@@ -486,6 +519,11 @@ object AutoTargetFeature {
       val now = System.currentTimeMillis()
       val currentAttackId = (json \ "attackInfo" \ "Id").asOpt[Int]
 
+      if (at.chosenTargetId == 0 ) {
+        return Some(state -> NoOpTask)
+      }
+
+      println(s"now: $now, last: ${state.autoTarget.lastTargetMarkCommandSend}, diff: ${now - state.autoTarget.lastTargetMarkCommandSend}")
 
       val shouldProceed =  at.stateAutoTarget == "fight" && // true
         !isTargetCurrentlyMarked(at.chosenTargetId, json) && // true
@@ -493,9 +531,9 @@ object AutoTargetFeature {
         (now - at.lastTargetMarkCommandSend >= markRetryIntervalMs) // true
 
       if (!shouldProceed) {
-        val targetCreatureId = (json \ "attackInfo" \ "Id").asOpt[Int]
-        val timeSinceLastMark = now - at.lastTargetMarkCommandSend
-        return None
+//        val targetCreatureId = (json \ "attackInfo" \ "Id").asOpt[Int]
+//        val timeSinceLastMark = now - at.lastTargetMarkCommandSend
+        return Some((state, NoOpTask))
       }
 
       println(s"[TargetMarking] Entered function.")
@@ -1029,7 +1067,7 @@ object AutoTargetFeature {
                                               state:          GameState,
                                               json:           JsValue
                                             ): GameState = {
-    println("[generateSubwaypointsToCreature] Starting.")
+//    println("[generateSubwaypointsToCreature] Starting.")
 
     // 1) pull all tiles and build grid
     val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
@@ -1038,7 +1076,7 @@ object AutoTargetFeature {
     val gridBounds @ (minX, minY, maxX, maxY) = (xs.min, ys.min, xs.max, ys.max)
 
     val (grid, (offX, offY)) = createBooleanGrid(tiles, minX, minY)
-    println(s"[generateSubwaypointsToCreature] Grid bounds = $gridBounds, offset = ($offX,$offY)")
+//    println(s"[generateSubwaypointsToCreature] Grid bounds = $gridBounds, offset = ($offX,$offY)")
 
     // 2) get character position
     val presentLoc = Vec(
@@ -1046,7 +1084,7 @@ object AutoTargetFeature {
       (json \ "characterInfo" \ "PositionY").as[Int]
     )
 
-    println(s"[generateSubwaypointsToCreature] Character: $presentLoc → Target: $targetLocation")
+//    println(s"[generateSubwaypointsToCreature] Character: $presentLoc → Target: $targetLocation")
 
     // 3) grid bounds warning
     if (
@@ -1067,7 +1105,7 @@ object AutoTargetFeature {
       }
 
     val filteredPath = rawPath.filterNot(_ == presentLoc)
-    println(s"[generateSubwaypointsToCreature] Final path: $filteredPath")
+//    println(s"[generateSubwaypointsToCreature] Final path: $filteredPath")
 
     // 5) debug visualization with printGridCreatures
     printGridCreatures(
@@ -1521,8 +1559,8 @@ object AutoTargetFeature {
     val path = aStarSearch(presentCharLocation, monsterPosition, grid, min_x, min_y)
 
     if (path.nonEmpty) {
-      println(s"[DEBUG] Path found to monster: ${monster.name}. Path: $path")
-      printGrid(grid, gridBounds, path, presentCharLocation, monsterPosition)
+//      println(s"[DEBUG] Path found to monster: ${monster.name}. Path: $path")
+//      printGrid(grid, gridBounds, path, presentCharLocation, monsterPosition)
       true
     } else {
       println(s"[DEBUG] No path found to monster: ${monster.name}.")
@@ -1539,7 +1577,7 @@ object AutoTargetFeature {
     val width = maxX - min_x + 1
     val height = maxY - min_y + 1
 
-    println(s"Creating boolean grid with dimensions: width=$width, height=$height, maxX=$maxX, maxY=$maxY, min_x=$min_x, min_y=$min_y")
+//    println(s"Creating boolean grid with dimensions: width=$width, height=$height, maxX=$maxX, maxY=$maxY, min_x=$min_x, min_y=$min_y")
 
     val grid = Array.fill(height, width)(false)
 
@@ -1572,7 +1610,7 @@ object AutoTargetFeature {
   }
 
   def aStarSearch(start: Vec, goal: Vec, grid: Array[Array[Boolean]], min_x: Int, min_y: Int): List[Vec] = {
-    println(s"Starting aStarSearch with start=$start, goal=$goal, min_x=$min_x, min_y=$min_y")
+//    println(s"Starting aStarSearch with start=$start, goal=$goal, min_x=$min_x, min_y=$min_y")
 
     if ((start.x - min_x) < 0 || (start.y - min_y) < 0 || (start.x - min_x) >= grid(0).length || (start.y - min_y) >= grid.length ||
       (goal.x - min_x) < 0 || (goal.y - min_y) < 0 || (goal.x - min_x) >= grid(0).length || (goal.y - min_y) >= grid.length) {
@@ -1599,7 +1637,7 @@ object AutoTargetFeature {
           path = temp :: path
           temp = cameFrom.getOrElse(temp, start)
         }
-        println("Path found: " + (start :: path).mkString(" -> "))
+//        println("Path found: " + (start :: path).mkString(" -> "))
         return start :: path
       }
 
@@ -1618,9 +1656,9 @@ object AutoTargetFeature {
       }
     }
 
-    println(s"Frontier contains: ${frontier.mkString(", ")}")
+//    println(s"Frontier contains: ${frontier.mkString(", ")}")
 
-    println("Path not found")
+//    println("Path not found")
     List()
   }
 
@@ -1974,9 +2012,9 @@ object AutoTargetFeature {
           case _ => s"${red}[X]$reset" // Non-walkable tile
         }
 
-        print(symbol)
+//        print(symbol)ss
       }
-      println() // New line after each row
+//      println() // New line after each row
     }
   }
 

@@ -6,7 +6,7 @@ import keyboard.{KeyboardAction, KeyboardActionManager}
 import mouse._
 import utils.SettingsUtils.UISettings
 import mouse.MouseActionManager
-import utils.GameState
+import utils.{GameState, JsonProcessingState}
 import cats.effect.IO
 import play.api.libs.json.JsValue
 import cats.syntax.all._
@@ -58,25 +58,77 @@ class FunctionalJsonConsumer(
     }
   }
 
+  def process(json: JsValue): IO[Unit] = {
+    for {
+      currentState <- stateRef.get
+      currentTime = System.currentTimeMillis()
 
-  def process(json: JsValue): IO[Unit] =
-    runPipeline(json).flatMap { case (_, tasks) =>
-      tasks
-        // Skip tasks with no mouse and no keyboard actions
-        .filter(task => task.actions.mouse.nonEmpty || task.actions.keyboard.nonEmpty)
-        .traverse_ { task =>
-          for {
-            _ <- IO.println(s"🛠️ Running task: ${task.taskName}")
-            // Enqueue only non-empty action batches
-            _ <- if (task.actions.mouse.nonEmpty)
-              mouseManager.enqueueBatches(List(task.taskName -> task.actions.mouse))
-            else IO.unit
-            _ <- if (task.actions.keyboard.nonEmpty)
-              keyboardManager.enqueueBatches(List(task.taskName -> task.actions.keyboard))
-            else IO.unit
-          } yield ()
-        }
-    }
+      // Check if already processing (with timeout protection)
+      canProcess = !currentState.jsonProcessing.isProcessing ||
+        (currentTime - currentState.jsonProcessing.processingStartTime) > currentState.jsonProcessing.processingTimeout
+
+      result <- if (canProcess) {
+        processJson(json, currentTime)
+      } else {
+        IO.println("⏳ JSON processing already in progress, skipping...")
+      }
+    } yield result
+  }
+
+  private def processJson(json: JsValue, startTime: Long): IO[Unit] = {
+    for {
+      // Set processing flag
+      _ <- stateRef.update(_.copy(jsonProcessing = JsonProcessingState(
+        isProcessing = true,
+        processingStartTime = startTime
+      )))
+
+      // Run pipeline and destructure the result
+      pipelineResult <- runPipeline(json)
+      (finalState, tasks) = pipelineResult
+
+      // Clear processing flag and update state
+      finalStateWithClearedFlag = finalState.copy(jsonProcessing = JsonProcessingState(isProcessing = false))
+      _ <- stateRef.set(finalStateWithClearedFlag)
+
+      // Execute tasks
+      _ <- executeTasks(tasks)
+    } yield ()
+  }
+
+  private def executeTasks(tasks: List[MKTask]): IO[Unit] = {
+    tasks
+      .filter(task => task.actions.mouse.nonEmpty || task.actions.keyboard.nonEmpty)
+      .traverse_ { task =>
+        for {
+          _ <- IO.println(s"🛠️ Running task: ${task.taskName}")
+          _ <- if (task.actions.mouse.nonEmpty)
+            mouseManager.enqueueBatches(List(task.taskName -> task.actions.mouse))
+          else IO.unit
+          _ <- if (task.actions.keyboard.nonEmpty)
+            keyboardManager.enqueueBatches(List(task.taskName -> task.actions.keyboard))
+          else IO.unit
+        } yield ()
+      }
+  }
+//  def process(json: JsValue): IO[Unit] =
+//    runPipeline(json).flatMap { case (_, tasks) =>
+//      tasks
+//        // Skip tasks with no mouse and no keyboard actions
+//        .filter(task => task.actions.mouse.nonEmpty || task.actions.keyboard.nonEmpty)
+//        .traverse_ { task =>
+//          for {
+//            _ <- IO.println(s"🛠️ Running task: ${task.taskName}")
+//            // Enqueue only non-empty action batches
+//            _ <- if (task.actions.mouse.nonEmpty)
+//              mouseManager.enqueueBatches(List(task.taskName -> task.actions.mouse))
+//            else IO.unit
+//            _ <- if (task.actions.keyboard.nonEmpty)
+//              keyboardManager.enqueueBatches(List(task.taskName -> task.actions.keyboard))
+//            else IO.unit
+//          } yield ()
+//        }
+//    }
 }
 
 

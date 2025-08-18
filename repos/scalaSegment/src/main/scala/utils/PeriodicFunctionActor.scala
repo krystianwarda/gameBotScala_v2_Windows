@@ -87,7 +87,7 @@ private lazy val kafkaPublisher = {
 
 
     case json: JsValue =>
-//      println(s"JSON: ${json}")
+      println(s"JSON: ${json}")
 //      println(s"[DEBUG] Top-level keys: ${json.as[play.api.libs.json.JsObject].keys.mkString(", ")}")
       jsonConsumer.process(json).unsafeRunAndForget()
 //      val cleanedJson = cleanJson(json)
