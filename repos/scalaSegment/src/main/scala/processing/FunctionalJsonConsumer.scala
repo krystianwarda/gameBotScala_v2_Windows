@@ -54,7 +54,7 @@ class FunctionalJsonConsumer(
           _ <- IO(printInColor(ANSI_RED, f"[PIPELINE] Finished JSON processing in $duration%.3f seconds"))
 
 
-        } yield (state5, fishTasks ++ healTasks ++ lootTasks ++ targetTasks ++ caveTasks)
+        } yield (state5, generalTasks ++ fishTasks ++ healTasks ++ lootTasks ++ targetTasks ++ caveTasks)
     }
   }
 

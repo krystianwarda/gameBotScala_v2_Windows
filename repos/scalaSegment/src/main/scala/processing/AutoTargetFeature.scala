@@ -36,6 +36,7 @@ object AutoTargetFeature {
       CheckAttackSupplies,
       HandleAttackBackpacks,
       RefillAmmo,
+      TargetFocusing,
       TargetMarking,
       EngageAttack,
       EngageMovement
@@ -279,8 +280,6 @@ object AutoTargetFeature {
 
   private object UpdateAttackStatus extends Step {
     private val taskName = "UpdateAttackStatus"
-    private val markRetryCooldownMs = 1000L
-
 
     override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
       val currentTime = System.currentTimeMillis()
@@ -377,10 +376,17 @@ object AutoTargetFeature {
       println(s"[UpdateAttackStatus] AutoTarget settings: $parsedSettings")
       println(s"[UpdateAttackStatus] Creatures list: $sortedCreatures")
 
+
       sortedCreatures.find { creature =>
         val targetPos = Vec(creature.posX, creature.posY)
         val hasPath = generateSubwaypointsToCreature(targetPos, state, json).autoTarget.subWaypoints.nonEmpty
-        characterPos.manhattanDistance(targetPos) <= 1 || hasPath
+
+
+        println(s"[UpdateAttackStatus] ${creature.name}: HP=${creature.healthPercent}")
+        println(s"[UpdateAttackStatus] characterPos: ${characterPos}, targetPos: ${targetPos}")
+        println(s"[UpdateAttackStatus] Distance: ${characterPos.manhattanDistance(targetPos)}, hasPath: $hasPath")
+
+        characterPos.chebyshevDistance(targetPos) <= 1 || hasPath
       } match {
         case Some(chosen) =>
           println(s"[UpdateAttackStatus] New target selected: ${chosen.name} (${chosen.id})")
@@ -509,92 +515,51 @@ object AutoTargetFeature {
   }
 
 
-  private object TargetMarking extends Step {
-    private val taskName = "TargetMarking"
-    private val markRetryIntervalMs = 2000L // Retry marking every 7 seconds
 
+  private object TargetFocusing extends Step {
     override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
+      val taskName = "TargetFocusing"
 
-      val at = state.autoTarget
-      val now = System.currentTimeMillis()
-      val currentAttackId = (json \ "attackInfo" \ "Id").asOpt[Int]
+      val autoTarget = state.autoTarget
+      val currentTime = System.currentTimeMillis()
+      val markRetryIntervalMs = 2000L
 
-      if (at.chosenTargetId == 0 ) {
+      if (autoTarget.stateMarkingTarget != "free" || autoTarget.chosenTargetId == 0) {
         return Some(state -> NoOpTask)
       }
 
-      println(s"now: $now, last: ${state.autoTarget.lastTargetMarkCommandSend}, diff: ${now - state.autoTarget.lastTargetMarkCommandSend}")
-
-      val shouldProceed =  at.stateAutoTarget == "fight" && // true
-        !isTargetCurrentlyMarked(at.chosenTargetId, json) && // true
-        at.chosenTargetId != 0 && // true
-        (now - at.lastTargetMarkCommandSend >= markRetryIntervalMs) // true
-
-      if (!shouldProceed) {
-//        val targetCreatureId = (json \ "attackInfo" \ "Id").asOpt[Int]
-//        val timeSinceLastMark = now - at.lastTargetMarkCommandSend
+      // Throttling check
+      if (currentTime - autoTarget.lastTargetActionTime < autoTarget.targetActionThrottle) {
         return Some((state, NoOpTask))
       }
 
-      println(s"[TargetMarking] Entered function.")
+      val shouldProceed =  autoTarget.stateAutoTarget == "fight" && // true
+        !isTargetCurrentlyMarked(autoTarget.chosenTargetId, json) && // true
+        autoTarget.chosenTargetId != 0 && // true
+        (currentTime - autoTarget.lastTargetMarkCommandSend >= markRetryIntervalMs) // true
 
-      val chosenId = at.chosenTargetId
-      val chosenName = at.chosenTargetName
-
-
-      println(s"[TargetMarking] chosenId=$chosenId, chosenName=$chosenName, currentTarget=$currentAttackId")
-
-      // Look up creature settings
-      println(s"[TargetMarking] looking up settings for creature '$chosenName'")
-      val creatureSettingsOpt = settings.autoTargetSettings.creatureList
-        .map(parseCreature)
-        .find(_.name.equalsIgnoreCase(chosenName))
-
-      println(s"[TargetMarking] settings lookup result=$creatureSettingsOpt")
-
-      val (markOnBattle, markOnScreen) = creatureSettingsOpt match {
-        case Some(cs) => (cs.targetBattle, cs.targetScreen)
-        case None => (false, false)
+      if (!shouldProceed) {
+        return Some((state, NoOpTask))
       }
 
-      println(s"[TargetMarking] markOnBattle=$markOnBattle, markOnScreen=$markOnScreen")
+      println(s"[$taskName] Entered function.")
+      val chosenId = autoTarget.chosenTargetId
 
-      if (!markOnBattle && !markOnScreen) {
-        println(s"[TargetMarking] creature $chosenName not configured for marking")
-        return None
-      }
+      // Find creature position using the same logic as markOnBattleUI/markOnScreenUI
+      getCreaturePosition(chosenId, json) match {
+        case Some((x, y)) =>
+          val mouseActions = List(MoveMouse(x, y))
 
+          val newState = state.copy(autoTarget = autoTarget.copy(
+            stateMarkingTarget = "target marking",
+            lastTargetActionTime = currentTime
+          ))
 
-      // Choose marking method
-      val useScreen = if (markOnBattle && markOnScreen) {
-        val choice = Random.nextBoolean()
-        println(s"[TargetMarking] both methods available, randomly choosing ${if (choice) "SCREEN" else "BATTLE"} mark for $chosenName")
-        choice
-      } else markOnScreen
+          Some((newState, MKTask("target focusing", MKActions(mouse = mouseActions, keyboard = Nil))))
 
-      // Generate click actions (but keep them commented out for simulation)
-      val clickActions = if (useScreen) {
-        println(s"[TargetMarking] markOnScreenUI() called for id=$chosenId")
-        markOnScreenUI(chosenId, json)
-      } else {
-        println(s"[TargetMarking] markOnBattleUI() called for id=$chosenId")
-        markOnBattleUI(chosenId, json)
-      }
-
-      println(s"[TargetMarking] clickActions generated: $clickActions")
-
-      if (clickActions.nonEmpty) {
-        val newAutoTarget = at.copy(
-          lastTargetMarkCommandSend = now,
-          lastMarkingAttemptedId = chosenId
-        )
-        println(s"[TargetMarking] updated autoTarget: $newAutoTarget")
-
-        val task = MKTask(taskName, MKActions(clickActions, Nil))
-        Some(state.copy(autoTarget = newAutoTarget) -> task)
-      } else {
-        println(s"[TargetMarking] failed to generate click actions for $chosenId")
-        None
+        case None =>
+          println(s"[$taskName] Creature location not found.")
+          Some((state.copy(autoTarget = autoTarget.copy(stateMarkingTarget = "free")), NoOpTask))
       }
     }
 
@@ -602,73 +567,296 @@ object AutoTargetFeature {
       (json \ "attackInfo" \ "Id").asOpt[Int].contains(targetId)
     }
 
-    private def markOnBattleUI(chosenId: Int, json: JsValue): List[MouseAction] = {
-      println(s"[TargetMarking] markOnBattleUI() called for id=$chosenId")
-      val result = for {
+    private def getCreaturePosition(chosenId: Int, json: JsValue): Option[(Int, Int)] = {
+      // Try battle panel first (like markOnBattleUI)
+      val battlePanelResult = for {
         posObj <- (json \ "screenInfo" \ "battlePanelLoc" \ chosenId.toString).asOpt[JsObject]
-          x <- (posObj \"PosX").asOpt[Int]
-        y <- (posObj \"PosY").asOpt[Int]
-      } yield {
-        println(s"[TargetMarking] battle UI position x=$x, y=$y")
-        List(
-          MoveMouse(x, y),
-          LeftButtonPress(x, y),
-          LeftButtonRelease(x, y)
-        )
-      }
-      val actions = result.getOrElse {
-        println(s"[TargetMarking] failed to find battle UI position for $chosenId")
-        Nil
-      }
-      println(s"[TargetMarking] markOnBattleUI actions: $actions")
-      actions
-    }
+        x <- (posObj \ "PosX").asOpt[Int]
+        y <- (posObj \ "PosY").asOpt[Int]
+      } yield (x, y)
 
-    private def markOnScreenUI(chosenId: Int, json: JsValue): List[MouseAction] = {
-      println(s"[TargetMarking] markOnScreenUI() called for id=$chosenId")
-      val battleInfo = (json \"battleInfo").as[Map[String, JsValue]]
-      val tileIdOpt = battleInfo.values
-        .find(obj => (obj \ "Id").asOpt[Int].contains(chosenId))
-        .flatMap { obj =>
-          for {
-            x <- (obj \ "PositionX").asOpt[Int]
-            y <- (obj \ "PositionY").asOpt[Int]
-            z <- (obj \ "PositionZ").asOpt[Int]
-          } yield {
-            // pad Z to 2 digits if needed
-            val zStr = f"$z%02d"
-            s"$x$y$zStr"
+      battlePanelResult.orElse {
+        // Fallback to screen UI (like markOnScreenUI)
+        val battleInfo = (json \ "battleInfo").as[Map[String, JsValue]]
+        val tileIdOpt = battleInfo.values
+          .find(obj => (obj \ "Id").asOpt[Int].contains(chosenId))
+          .flatMap { obj =>
+            for {
+              x <- (obj \ "PositionX").asOpt[Int]
+              y <- (obj \ "PositionY").asOpt[Int]
+              z <- (obj \ "PositionZ").asOpt[Int]
+            } yield {
+              val zStr = f"$z%02d"
+              s"$x$y$zStr"
+            }
           }
-        }
 
-
-      println(s"[TargetMarking] computed tileIdOpt=$tileIdOpt")
-
-      val mapTiles = (json \"screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
-      val targetOpt = mapTiles.values.find(obj => (obj \"id").asOpt[String] == tileIdOpt)
-      println(s"[TargetMarking] found map panel tile object: $targetOpt")
-
-      val actions = targetOpt.flatMap { obj =>
-        for {
-          x <- (obj \"x").asOpt[Int]
-          y <- (obj \"y").asOpt[Int]
-        } yield {
-          println(s"[TargetMarking] screen UI position x=$x, y=$y")
-          List(
-            MoveMouse(x, y),
-            RightButtonPress(x, y),
-            RightButtonRelease(x, y)
-          )
-        }
-      }.getOrElse {
-        println(s"[TargetMarking] failed to find screen position for $chosenId")
-        Nil
+        val mapTiles = (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
+        mapTiles.values
+          .find(obj => (obj \ "id").asOpt[String] == tileIdOpt)
+          .flatMap { obj =>
+            for {
+              x <- (obj \ "x").asOpt[Int]
+              y <- (obj \ "y").asOpt[Int]
+            } yield (x, y)
+          }
       }
-      println(s"[TargetMarking] markOnScreenUI actions: $actions")
-      actions
+    }
+  }
+
+  private object TargetMarking extends Step {
+    override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
+      val taskName = "TargetMarking"
+      val autoTarget = state.autoTarget
+      val currentTime = System.currentTimeMillis()
+      val markRetryIntervalMs = 2000L
+
+      if (autoTarget.stateMarkingTarget != "target marking" || autoTarget.chosenTargetId == 0) {
+        return Some(state -> NoOpTask)
+      }
+
+      // Throttling check
+      if (currentTime - autoTarget.lastTargetActionTime < autoTarget.targetActionThrottle) {
+        return Some((state, NoOpTask))
+      }
+
+      val shouldProceed =  autoTarget.stateAutoTarget == "fight" && // true
+        !isTargetCurrentlyMarked(autoTarget.chosenTargetId, json) && // true
+        autoTarget.chosenTargetId != 0 && // true
+        (currentTime - autoTarget.lastTargetMarkCommandSend >= markRetryIntervalMs) // true
+
+      if (!shouldProceed) {
+        return Some((state, NoOpTask))
+      }
+
+      println(s"[$taskName] Entered function.")
+
+      val chosenId = autoTarget.chosenTargetId
+
+      // Find creature's UPDATED position again
+      getCreaturePosition(chosenId, json) match {
+        case Some((x, y)) =>
+          val mouseActions = List(
+            MoveMouse(x, y),
+            LeftButtonPress(x, y),
+            LeftButtonRelease(x, y)
+          )
+
+          val newState = state.copy(autoTarget = autoTarget.copy(
+            stateMarkingTarget = "free",
+            lastTargetActionTime = currentTime
+          ))
+
+          Some((newState, MKTask("target marking", MKActions(mouse = mouseActions, keyboard = Nil))))
+
+        case None =>
+          println(s"[$taskName] Creature location not found.")
+          Some((state.copy(autoTarget = autoTarget.copy(stateMarkingTarget = "free")), NoOpTask))
+      }
     }
 
+        private def isTargetCurrentlyMarked(targetId: Int, json: JsValue): Boolean = {
+          (json \ "attackInfo" \ "Id").asOpt[Int].contains(targetId)
+        }
+
+    private def getCreaturePosition(chosenId: Int, json: JsValue): Option[(Int, Int)] = {
+      // Same logic as TargetFocusing - find updated position
+      val battlePanelResult = for {
+        posObj <- (json \ "screenInfo" \ "battlePanelLoc" \ chosenId.toString).asOpt[JsObject]
+        x <- (posObj \ "PosX").asOpt[Int]
+        y <- (posObj \ "PosY").asOpt[Int]
+      } yield (x, y)
+
+      battlePanelResult.orElse {
+        val battleInfo = (json \ "battleInfo").as[Map[String, JsValue]]
+        val tileIdOpt = battleInfo.values
+          .find(obj => (obj \ "Id").asOpt[Int].contains(chosenId))
+          .flatMap { obj =>
+            for {
+              x <- (obj \ "PositionX").asOpt[Int]
+              y <- (obj \ "PositionY").asOpt[Int]
+              z <- (obj \ "PositionZ").asOpt[Int]
+            } yield {
+              val zStr = f"$z%02d"
+              s"$x$y$zStr"
+            }
+          }
+
+        val mapTiles = (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
+        mapTiles.values
+          .find(obj => (obj \ "id").asOpt[String] == tileIdOpt)
+          .flatMap { obj =>
+            for {
+              x <- (obj \ "x").asOpt[Int]
+              y <- (obj \ "y").asOpt[Int]
+            } yield (x, y)
+          }
+      }
+    }
   }
+
+
+
+//  private object TargetMarking extends Step {
+//    private val taskName = "TargetMarking"
+//    private val markRetryIntervalMs = 2000L // Retry marking every 7 seconds
+//
+//    override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
+//
+//      val at = state.autoTarget
+//      val now = System.currentTimeMillis()
+//      val currentAttackId = (json \ "attackInfo" \ "Id").asOpt[Int]
+//
+//      if (at.chosenTargetId == 0 ) {
+//        return Some(state -> NoOpTask)
+//      }
+//
+//      println(s"now: $now, last: ${state.autoTarget.lastTargetMarkCommandSend}, diff: ${now - state.autoTarget.lastTargetMarkCommandSend}")
+//
+//      val shouldProceed =  at.stateAutoTarget == "fight" && // true
+//        !isTargetCurrentlyMarked(at.chosenTargetId, json) && // true
+//        at.chosenTargetId != 0 && // true
+//        (now - at.lastTargetMarkCommandSend >= markRetryIntervalMs) // true
+//
+//      if (!shouldProceed) {
+////        val targetCreatureId = (json \ "attackInfo" \ "Id").asOpt[Int]
+////        val timeSinceLastMark = now - at.lastTargetMarkCommandSend
+//        return Some((state, NoOpTask))
+//      }
+//
+//      println(s"[TargetMarking] Entered function.")
+//
+//      val chosenId = at.chosenTargetId
+//      val chosenName = at.chosenTargetName
+//
+//
+//      println(s"[TargetMarking] chosenId=$chosenId, chosenName=$chosenName, currentTarget=$currentAttackId")
+//
+//      // Look up creature settings
+//      println(s"[TargetMarking] looking up settings for creature '$chosenName'")
+//      val creatureSettingsOpt = settings.autoTargetSettings.creatureList
+//        .map(parseCreature)
+//        .find(_.name.equalsIgnoreCase(chosenName))
+//
+//      println(s"[TargetMarking] settings lookup result=$creatureSettingsOpt")
+//
+//      val (markOnBattle, markOnScreen) = creatureSettingsOpt match {
+//        case Some(cs) => (cs.targetBattle, cs.targetScreen)
+//        case None => (false, false)
+//      }
+//
+//      println(s"[TargetMarking] markOnBattle=$markOnBattle, markOnScreen=$markOnScreen")
+//
+//      if (!markOnBattle && !markOnScreen) {
+//        println(s"[TargetMarking] creature $chosenName not configured for marking")
+//        return None
+//      }
+//
+//
+//      // Choose marking method
+//      val useScreen = if (markOnBattle && markOnScreen) {
+//        val choice = Random.nextBoolean()
+//        println(s"[TargetMarking] both methods available, randomly choosing ${if (choice) "SCREEN" else "BATTLE"} mark for $chosenName")
+//        choice
+//      } else markOnScreen
+//
+//      // Generate click actions (but keep them commented out for simulation)
+//      val clickActions = if (useScreen) {
+//        println(s"[TargetMarking] markOnScreenUI() called for id=$chosenId")
+//        markOnScreenUI(chosenId, json)
+//      } else {
+//        println(s"[TargetMarking] markOnBattleUI() called for id=$chosenId")
+//        markOnBattleUI(chosenId, json)
+//      }
+//
+//      println(s"[TargetMarking] clickActions generated: $clickActions")
+//
+//      if (clickActions.nonEmpty) {
+//        val newAutoTarget = at.copy(
+//          lastTargetMarkCommandSend = now,
+//          lastMarkingAttemptedId = chosenId
+//        )
+//        println(s"[TargetMarking] updated autoTarget: $newAutoTarget")
+//
+//        val task = MKTask(taskName, MKActions(clickActions, Nil))
+//        Some(state.copy(autoTarget = newAutoTarget) -> task)
+//      } else {
+//        println(s"[TargetMarking] failed to generate click actions for $chosenId")
+//        None
+//      }
+//    }
+//
+//    private def isTargetCurrentlyMarked(targetId: Int, json: JsValue): Boolean = {
+//      (json \ "attackInfo" \ "Id").asOpt[Int].contains(targetId)
+//    }
+//
+//    private def markOnBattleUI(chosenId: Int, json: JsValue): List[MouseAction] = {
+//      println(s"[TargetMarking] markOnBattleUI() called for id=$chosenId")
+//      val result = for {
+//        posObj <- (json \ "screenInfo" \ "battlePanelLoc" \ chosenId.toString).asOpt[JsObject]
+//          x <- (posObj \"PosX").asOpt[Int]
+//        y <- (posObj \"PosY").asOpt[Int]
+//      } yield {
+//        println(s"[TargetMarking] battle UI position x=$x, y=$y")
+//        List(
+//          MoveMouse(x, y),
+//          LeftButtonPress(x, y),
+//          LeftButtonRelease(x, y)
+//        )
+//      }
+//      val actions = result.getOrElse {
+//        println(s"[TargetMarking] failed to find battle UI position for $chosenId")
+//        Nil
+//      }
+//      println(s"[TargetMarking] markOnBattleUI actions: $actions")
+//      actions
+//    }
+//
+//    private def markOnScreenUI(chosenId: Int, json: JsValue): List[MouseAction] = {
+//      println(s"[TargetMarking] markOnScreenUI() called for id=$chosenId")
+//      val battleInfo = (json \"battleInfo").as[Map[String, JsValue]]
+//      val tileIdOpt = battleInfo.values
+//        .find(obj => (obj \ "Id").asOpt[Int].contains(chosenId))
+//        .flatMap { obj =>
+//          for {
+//            x <- (obj \ "PositionX").asOpt[Int]
+//            y <- (obj \ "PositionY").asOpt[Int]
+//            z <- (obj \ "PositionZ").asOpt[Int]
+//          } yield {
+//            // pad Z to 2 digits if needed
+//            val zStr = f"$z%02d"
+//            s"$x$y$zStr"
+//          }
+//        }
+//
+//
+//      println(s"[TargetMarking] computed tileIdOpt=$tileIdOpt")
+//
+//      val mapTiles = (json \"screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
+//      val targetOpt = mapTiles.values.find(obj => (obj \"id").asOpt[String] == tileIdOpt)
+//      println(s"[TargetMarking] found map panel tile object: $targetOpt")
+//
+//      val actions = targetOpt.flatMap { obj =>
+//        for {
+//          x <- (obj \"x").asOpt[Int]
+//          y <- (obj \"y").asOpt[Int]
+//        } yield {
+//          println(s"[TargetMarking] screen UI position x=$x, y=$y")
+//          List(
+//            MoveMouse(x, y),
+//            RightButtonPress(x, y),
+//            RightButtonRelease(x, y)
+//          )
+//        }
+//      }.getOrElse {
+//        println(s"[TargetMarking] failed to find screen position for $chosenId")
+//        Nil
+//      }
+//      println(s"[TargetMarking] markOnScreenUI actions: $actions")
+//      actions
+//    }
+//
+//  }
 
 
 

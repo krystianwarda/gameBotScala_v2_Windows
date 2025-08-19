@@ -163,6 +163,8 @@ case class Creature(
 case class AutoTargetState(
                             updateAttackChangeTime: Long = 0,
                             updateAttackThrottleTime: Long = 4000L,
+                            lastTargetActionTime: Long = 0,
+                            targetActionThrottle: Long = 600L,
                             dangerLevelHealing: String = "low",
                             lastMarkingAttemptedId: Int = 0,
                             lastTargetLookoutTime: Long = 0,
@@ -172,6 +174,7 @@ case class AutoTargetState(
                             lastTargetName: String = "",
                             lastTargetPos: (Int, Int, Int) = (0,0,0),
                             stateAutoTarget: String = "not_set",
+                            stateMarkingTarget: String = "free",
                             autoTargetContainerMapping: Map[Int, String] = Map.empty[Int, String],
                             currentAutoAttackContainerName: String = "",
                             isUsingAmmo: String = "not_set",
@@ -186,7 +189,8 @@ case class AutoTargetState(
                             runeUseCooldown: Long = 2000,
                             runeUseRandomness: Long = 0,
                             runeUseTimeRange:  (Int, Int) = (500,1000),
-                            stopReason: Option[String] = None
+                            stopReason: Option[String] = None,
+                            targetCreatureToAttack: Option[String] = None
                           )
 
 case class GuardianState(

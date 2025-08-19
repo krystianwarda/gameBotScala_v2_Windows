@@ -151,7 +151,8 @@ object AutoLootFeature {
         state.autoLoot.stateLooting match {
           case "free" => handleLootOrMoveCarcass(json, settings, state)
           case "moving carcass" => handleMovingOldCarcass(json, settings, state)
-          case "opening carcass" => handleOpeningCarcass(json, settings, state)
+          case "focus on carcass" => handleFocusingOnCarcass(json, settings, state)
+          case "clicking carcass" => handleClickingCarcass(json, settings, state)
           case "clicking open button" => handleClickingOpen(json, settings, state)
           case "loot plunder" => handleLootPlunder(json, settings, state)
           case _ => Some((state, NoOpTask))
@@ -164,11 +165,10 @@ object AutoLootFeature {
   }
 
 
-
-  def handleOpeningCarcass(json: JsValue, settings: UISettings, state: GameState): Option[(GameState, MKTask)] = {
-    val currentTime        = System.currentTimeMillis()
-    val autoLoot           = state.autoLoot
-    val taskName = "handleOpeningCarcass"
+  def handleFocusingOnCarcass(json: JsValue, settings: UISettings, state: GameState): Option[(GameState, MKTask)] = {
+    val currentTime = System.currentTimeMillis()
+    val autoLoot = state.autoLoot
+    val taskName = "handleFocusingOnCarcass"
 
     println(s"[$taskName] Entered — stateLooting = ${autoLoot.stateLooting}")
 
@@ -179,10 +179,9 @@ object AutoLootFeature {
 
     println(s"[$taskName] carcassTileToLoot = ${autoLoot.carcassTileToLoot}")
 
-
     autoLoot.carcassTileToLoot match {
       case Some((carcassTileToLoot, deathTime)) =>
-        println(s"[$taskName] Will open carcass at $carcassTileToLoot, died at $deathTime")
+        println(s"[$taskName] Will focus on carcass at $carcassTileToLoot, died at $deathTime")
 
         // parse map coords
         val carcassPos = Vec(
@@ -200,102 +199,51 @@ object AutoLootFeature {
         println(s"[$taskName] carcassPos=$carcassPos, charPos=$charPos, chebyshevDist=$chebyshevDist")
 
         if (chebyshevDist <= 1) {
+          // Find screen coordinates for the carcass
+          val mapPanelMap = (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
+          val screenCoordsOpt = mapPanelMap.values.collectFirst {
+            case obj if (obj \ "id").asOpt[String].contains(carcassTileToLoot) =>
+              for {
+                x <- (obj \ "x").asOpt[Int]
+                y <- (obj \ "y").asOpt[Int]
+              } yield (x, y)
+          }.flatten
 
-          val hasNearbyInterference = checkForNearbyInterference(json, carcassPos)
-          if (hasNearbyInterference) {
-            println(s"[$taskName] Nearby creatures/players detected, using Ctrl+right-click approach")
+          screenCoordsOpt match {
+            case Some((x, y)) =>
+              println(s"[$taskName] Moving mouse to carcass at ($x,$y)")
 
-            val mapPanelMap = (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
-            val screenCoordsOpt = mapPanelMap.values.collectFirst {
-              case obj if (obj \ "id").asOpt[String].contains(carcassTileToLoot) =>
-                for {
-                  x <- (obj \ "x").asOpt[Int]
-                  y <- (obj \ "y").asOpt[Int]
-                } yield (x, y)
-            }.flatten
+              val mouseActions = List(MoveMouse(x, y))
 
-            screenCoordsOpt match {
-              case Some((x, y)) =>
-                println(s"[$taskName] Issuing Ctrl+right-click at ($x,$y)")
+              val newState = state.copy(autoLoot = autoLoot.copy(
+                stateLooting = "clicking carcass",
+                lastAutoLootActionTime = currentTime
+              ))
 
-                // Coordinated keyboard and mouse actions
-                val mouseActions = List(
-                  MoveMouse(x, y),
-                  RightButtonPress(x, y),
-                  RightButtonRelease(x, y)
-                )
+              Some((newState, MKTask("focus on carcass", MKActions(mouse = mouseActions, keyboard = Nil))))
 
-                val keyboardActions = List(
-                  PressCtrl,
-                  HoldCtrlFor(1.second),
-                  ReleaseCtrl
-                )
-
-                val newState = state.copy(autoLoot = autoLoot.copy(
-                  stateLooting = "clicking open button",
-                  lastAutoLootActionTime = currentTime
-                ))
-
-                Some((newState, MKTask("ctrl right-click carcass", MKActions(mouse = mouseActions, keyboard = keyboardActions))))
-
-              case None =>
-                println(s"[$taskName] ❌ Couldn't find screen coords for carcassTileToLoot → aborting loot")
-                Some((state.copy(
-                  autoLoot = autoLoot.copy(stateLooting = "free")
-                ), NoOpTask))
-            }
-
-          } else {
-            // right‐click to open
-            val mapPanelMap = (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
-            val screenCoordsOpt = mapPanelMap.values.collectFirst {
-              case obj if (obj \ "id").asOpt[String].contains(carcassTileToLoot) =>
-                for {
-                  x <- (obj \ "x").asOpt[Int]
-                  y <- (obj \ "y").asOpt[Int]
-                } yield (x, y)
-            }.flatten
-
-            println(s"[$taskName] screenCoordsOpt = $screenCoordsOpt")
-
-            screenCoordsOpt match {
-              case Some((x, y)) =>
-                println(s"[$taskName] Issuing right‐click at ($x,$y)")
-                val actions = List(
-                  MoveMouse(x, y),
-                  RightButtonPress(x, y),
-                  RightButtonRelease(x, y)
-                )
-                val newState = state.copy(autoLoot = autoLoot.copy(
-                  stateLooting       = "loot plunder",
-                  lastAutoLootActionTime = currentTime
-                ))
-                Some((newState, MKTask("opening carcass", MKActions(mouse = actions, keyboard = Nil))))
-
-              case None =>
-                println(s"[$taskName] ❌ Couldn't find screen coords for carcassTileToLoot → aborting loot")
-                Some((state.copy(
-                  autoLoot = autoLoot.copy(stateLooting = "free"),
-                  //                caveBot  = state.caveBot.copy(stateHunting = "free")
-                ), NoOpTask))
-            }
+            case None =>
+              println(s"[$taskName] ❌ Couldn't find screen coords for carcassTileToLoot → aborting loot")
+              Some((state.copy(
+                autoLoot = autoLoot.copy(stateLooting = "free")
+              ), NoOpTask))
           }
 
         } else {
-          // need to path‐find closer
+          // need to path-find closer
           println(s"[$taskName] Too far (dist=$chebyshevDist) → pathing toward $carcassPos")
           val newState = generateSubwaypointsToGamePosition(carcassPos, state, json)
           val sw = newState.autoLoot.subWaypoints
           println(s"[$taskName] New subWaypoints = $sw")
 
           if (sw.nonEmpty) {
-            val next   = sw.head
+            val next = sw.head
             val dirOpt = calculateDirection(charPos, next, newState.autoLoot.lastDirection)
             println(s"[$taskName] Moving one step: dir=$dirOpt toward $next")
 
             val updatedAutoLoot = newState.autoLoot.copy(
-              subWaypoints   = sw.tail,
-              lastDirection  = dirOpt,
+              subWaypoints = sw.tail,
+              lastDirection = dirOpt,
               lastAutoLootActionTime = currentTime
             )
             val updatedState = newState.copy(autoLoot = updatedAutoLoot)
@@ -304,8 +252,7 @@ object AutoLootFeature {
           } else {
             println(s"[$taskName] No subWaypoints → giving up and resetting to free")
             Some((newState.copy(
-              autoLoot = autoLoot.copy(stateLooting = "free"),
-              //              caveBot  = state.caveBot.copy(stateHunting = "free")
+              autoLoot = autoLoot.copy(stateLooting = "free")
             ), NoOpTask))
           }
         }
@@ -313,11 +260,258 @@ object AutoLootFeature {
       case None =>
         println(s"[$taskName] carcassTileToLoot is None → resetting to free")
         Some((state.copy(
-          autoLoot = autoLoot.copy(stateLooting = "free"),
-          //          caveBot  = state.caveBot.copy(stateHunting = "free")
+          autoLoot = autoLoot.copy(stateLooting = "free")
         ), NoOpTask))
     }
   }
+
+  def handleClickingCarcass(json: JsValue, settings: UISettings, state: GameState): Option[(GameState, MKTask)] = {
+    val currentTime = System.currentTimeMillis()
+    val autoLoot = state.autoLoot
+    val taskName = "handleClickingCarcass"
+
+    println(s"[$taskName] Entered — stateLooting = ${autoLoot.stateLooting}")
+
+    if (state.autoLoot.autoLootActionThrottle > currentTime - autoLoot.lastAutoLootActionTime) {
+      println(s"[$taskName] Too soon since last action → NoOp")
+      return Some(state -> NoOpTask)
+    }
+
+    autoLoot.carcassTileToLoot match {
+      case Some((carcassTileToLoot, deathTime)) =>
+        println(s"[$taskName] Will click on carcass at $carcassTileToLoot, died at $deathTime")
+
+        // parse map coords
+        val carcassPos = Vec(
+          carcassTileToLoot.substring(0, 5).toInt,
+          carcassTileToLoot.substring(5, 10).toInt
+        )
+
+        // Find screen coordinates for the carcass
+        val mapPanelMap = (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
+        val screenCoordsOpt = mapPanelMap.values.collectFirst {
+          case obj if (obj \ "id").asOpt[String].contains(carcassTileToLoot) =>
+            for {
+              x <- (obj \ "x").asOpt[Int]
+              y <- (obj \ "y").asOpt[Int]
+            } yield (x, y)
+        }.flatten
+
+        screenCoordsOpt match {
+          case Some((x, y)) =>
+            val hasNearbyInterference = checkForNearbyInterference(json, carcassPos)
+
+            if (hasNearbyInterference) {
+              println(s"[$taskName] Nearby creatures/players detected, using Ctrl+right-click approach")
+
+              // Coordinated keyboard and mouse actions
+              val mouseActions = List(
+                MoveMouse(x, y),
+                RightButtonPress(x, y),
+                RightButtonRelease(x, y)
+              )
+
+              val keyboardActions = List(
+                PressCtrl,
+                HoldCtrlFor(1.second),
+                ReleaseCtrl
+              )
+
+              val newState = state.copy(autoLoot = autoLoot.copy(
+                stateLooting = "clicking open button",
+                lastAutoLootActionTime = currentTime
+              ))
+
+              Some((newState, MKTask("ctrl right-click carcass", MKActions(mouse = mouseActions, keyboard = keyboardActions))))
+
+            } else {
+              println(s"[$taskName] No interference detected, using regular right-click")
+
+              val mouseActions = List(
+                MoveMouse(x, y),
+                RightButtonPress(x, y),
+                RightButtonRelease(x, y)
+              )
+
+              val newState = state.copy(autoLoot = autoLoot.copy(
+                stateLooting = "loot plunder",
+                lastAutoLootActionTime = currentTime
+              ))
+
+              Some((newState, MKTask("right-click carcass", MKActions(mouse = mouseActions, keyboard = Nil))))
+            }
+
+          case None =>
+            println(s"[$taskName] ❌ Couldn't find screen coords for carcassTileToLoot → aborting loot")
+            Some((state.copy(
+              autoLoot = autoLoot.copy(stateLooting = "free")
+            ), NoOpTask))
+        }
+
+      case None =>
+        println(s"[$taskName] carcassTileToLoot is None → resetting to free")
+        Some((state.copy(
+          autoLoot = autoLoot.copy(stateLooting = "free")
+        ), NoOpTask))
+    }
+  }
+
+
+
+
+//  def handleFocusingOnCarcass(json: JsValue, settings: UISettings, state: GameState): Option[(GameState, MKTask)] = {
+//    val currentTime        = System.currentTimeMillis()
+//    val autoLoot           = state.autoLoot
+//    val taskName = "handleOpeningCarcass"
+//
+//    println(s"[$taskName] Entered — stateLooting = ${autoLoot.stateLooting}")
+//
+//    if (state.autoLoot.autoLootActionThrottle > currentTime - autoLoot.lastAutoLootActionTime) {
+//      println(s"[$taskName] Too soon since last action → NoOp")
+//      return Some(state -> NoOpTask)
+//    }
+//
+//    println(s"[$taskName] carcassTileToLoot = ${autoLoot.carcassTileToLoot}")
+//
+//
+//    autoLoot.carcassTileToLoot match {
+//      case Some((carcassTileToLoot, deathTime)) =>
+//        println(s"[$taskName] Will open carcass at $carcassTileToLoot, died at $deathTime")
+//
+//        // parse map coords
+//        val carcassPos = Vec(
+//          carcassTileToLoot.substring(0, 5).toInt,
+//          carcassTileToLoot.substring(5, 10).toInt
+//        )
+//        val charPos = Vec(
+//          (json \ "characterInfo" \ "PositionX").as[Int],
+//          (json \ "characterInfo" \ "PositionY").as[Int]
+//        )
+//        val chebyshevDist = math.max(
+//          math.abs(carcassPos.x - charPos.x),
+//          math.abs(carcassPos.y - charPos.y)
+//        )
+//        println(s"[$taskName] carcassPos=$carcassPos, charPos=$charPos, chebyshevDist=$chebyshevDist")
+//
+//        if (chebyshevDist <= 1) {
+//
+//          val hasNearbyInterference = checkForNearbyInterference(json, carcassPos)
+//          if (hasNearbyInterference) {
+//            println(s"[$taskName] Nearby creatures/players detected, using Ctrl+right-click approach")
+//
+//            val mapPanelMap = (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
+//            val screenCoordsOpt = mapPanelMap.values.collectFirst {
+//              case obj if (obj \ "id").asOpt[String].contains(carcassTileToLoot) =>
+//                for {
+//                  x <- (obj \ "x").asOpt[Int]
+//                  y <- (obj \ "y").asOpt[Int]
+//                } yield (x, y)
+//            }.flatten
+//
+//            screenCoordsOpt match {
+//              case Some((x, y)) =>
+//                println(s"[$taskName] Issuing Ctrl+right-click at ($x,$y)")
+//
+//                // Coordinated keyboard and mouse actions
+//                val mouseActions = List(
+//                  MoveMouse(x, y),
+//                  RightButtonPress(x, y),
+//                  RightButtonRelease(x, y)
+//                )
+//
+//                val keyboardActions = List(
+//                  PressCtrl,
+//                  HoldCtrlFor(1.second),
+//                  ReleaseCtrl
+//                )
+//
+//                val newState = state.copy(autoLoot = autoLoot.copy(
+//                  stateLooting = "clicking open button",
+//                  lastAutoLootActionTime = currentTime
+//                ))
+//
+//                Some((newState, MKTask("ctrl right-click carcass", MKActions(mouse = mouseActions, keyboard = keyboardActions))))
+//
+//              case None =>
+//                println(s"[$taskName] ❌ Couldn't find screen coords for carcassTileToLoot → aborting loot")
+//                Some((state.copy(
+//                  autoLoot = autoLoot.copy(stateLooting = "free")
+//                ), NoOpTask))
+//            }
+//
+//          } else {
+//            // right‐click to open
+//            val mapPanelMap = (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
+//            val screenCoordsOpt = mapPanelMap.values.collectFirst {
+//              case obj if (obj \ "id").asOpt[String].contains(carcassTileToLoot) =>
+//                for {
+//                  x <- (obj \ "x").asOpt[Int]
+//                  y <- (obj \ "y").asOpt[Int]
+//                } yield (x, y)
+//            }.flatten
+//
+//            println(s"[$taskName] screenCoordsOpt = $screenCoordsOpt")
+//
+//            screenCoordsOpt match {
+//              case Some((x, y)) =>
+//                println(s"[$taskName] Issuing right‐click at ($x,$y)")
+//                val actions = List(
+//                  MoveMouse(x, y),
+//                  RightButtonPress(x, y),
+//                  RightButtonRelease(x, y)
+//                )
+//                val newState = state.copy(autoLoot = autoLoot.copy(
+//                  stateLooting       = "loot plunder",
+//                  lastAutoLootActionTime = currentTime
+//                ))
+//                Some((newState, MKTask("focus on carcass", MKActions(mouse = actions, keyboard = Nil))))
+//
+//              case None =>
+//                println(s"[$taskName] ❌ Couldn't find screen coords for carcassTileToLoot → aborting loot")
+//                Some((state.copy(
+//                  autoLoot = autoLoot.copy(stateLooting = "free"),
+//                  //                caveBot  = state.caveBot.copy(stateHunting = "free")
+//                ), NoOpTask))
+//            }
+//          }
+//
+//        } else {
+//          // need to path‐find closer
+//          println(s"[$taskName] Too far (dist=$chebyshevDist) → pathing toward $carcassPos")
+//          val newState = generateSubwaypointsToGamePosition(carcassPos, state, json)
+//          val sw = newState.autoLoot.subWaypoints
+//          println(s"[$taskName] New subWaypoints = $sw")
+//
+//          if (sw.nonEmpty) {
+//            val next   = sw.head
+//            val dirOpt = calculateDirection(charPos, next, newState.autoLoot.lastDirection)
+//            println(s"[$taskName] Moving one step: dir=$dirOpt toward $next")
+//
+//            val updatedAutoLoot = newState.autoLoot.copy(
+//              subWaypoints   = sw.tail,
+//              lastDirection  = dirOpt,
+//              lastAutoLootActionTime = currentTime
+//            )
+//            val updatedState = newState.copy(autoLoot = updatedAutoLoot)
+//            val kbActions = dirOpt.toList.map(DirectionalKey(_))
+//            Some((updatedState, MKTask("approachingLoot", MKActions(mouse = Nil, keyboard = kbActions))))
+//          } else {
+//            println(s"[$taskName] No subWaypoints → giving up and resetting to free")
+//            Some((newState.copy(
+//              autoLoot = autoLoot.copy(stateLooting = "free"),
+//              //              caveBot  = state.caveBot.copy(stateHunting = "free")
+//            ), NoOpTask))
+//          }
+//        }
+//
+//      case None =>
+//        println(s"[$taskName] carcassTileToLoot is None → resetting to free")
+//        Some((state.copy(
+//          autoLoot = autoLoot.copy(stateLooting = "free"),
+//          //          caveBot  = state.caveBot.copy(stateHunting = "free")
+//        ), NoOpTask))
+//    }
+//  }
 
 
   private def checkForNearbyInterference(json: JsValue, carcassPos: Vec): Boolean = {
@@ -553,9 +747,9 @@ object AutoLootFeature {
             state.copy(autoLoot = autoLootState.copy(stateLooting = "moving carcass"))
 
           case _ =>
-            println(s"[$taskName] new carcassTile $carcassTile, opening carcass")
+            println(s"[$taskName] new carcassTile $carcassTile, focus on carcass")
             state.copy(autoLoot = autoLootState.copy(
-              stateLooting = "opening carcass",
+              stateLooting = "focus on carcass",
               lastLootedCarcassTile = Some((carcassTile, timeOfDeath))
             ))
         }
@@ -610,7 +804,7 @@ object AutoLootFeature {
                 val actions = moveSingleItem(itemX, itemY, targetX, targetY)
                 val newState = state.copy(
                   autoLoot = autoLoot.copy(
-                    stateLooting = "opening carcass",
+                    stateLooting = "focus on carcass",
                     lastAutoLootActionTime = currentTime
                   )
                 )

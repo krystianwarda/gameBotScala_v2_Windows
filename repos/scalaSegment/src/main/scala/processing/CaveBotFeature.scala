@@ -738,6 +738,10 @@ object CaveBotFeature {
     def +(other: Vec): Vec = Vec(x + other.x, y + other.y)
     def manhattanDistance(other: Vec): Int = (x - other.x).abs + (y - other.y).abs
 
+    def chebyshevDistance(other: Vec): Int = {
+      math.max(math.abs(this.x - other.x), math.abs(this.y - other.y))
+    }
+
     // Euclidean distance between two points
     def distanceTo(other: Vec): Double = {
       val dx = this.x - other.x
