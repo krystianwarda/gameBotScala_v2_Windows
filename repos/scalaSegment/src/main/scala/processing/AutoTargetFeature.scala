@@ -3,12 +3,12 @@ package processing
 import cats.implicits.{catsSyntaxAlternativeGuard, toFunctorOps}
 import keyboard.{DirectionalKey, KeyboardAction}
 import play.api.libs.json.{JsObject, JsValue, Json, OFormat}
-import utils.{GameState, StaticGameInfo}
+import utils.{GameState, RandomUtils, StaticGameInfo}
 import utils.ProcessingUtils.{MKActions, MKTask, NoOpTask, Step}
 import utils.SettingsUtils.UISettings
 import utils.consoleColorPrint.{ANSI_BLUE, printInColor}
 
-import scala.util.Random
+//import scala.util.Random
 import scala.collection.mutable
 import scala.util.Try
 import mouse.{LeftButtonPress, LeftButtonRelease, MouseAction, MoveMouse, RightButtonPress, RightButtonRelease}
@@ -39,7 +39,8 @@ object AutoTargetFeature {
       TargetFocusing,
       TargetMarking,
       EngageAttack,
-      EngageMovement
+      EngageMovement,
+      PrepareToLoot
     )
 
 
@@ -117,99 +118,12 @@ object AutoTargetFeature {
   }
 
 
-//  private object DetectDeadCreatures extends Step {
-//    private val taskName = "DetectDeadCreatures"
-//
-//    override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
-//
-//      // Skip if AutoTarget is already stopped
-//      if (state.autoTarget.stateAutoTarget == "stop") {
-//        return Some((state, NoOpTask))
-//      }
-//
-//      println(s"[$taskName] Entered the function.")
-//
-//      val currentTime = System.currentTimeMillis()
-//      val killedCreatures = (json \ "lastKilledCreatures").asOpt[JsObject].getOrElse(Json.obj())
-//
-//      println(s"[$taskName] KilledCreatures JSON: $killedCreatures")
-//      println(s"[$taskName] KilledCreatures fields count: ${killedCreatures.fields.size}")
-//
-//      // Skip placeholder-only case
-//      if (killedCreatures.fields.size == 1 && {
-//        val only = killedCreatures.fields.head._2
-//        val isPlaceholder = (only \ "None").asOpt[Boolean].contains(true)
-//        println(s"[$taskName] Checking placeholder: field=${killedCreatures.fields.head._1}, isPlaceholder=$isPlaceholder")
-//        isPlaceholder
-//      }) {
-//        println(s"[$taskName] EXIT: Only placeholder creature found")
-//        return None
-//      }
-//
-//      var updatedState = state
-//      var shouldStopAutoTarget = false
-//
-//      killedCreatures.fields.foreach { case (creatureId, creatureInfo) =>
-//        val name = (creatureInfo \ "Name").asOpt[String].getOrElse("<unknown>")
-//        val (x, y, z) = state.autoTarget.lastTargetPos
-//        val isDead = (creatureInfo \ "IsDead").asOpt[Boolean].getOrElse(false)
-//
-//
-//        println(s"[$taskName] Creature name: '$name'")
-//        println(s"[$taskName] Last target position: ($x, $y, $z)")
-//        println(s"[$taskName] Is dead: $isDead")
-//
-//        if (isDead) {
-//          println(s"[$taskName] Creature $name is dead - checking loot settings")
-//          println(s"[$taskName] Available creature settings: ${settings.autoTargetSettings.creatureList}")
-//
-//          // Check if this creature has loot settings
-//          settings.autoTargetSettings.creatureList
-//            .map(parseCreature)
-//            .find(_.name.equalsIgnoreCase(name)) match {
-//
-//            case Some(cs) if cs.lootMonsterImmediately =>
-//              println(s"[$taskName] Creature $name died with immediate loot setting - stopping AutoTarget")
-//
-//              // Add to loot queue
-//              val tileKey = generatePositionKey(x, y, z)
-//              updatedState = updatedState.copy(
-//                autoLoot = updatedState.autoLoot.copy(
-//                  carcassToLootImmediately = updatedState.autoLoot.carcassToLootImmediately :+ (tileKey, currentTime, creatureId)
-//                ),
-//                autoTarget = updatedState.autoTarget.copy(
-//                  stateAutoTarget = "stop",
-//                  chosenTargetId = 0,
-//                )
-//              )
-//
-//
-//            case Some(cs) if cs.lootMonsterAfterFight =>
-//              println(s"[$taskName] Creature $name died with post-fight loot setting")
-//              val tileKey = generatePositionKey(x, y, z)
-//              updatedState = updatedState.copy(autoLoot = updatedState.autoLoot.copy(
-//                carcassToLootAfterFight = updatedState.autoLoot.carcassToLootAfterFight :+ (tileKey, currentTime, creatureId)
-//              ))
-//              return Some((updatedState, NoOpTask))
-//
-//            case _ =>
-//              println(s"[$taskName] Creature $name died with no loot settings")
-//              return Some((state, NoOpTask))
-//          }
-//        }
-//      }
-//      println(s"[$taskName] Finished processing all creatures")
-//      // If we get here, no dead creatures required action
-//      None
-//    }
-
-
   private object DetectDeadCreatures extends Step {
     private val taskName = "DetectDeadCreatures"
 
     override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
       // Skip if AutoTarget is already stopped
-      if (state.autoTarget.stateAutoTarget == "stop") {
+      if (state.autoTarget.stateAutoTarget == "stop" || !settings.autoLootSettings.enabled) {
         return None
       }
 
@@ -226,6 +140,7 @@ object AutoTargetFeature {
 
       val lastAttackedId = lastAttackedIdOpt.get
       val creatureName = state.autoTarget.lastTargetName
+
       val (x, y, z) = state.autoTarget.lastTargetPos
 
       // **ADDED CHECK**: Only process if we have a valid chosen target and it matches the dead creature
@@ -247,7 +162,8 @@ object AutoTargetFeature {
             val tileKey = generatePositionKey(x, y, z)
             val updatedState = state.copy(
               autoLoot = state.autoLoot.copy(
-                carcassToLootImmediately = state.autoLoot.carcassToLootImmediately :+ (tileKey, currentTime, lastAttackedId.toString)
+                carcassToLootImmediately = state.autoLoot.carcassToLootImmediately :+ (tileKey, currentTime, lastAttackedId.toString),
+                startTimeOfLooting = currentTime
               ),
               autoTarget = state.autoTarget.copy(
                 stateAutoTarget = "stop",
@@ -330,10 +246,9 @@ object AutoTargetFeature {
 
       val characterPos = extractCharPosition(json)
 
-      if (currentTime - at0.lastTargetLookoutTime > 1000 ) {
-        println(s"[UpdateAttackStatus] Freezeing picking new target for a while.")
-        val updatedState = state.copy(autoTarget = state.autoTarget.copy(lastTargetLookoutTime = currentTime))
-        return Some(updatedState -> NoOpTask)
+      if (currentTime - at0.lastTargetLookoutTime < 1000 ) {
+        println(s"[UpdateAttackStatus] Freezeing picking new target for a while. Time: ${currentTime - at0.lastTargetLookoutTime} ")
+        return Some(state -> NoOpTask)
       }
 
       println(s"[UpdateAttackStatus] Looking for a new target")
@@ -391,7 +306,13 @@ object AutoTargetFeature {
         case Some(chosen) =>
           println(s"[UpdateAttackStatus] New target selected: ${chosen.name} (${chosen.id})")
 
-          val updatedAutoTargetState = state.autoTarget.copy(chosenTargetId = chosen.id, chosenTargetName = chosen.name, stateAutoTarget = "fight")
+          val updatedAutoTargetState = state.autoTarget.copy(
+            chosenTargetId = chosen.id,
+            chosenTargetName = chosen.name,
+            stateAutoTarget = "fight",
+            lastTargetPos = (chosen.posX, chosen.posY, chosen.posZ)
+          )
+
           val updatedCaveBotState = state.caveBot.copy(stateHunting = "stop")
 
           val updatedState = state.copy(
@@ -440,7 +361,7 @@ object AutoTargetFeature {
         // decide isUsingAmmo, ammoId, and nextResupply count
         val (isUsingAmmoStr, ammoIdVal, ammoCountVal) = ammoIdOpt match {
           case Some(id) if ammoIdsList.contains(id) =>
-            val rnd = scala.util.Random.nextInt(41) + 40
+            val rnd =  40 // scala.util.Random.nextInt(41) +
             println(s"[SetUpAttackSupplies] Detected ammo ID $id → using ammo; next refill count = $rnd")
             ("true", id, rnd)
           case _ =>
@@ -515,186 +436,514 @@ object AutoTargetFeature {
   }
 
 
-
   private object TargetFocusing extends Step {
-    override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
-      val taskName = "TargetFocusing"
+    private val taskName = "TargetFocusing"
 
-      val autoTarget = state.autoTarget
-      val currentTime = System.currentTimeMillis()
+    override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
+      val at = state.autoTarget
+      val now = System.currentTimeMillis()
       val markRetryIntervalMs = 2000L
 
-      if (autoTarget.stateMarkingTarget != "free" || autoTarget.chosenTargetId == 0) {
+      // Preconditions
+      if (at.stateMarkingTarget != "free" || at.chosenTargetId == 0) {
+        return Some(state -> NoOpTask)
+      }
+      if (now - at.lastTargetActionTime < at.targetActionThrottle) {
+        return Some(state -> NoOpTask)
+      }
+      val alreadyMarked = (json \ "attackInfo" \ "Id").asOpt[Int].contains(at.chosenTargetId)
+      if (at.stateAutoTarget != "fight" || alreadyMarked || (now - at.lastTargetMarkCommandSend < markRetryIntervalMs)) {
         return Some(state -> NoOpTask)
       }
 
-      // Throttling check
-      if (currentTime - autoTarget.lastTargetActionTime < autoTarget.targetActionThrottle) {
-        return Some((state, NoOpTask))
-      }
+      val chosenId = at.chosenTargetId
+      val chosenName = at.chosenTargetName
 
-      val shouldProceed =  autoTarget.stateAutoTarget == "fight" && // true
-        !isTargetCurrentlyMarked(autoTarget.chosenTargetId, json) && // true
-        autoTarget.chosenTargetId != 0 && // true
-        (currentTime - autoTarget.lastTargetMarkCommandSend >= markRetryIntervalMs) // true
+      // Get character position
+      val charX = (json \ "characterInfo" \ "PositionX").as[Int]
+      val charY = (json \ "characterInfo" \ "PositionY").as[Int]
 
-      if (!shouldProceed) {
-        return Some((state, NoOpTask))
-      }
-
-      println(s"[$taskName] Entered function.")
-      val chosenId = autoTarget.chosenTargetId
-
-      // Find creature position using the same logic as markOnBattleUI/markOnScreenUI
-      getCreaturePosition(chosenId, json) match {
-        case Some((x, y)) =>
-          val mouseActions = List(MoveMouse(x, y))
-
-          val newState = state.copy(autoTarget = autoTarget.copy(
-            stateMarkingTarget = "target marking",
-            lastTargetActionTime = currentTime
-          ))
-
-          Some((newState, MKTask("target focusing", MKActions(mouse = mouseActions, keyboard = Nil))))
-
-        case None =>
-          println(s"[$taskName] Creature location not found.")
-          Some((state.copy(autoTarget = autoTarget.copy(stateMarkingTarget = "free")), NoOpTask))
-      }
-    }
-
-    private def isTargetCurrentlyMarked(targetId: Int, json: JsValue): Boolean = {
-      (json \ "attackInfo" \ "Id").asOpt[Int].contains(targetId)
-    }
-
-    private def getCreaturePosition(chosenId: Int, json: JsValue): Option[(Int, Int)] = {
-      // Try battle panel first (like markOnBattleUI)
-      val battlePanelResult = for {
-        posObj <- (json \ "screenInfo" \ "battlePanelLoc" \ chosenId.toString).asOpt[JsObject]
-        x <- (posObj \ "PosX").asOpt[Int]
-        y <- (posObj \ "PosY").asOpt[Int]
-      } yield (x, y)
-
-      battlePanelResult.orElse {
-        // Fallback to screen UI (like markOnScreenUI)
-        val battleInfo = (json \ "battleInfo").as[Map[String, JsValue]]
-        val tileIdOpt = battleInfo.values
-          .find(obj => (obj \ "Id").asOpt[Int].contains(chosenId))
-          .flatMap { obj =>
-            for {
-              x <- (obj \ "PositionX").asOpt[Int]
-              y <- (obj \ "PositionY").asOpt[Int]
-              z <- (obj \ "PositionZ").asOpt[Int]
-            } yield {
-              val zStr = f"$z%02d"
-              s"$x$y$zStr"
-            }
-          }
-
-        val mapTiles = (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
-        mapTiles.values
-          .find(obj => (obj \ "id").asOpt[String] == tileIdOpt)
-          .flatMap { obj =>
-            for {
-              x <- (obj \ "x").asOpt[Int]
-              y <- (obj \ "y").asOpt[Int]
-            } yield (x, y)
-          }
-      }
-    }
-  }
-
-  private object TargetMarking extends Step {
-    override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
-      val taskName = "TargetMarking"
-      val autoTarget = state.autoTarget
-      val currentTime = System.currentTimeMillis()
-      val markRetryIntervalMs = 2000L
-
-      if (autoTarget.stateMarkingTarget != "target marking" || autoTarget.chosenTargetId == 0) {
-        return Some(state -> NoOpTask)
-      }
-
-      // Throttling check
-      if (currentTime - autoTarget.lastTargetActionTime < autoTarget.targetActionThrottle) {
-        return Some((state, NoOpTask))
-      }
-
-      val shouldProceed =  autoTarget.stateAutoTarget == "fight" && // true
-        !isTargetCurrentlyMarked(autoTarget.chosenTargetId, json) && // true
-        autoTarget.chosenTargetId != 0 && // true
-        (currentTime - autoTarget.lastTargetMarkCommandSend >= markRetryIntervalMs) // true
-
-      if (!shouldProceed) {
-        return Some((state, NoOpTask))
-      }
-
-      println(s"[$taskName] Entered function.")
-
-      val chosenId = autoTarget.chosenTargetId
-
-      // Find creature's UPDATED position again
-      getCreaturePosition(chosenId, json) match {
-        case Some((x, y)) =>
-          val mouseActions = List(
-            MoveMouse(x, y),
-            LeftButtonPress(x, y),
-            LeftButtonRelease(x, y)
-          )
-
-          val newState = state.copy(autoTarget = autoTarget.copy(
-            stateMarkingTarget = "free",
-            lastTargetActionTime = currentTime
-          ))
-
-          Some((newState, MKTask("target marking", MKActions(mouse = mouseActions, keyboard = Nil))))
-
-        case None =>
-          println(s"[$taskName] Creature location not found.")
-          Some((state.copy(autoTarget = autoTarget.copy(stateMarkingTarget = "free")), NoOpTask))
-      }
-    }
-
-        private def isTargetCurrentlyMarked(targetId: Int, json: JsValue): Boolean = {
-          (json \ "attackInfo" \ "Id").asOpt[Int].contains(targetId)
+      // Get creature position
+      val battleInfo = (json \ "battleInfo").asOpt[Map[String, JsValue]].getOrElse(Map.empty)
+      val creaturePos = battleInfo.values
+        .find(obj => (obj \ "Id").asOpt[Int].contains(chosenId))
+        .map { obj =>
+          val x = (obj \ "PositionX").as[Int]
+          val y = (obj \ "PositionY").as[Int]
+          (x, y)
         }
 
+      val isAdjacent = creaturePos.exists { case (creatureX, creatureY) =>
+        math.max(math.abs(charX - creatureX), math.abs(charY - creatureY)) <= 1
+      }
+
+      // Decide marking mode based on creature settings and adjacency
+      val decidedModeOpt: Option[String] = {
+        val csOpt = settings.autoTargetSettings.creatureList
+          .map(parseCreature)
+          .find(_.name.equalsIgnoreCase(chosenName))
+        csOpt.flatMap { cs =>
+          (cs.targetBattle, cs.targetScreen) match {
+            case (true, true) if isAdjacent => Some(if (RandomUtils.chance(0.5)) "screen" else "battle")
+            case (true, true) => Some("battle") // Only battle if not adjacent
+            case (true, false) => Some("battle")
+            case (false, true) if isAdjacent => Some("screen") // Only screen if adjacent
+            case (false, true) => None // Skip if screen only but not adjacent
+            case _ => None
+          }
+        }
+      }
+
+      if (decidedModeOpt.isEmpty) {
+        println(s"[TargetFocusing] Creature $chosenName not adjacent, skipping screen targeting")
+        return Some(state -> NoOpTask)
+      }
+
+      val decidedMode = decidedModeOpt.get
+
+      // Resolve the UI coordinates for the decided mode
+      val posOpt = decidedMode match {
+        case "battle" => getBattlePosition(chosenId, json)
+        case "screen" => getScreenPosition(chosenId, json)
+        case _ => None
+      }
+
+      posOpt match {
+        case Some((x, y)) =>
+          val newAT = at.copy(
+            plannedMarkingMode = Some(decidedMode),
+            stateMarkingTarget = "target marking",
+            lastTargetActionTime = now
+          )
+          println(s"[TargetFocusing] Focusing on $chosenName ($chosenId) at ($x, $y) using mode '$decidedMode', adjacent: $isAdjacent")
+          val newState = state.copy(autoTarget = newAT)
+          Some(newState -> MKTask(taskName, MKActions(mouse = List(MoveMouse(x, y)), keyboard = Nil)))
+
+        case None =>
+          val newAT = at.copy(
+            plannedMarkingMode = None,
+            stateMarkingTarget = "free"
+          )
+          Some(state.copy(autoTarget = newAT) -> NoOpTask)
+      }
+    }
+
     private def getCreaturePosition(chosenId: Int, json: JsValue): Option[(Int, Int)] = {
-      // Same logic as TargetFocusing - find updated position
-      val battlePanelResult = for {
+      getBattlePosition(chosenId, json).orElse(getScreenPosition(chosenId, json))
+    }
+
+    private def getBattlePosition(chosenId: Int, json: JsValue): Option[(Int, Int)] = {
+      for {
         posObj <- (json \ "screenInfo" \ "battlePanelLoc" \ chosenId.toString).asOpt[JsObject]
         x <- (posObj \ "PosX").asOpt[Int]
         y <- (posObj \ "PosY").asOpt[Int]
       } yield (x, y)
+    }
 
-      battlePanelResult.orElse {
-        val battleInfo = (json \ "battleInfo").as[Map[String, JsValue]]
-        val tileIdOpt = battleInfo.values
-          .find(obj => (obj \ "Id").asOpt[Int].contains(chosenId))
-          .flatMap { obj =>
-            for {
-              x <- (obj \ "PositionX").asOpt[Int]
-              y <- (obj \ "PositionY").asOpt[Int]
-              z <- (obj \ "PositionZ").asOpt[Int]
-            } yield {
-              val zStr = f"$z%02d"
-              s"$x$y$zStr"
-            }
-          }
+    private def getScreenPosition(chosenId: Int, json: JsValue): Option[(Int, Int)] = {
+      val battleInfo = (json \ "battleInfo").asOpt[Map[String, JsValue]].getOrElse(Map.empty)
+      val tileIdOpt = battleInfo.values
+        .find(obj => (obj \ "Id").asOpt[Int].contains(chosenId))
+        .flatMap { obj =>
+          for {
+            x <- (obj \ "PositionX").asOpt[Int]
+            y <- (obj \ "PositionY").asOpt[Int]
+            z <- (obj \ "PositionZ").asOpt[Int]
+          } yield f"$x$y${z}%02d"
+        }
 
-        val mapTiles = (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
-        mapTiles.values
-          .find(obj => (obj \ "id").asOpt[String] == tileIdOpt)
-          .flatMap { obj =>
-            for {
-              x <- (obj \ "x").asOpt[Int]
-              y <- (obj \ "y").asOpt[Int]
-            } yield (x, y)
-          }
+      val mapTiles = (json \ "screenInfo" \ "mapPanelLoc").asOpt[Map[String, JsObject]].getOrElse(Map.empty)
+      mapTiles.values.find(obj => (obj \ "id").asOpt[String] == tileIdOpt).flatMap { obj =>
+        for {
+          x <- (obj \ "x").asOpt[Int]
+          y <- (obj \ "y").asOpt[Int]
+        } yield (x, y)
       }
     }
   }
 
+
+//  private object TargetFocusing extends Step {
+//    private val taskName = "TargetFocusing"
+//
+//    override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
+//      val at = state.autoTarget
+//      val now = System.currentTimeMillis()
+//      val markRetryIntervalMs = 2000L
+//
+//      // Preconditions
+//      if (at.stateMarkingTarget != "free" || at.chosenTargetId == 0) {
+//        return Some(state -> NoOpTask)
+//      }
+//      if (now - at.lastTargetActionTime < at.targetActionThrottle) {
+//        return Some(state -> NoOpTask)
+//      }
+//      val alreadyMarked = (json \ "attackInfo" \ "Id").asOpt[Int].contains(at.chosenTargetId)
+//      if (at.stateAutoTarget != "fight" || alreadyMarked || (now - at.lastTargetMarkCommandSend < markRetryIntervalMs)) {
+//        return Some(state -> NoOpTask)
+//      }
+//
+//      val chosenId = at.chosenTargetId
+//      val chosenName = at.chosenTargetName
+//
+//      // Decide marking mode based on creature settings
+//      val decidedModeOpt: Option[String] = {
+//        val csOpt = settings.autoTargetSettings.creatureList
+//          .map(parseCreature)
+//          .find(_.name.equalsIgnoreCase(chosenName))
+//        csOpt.flatMap { cs =>
+//          (cs.targetBattle, cs.targetScreen) match {
+//            case (true, true)  => Some(if (RandomUtils.chance(0.5)) "screen" else "battle")
+//            case (true, false) => Some("battle")
+//            case (false, true) => Some("screen")
+//            case _             => None
+//          }
+//        }
+//      }
+//
+//      if (decidedModeOpt.isEmpty) {
+//        return Some(state -> NoOpTask)
+//      }
+//
+//      val decidedMode = decidedModeOpt.get
+//
+//      // Resolve the UI coordinates for the decided mode
+//      val posOpt = decidedMode match {
+//        case "battle" => getBattlePosition(chosenId, json)
+//        case "screen" => getScreenPosition(chosenId, json)
+//        case _        => None
+//      }
+//
+//      posOpt match {
+//        case Some((x, y)) =>
+//          val newAT = at.copy(
+//            plannedMarkingMode = Some(decidedMode),
+//            stateMarkingTarget = "target marking",
+//            lastTargetActionTime = now
+//          )
+//          println(s"[TargetFocusing] Focusing on $chosenName ($chosenId) at ($x, $y) using mode '$decidedMode'")
+//          val newState = state.copy(autoTarget = newAT)
+//          Some(newState -> MKTask(taskName, MKActions(mouse = List(MoveMouse(x, y)), keyboard = Nil)))
+//
+//        case None =>
+//          // Could not find a position for the decided mode, reset
+//          val newAT = at.copy(
+//            plannedMarkingMode = None,
+//            stateMarkingTarget = "free"
+//          )
+//          Some(state.copy(autoTarget = newAT) -> NoOpTask)
+//      }
+//    }
+//
+//    // Kept for compatibility with your selection; routes to screen first then battle if needed.
+//    // Does not use scala.util.Random.
+//    private def getCreaturePosition(chosenId: Int, json: JsValue): Option[(Int, Int)] = {
+//      getBattlePosition(chosenId, json).orElse(getScreenPosition(chosenId, json))
+//    }
+//
+//    private def getBattlePosition(chosenId: Int, json: JsValue): Option[(Int, Int)] = {
+//      for {
+//        posObj <- (json \ "screenInfo" \ "battlePanelLoc" \ chosenId.toString).asOpt[JsObject]
+//        x <- (posObj \ "PosX").asOpt[Int]
+//        y <- (posObj \ "PosY").asOpt[Int]
+//      } yield (x, y)
+//    }
+//
+//    private def getScreenPosition(chosenId: Int, json: JsValue): Option[(Int, Int)] = {
+//      val battleInfo = (json \ "battleInfo").asOpt[Map[String, JsValue]].getOrElse(Map.empty)
+//      val tileIdOpt = battleInfo.values
+//        .find(obj => (obj \ "Id").asOpt[Int].contains(chosenId))
+//        .flatMap { obj =>
+//          for {
+//            x <- (obj \ "PositionX").asOpt[Int]
+//            y <- (obj \ "PositionY").asOpt[Int]
+//            z <- (obj \ "PositionZ").asOpt[Int]
+//          } yield f"$x$y${z}%02d"
+//        }
+//
+//      val mapTiles = (json \ "screenInfo" \ "mapPanelLoc").asOpt[Map[String, JsObject]].getOrElse(Map.empty)
+//      mapTiles.values.find(obj => (obj \ "id").asOpt[String] == tileIdOpt).flatMap { obj =>
+//        for {
+//          x <- (obj \ "x").asOpt[Int]
+//          y <- (obj \ "y").asOpt[Int]
+//        } yield (x, y)
+//      }
+//    }
+//  }
+
+  private object TargetMarking extends Step {
+    private val taskName = "TargetMarking"
+    private val markRetryIntervalMs = 2000L
+
+    override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
+      val at = state.autoTarget
+      val now = System.currentTimeMillis()
+
+      if (at.chosenTargetId == 0) {
+        return Some(state -> NoOpTask)
+      }
+
+      // Already marked → clear any pending marking state
+      val alreadyMarked = (json \ "attackInfo" \ "Id").asOpt[Int].contains(at.chosenTargetId)
+      if (alreadyMarked) {
+        val cleared = at.copy(stateMarkingTarget = "free", plannedMarkingMode = None)
+        return Some(state.copy(autoTarget = cleared) -> NoOpTask)
+      }
+
+      // Consume the planned mode from focusing
+      val modeOpt = at.plannedMarkingMode
+      if (modeOpt.isEmpty) {
+        return Some(state -> NoOpTask)
+      }
+
+      if (now - at.lastTargetMarkCommandSend < markRetryIntervalMs) {
+        return Some(state -> NoOpTask)
+      }
+
+      val chosenId = at.chosenTargetId
+      val mode = modeOpt.get
+
+      val actions: List[MouseAction] = mode match {
+        case "battle" =>
+          getBattlePosition(chosenId, json) match {
+            case Some((x, y)) => List(MoveMouse(x, y), LeftButtonPress(x, y), LeftButtonRelease(x, y))
+            case None         => Nil
+          }
+        case "screen" =>
+          getScreenPosition(chosenId, json) match {
+            case Some((x, y)) => List(MoveMouse(x, y), RightButtonPress(x, y), RightButtonRelease(x, y))
+            case None         => Nil
+          }
+        case _ => Nil
+      }
+
+      if (actions.isEmpty) {
+        val resetAT = at.copy(stateMarkingTarget = "free", plannedMarkingMode = None)
+        return Some(state.copy(autoTarget = resetAT) -> NoOpTask)
+      }
+
+      val newAT = at.copy(
+        lastTargetMarkCommandSend = now,
+        lastMarkingAttemptedId = chosenId,
+        stateMarkingTarget = "free",
+        plannedMarkingMode = None
+      )
+      println(s"[TargetMarking] Marking target ${at.chosenTargetId} using mode $mode")
+      val newState = state.copy(autoTarget = newAT)
+      Some(newState -> MKTask(taskName, MKActions(mouse = actions, keyboard = Nil)))
+    }
+
+    private def getBattlePosition(chosenId: Int, json: JsValue): Option[(Int, Int)] = {
+      for {
+        posObj <- (json \ "screenInfo" \ "battlePanelLoc" \ chosenId.toString).asOpt[JsObject]
+        x <- (posObj \ "PosX").asOpt[Int]
+        y <- (posObj \ "PosY").asOpt[Int]
+      } yield (x, y)
+    }
+
+    private def getScreenPosition(chosenId: Int, json: JsValue): Option[(Int, Int)] = {
+      val battleInfo = (json \ "battleInfo").asOpt[Map[String, JsValue]].getOrElse(Map.empty)
+      val tileIdOpt = battleInfo.values
+        .find(obj => (obj \ "Id").asOpt[Int].contains(chosenId))
+        .flatMap { obj =>
+          for {
+            x <- (obj \ "PositionX").asOpt[Int]
+            y <- (obj \ "PositionY").asOpt[Int]
+            z <- (obj \ "PositionZ").asOpt[Int]
+          } yield f"$x$y${z}%02d"
+        }
+
+      val mapTiles = (json \ "screenInfo" \ "mapPanelLoc").asOpt[Map[String, JsObject]].getOrElse(Map.empty)
+      mapTiles.values.find(obj => (obj \ "id").asOpt[String] == tileIdOpt).flatMap { obj =>
+        for {
+          x <- (obj \ "x").asOpt[Int]
+          y <- (obj \ "y").asOpt[Int]
+        } yield (x, y)
+      }
+    }
+  }
+
+
+//
+//  private object TargetFocusing extends Step {
+//    override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
+//      val taskName = "TargetFocusing"
+//
+//      val autoTarget = state.autoTarget
+//      val currentTime = System.currentTimeMillis()
+//      val markRetryIntervalMs = 2000L
+//
+//      if (autoTarget.stateMarkingTarget != "free" || autoTarget.chosenTargetId == 0) {
+//        return Some(state -> NoOpTask)
+//      }
+//
+//      // Throttling check
+//      if (currentTime - autoTarget.lastTargetActionTime < autoTarget.targetActionThrottle) {
+//        return Some((state, NoOpTask))
+//      }
+//
+//      val shouldProceed =  autoTarget.stateAutoTarget == "fight" && // true
+//        !isTargetCurrentlyMarked(autoTarget.chosenTargetId, json) && // true
+//        autoTarget.chosenTargetId != 0 && // true
+//        (currentTime - autoTarget.lastTargetMarkCommandSend >= markRetryIntervalMs) // true
+//
+//      if (!shouldProceed) {
+//        return Some((state, NoOpTask))
+//      }
+//
+//      println(s"[$taskName] Entered function.")
+//      val chosenId = autoTarget.chosenTargetId
+//
+//      // Find creature position using the same logic as markOnBattleUI/markOnScreenUI
+//      getCreaturePosition(chosenId, json) match {
+//        case Some((x, y)) =>
+//          val mouseActions = List(MoveMouse(x, y))
+//
+//          val newState = state.copy(autoTarget = autoTarget.copy(
+//            stateMarkingTarget = "target marking",
+//            lastTargetActionTime = currentTime
+//          ))
+//
+//          Some((newState, MKTask("target focusing", MKActions(mouse = mouseActions, keyboard = Nil))))
+//
+//        case None =>
+//          println(s"[$taskName] Creature location not found.")
+//          Some((state.copy(autoTarget = autoTarget.copy(stateMarkingTarget = "free")), NoOpTask))
+//      }
+//    }
+//
+//    private def isTargetCurrentlyMarked(targetId: Int, json: JsValue): Boolean = {
+//      (json \ "attackInfo" \ "Id").asOpt[Int].contains(targetId)
+//    }
+//
+//    private def getCreaturePosition(chosenId: Int, json: JsValue): Option[(Int, Int)] = {
+//      // Try battle panel first (like markOnBattleUI)
+//      val battlePanelResult = for {
+//        posObj <- (json \ "screenInfo" \ "battlePanelLoc" \ chosenId.toString).asOpt[JsObject]
+//        x <- (posObj \ "PosX").asOpt[Int]
+//        y <- (posObj \ "PosY").asOpt[Int]
+//      } yield (x, y)
+//
+//      battlePanelResult.orElse {
+//        // Fallback to screen UI (like markOnScreenUI)
+//        val battleInfo = (json \ "battleInfo").as[Map[String, JsValue]]
+//        val tileIdOpt = battleInfo.values
+//          .find(obj => (obj \ "Id").asOpt[Int].contains(chosenId))
+//          .flatMap { obj =>
+//            for {
+//              x <- (obj \ "PositionX").asOpt[Int]
+//              y <- (obj \ "PositionY").asOpt[Int]
+//              z <- (obj \ "PositionZ").asOpt[Int]
+//            } yield {
+//              val zStr = f"$z%02d"
+//              s"$x$y$zStr"
+//            }
+//          }
+//
+//        val mapTiles = (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
+//        mapTiles.values
+//          .find(obj => (obj \ "id").asOpt[String] == tileIdOpt)
+//          .flatMap { obj =>
+//            for {
+//              x <- (obj \ "x").asOpt[Int]
+//              y <- (obj \ "y").asOpt[Int]
+//            } yield (x, y)
+//          }
+//      }
+//    }
+//  }
+//
+//  private object TargetMarking extends Step {
+//    override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
+//      val taskName = "TargetMarking"
+//      val autoTarget = state.autoTarget
+//      val currentTime = System.currentTimeMillis()
+//      val markRetryIntervalMs = 2000L
+//
+//      if (autoTarget.stateMarkingTarget != "target marking" || autoTarget.chosenTargetId == 0) {
+//        return Some(state -> NoOpTask)
+//      }
+//
+//      // Throttling check
+//      if (currentTime - autoTarget.lastTargetActionTime < autoTarget.targetActionThrottle) {
+//        return Some((state, NoOpTask))
+//      }
+//
+//      val shouldProceed =  autoTarget.stateAutoTarget == "fight" && // true
+//        !isTargetCurrentlyMarked(autoTarget.chosenTargetId, json) && // true
+//        autoTarget.chosenTargetId != 0 && // true
+//        (currentTime - autoTarget.lastTargetMarkCommandSend >= markRetryIntervalMs) // true
+//
+//      if (!shouldProceed) {
+//        return Some((state, NoOpTask))
+//      }
+//
+//      println(s"[$taskName] Entered function.")
+//
+//      val chosenId = autoTarget.chosenTargetId
+//
+//      // Find creature's UPDATED position again
+//      getCreaturePosition(chosenId, json) match {
+//        case Some((x, y)) =>
+//          val mouseActions = List(
+//            MoveMouse(x, y),
+//            LeftButtonPress(x, y),
+//            LeftButtonRelease(x, y)
+//          )
+//
+//          val newState = state.copy(autoTarget = autoTarget.copy(
+//            stateMarkingTarget = "free",
+//            lastTargetActionTime = currentTime
+//          ))
+//
+//          Some((newState, MKTask("target marking", MKActions(mouse = mouseActions, keyboard = Nil))))
+//
+//        case None =>
+//          println(s"[$taskName] Creature location not found.")
+//          Some((state.copy(autoTarget = autoTarget.copy(stateMarkingTarget = "free")), NoOpTask))
+//      }
+//    }
+//
+//        private def isTargetCurrentlyMarked(targetId: Int, json: JsValue): Boolean = {
+//          (json \ "attackInfo" \ "Id").asOpt[Int].contains(targetId)
+//        }
+//
+//    private def getCreaturePosition(chosenId: Int, json: JsValue): Option[(Int, Int)] = {
+//      // Same logic as TargetFocusing - find updated position
+//      val battlePanelResult = for {
+//        posObj <- (json \ "screenInfo" \ "battlePanelLoc" \ chosenId.toString).asOpt[JsObject]
+//        x <- (posObj \ "PosX").asOpt[Int]
+//        y <- (posObj \ "PosY").asOpt[Int]
+//      } yield (x, y)
+//
+//      battlePanelResult.orElse {
+//        val battleInfo = (json \ "battleInfo").as[Map[String, JsValue]]
+//        val tileIdOpt = battleInfo.values
+//          .find(obj => (obj \ "Id").asOpt[Int].contains(chosenId))
+//          .flatMap { obj =>
+//            for {
+//              x <- (obj \ "PositionX").asOpt[Int]
+//              y <- (obj \ "PositionY").asOpt[Int]
+//              z <- (obj \ "PositionZ").asOpt[Int]
+//            } yield {
+//              val zStr = f"$z%02d"
+//              s"$x$y$zStr"
+//            }
+//          }
+//
+//        val mapTiles = (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
+//        mapTiles.values
+//          .find(obj => (obj \ "id").asOpt[String] == tileIdOpt)
+//          .flatMap { obj =>
+//            for {
+//              x <- (obj \ "x").asOpt[Int]
+//              y <- (obj \ "y").asOpt[Int]
+//            } yield (x, y)
+//          }
+//      }
+//    }
+//  }
+//
 
 
 //  private object TargetMarking extends Step {
@@ -1165,6 +1414,168 @@ object AutoTargetFeature {
   }
 
 
+  private object PrepareToLoot extends Step {
+    private val taskName = "PrepareToLoot"
+
+    def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
+      val currentTime = System.currentTimeMillis()
+      val autoTarget = state.autoTarget
+
+      // Check if not in fight state
+      if (autoTarget.stateAutoTarget != "fight") {
+        return None
+      }
+
+      // Check throttling similar to autoLoot
+      if (autoTarget.targetActionThrottle > currentTime - autoTarget.lastTargetActionTime) {
+        println(s"[$taskName] Too soon since last action → NoOp")
+        return Some(state -> NoOpTask)
+      }
+
+      // Get the current target ID
+      val targetId = autoTarget.chosenTargetId
+      if (targetId == 0) {
+        return None
+      }
+
+      // Find the creature in battleInfo
+      val battleInfo = (json \ "battleInfo").as[Map[String, JsValue]]
+      val creatureOpt = battleInfo.values.find { creatureData =>
+        (creatureData \ "Id").asOpt[Int].contains(targetId)
+      }
+
+      creatureOpt match {
+        case Some(creatureData) =>
+          val creatureName = (creatureData \ "Name").asOpt[String].getOrElse("")
+          val healthPercent = (creatureData \ "HealthPercent").asOpt[Int].getOrElse(100)
+          val isMonster = (creatureData \ "IsMonster").asOpt[Boolean].getOrElse(false)
+
+          if (!isMonster || creatureName.isEmpty) {
+            return None
+          }
+
+          // Check if creature has looting settings
+          settings.autoTargetSettings.creatureList
+            .map(parseCreature)
+            .find(_.name.equalsIgnoreCase(creatureName)) match {
+
+            case Some(creatureSettings) =>
+              // Check if creature has any looting settings
+              val hasLootSettings = creatureSettings.lootMonsterImmediately || creatureSettings.lootMonsterAfterFight
+
+              if (!hasLootSettings) {
+                return None
+              }
+
+              // For immediate looting or after fight looting with no monsters in battle
+              val shouldPrepareLoot = if (creatureSettings.lootMonsterImmediately) {
+                true
+              } else if (creatureSettings.lootMonsterAfterFight) {
+                // Check if there are other monsters in battle
+                val hasOtherMonsters = battleInfo.values.exists { otherCreature =>
+                  val otherId = (otherCreature \ "Id").asOpt[Int].getOrElse(0)
+                  val otherIsMonster = (otherCreature \ "IsMonster").asOpt[Boolean].getOrElse(false)
+                  otherIsMonster && otherId != targetId
+                }
+                !hasOtherMonsters
+              } else {
+                false
+              }
+
+              if (!shouldPrepareLoot) {
+                return None
+              }
+
+              // Check if creature has less than 60% HP
+              if (healthPercent < 20) {
+                println(s"[$taskName] Creature $creatureName has $healthPercent% HP, preparing to loot")
+
+                // Find creature position using similar logic to TargetFocusing
+                getScreenPosition(targetId, json) match {
+                  case Some((x, y)) =>
+                    val mouseActions = List(MoveMouse(x, y))
+
+                    val newState = state.copy(autoTarget = autoTarget.copy(
+                      lastTargetActionTime = currentTime
+                    ))
+
+                    Some((newState, MKTask("prepare to loot", MKActions(mouse = mouseActions, keyboard = Nil))))
+
+                  case None =>
+                    println(s"[$taskName] Creature location not found")
+                    None
+                }
+              } else {
+                None
+              }
+
+            case None =>
+              println(s"[$taskName] No looting settings found for creature: $creatureName")
+              None
+          }
+
+        case None =>
+          None
+      }
+    }
+
+    private def getScreenPosition(chosenId: Int, json: JsValue): Option[(Int, Int)] = {
+      val battleInfo = (json \ "battleInfo").asOpt[Map[String, JsValue]].getOrElse(Map.empty)
+      val tileIdOpt = battleInfo.values
+        .find(obj => (obj \ "Id").asOpt[Int].contains(chosenId))
+        .flatMap { obj =>
+          for {
+            x <- (obj \ "PositionX").asOpt[Int]
+            y <- (obj \ "PositionY").asOpt[Int]
+            z <- (obj \ "PositionZ").asOpt[Int]
+          } yield f"$x$y${z}%02d"
+        }
+
+      val mapTiles = (json \ "screenInfo" \ "mapPanelLoc").asOpt[Map[String, JsObject]].getOrElse(Map.empty)
+      mapTiles.values.find(obj => (obj \ "id").asOpt[String] == tileIdOpt).flatMap { obj =>
+        for {
+          x <- (obj \ "x").asOpt[Int]
+          y <- (obj \ "y").asOpt[Int]
+        } yield (x, y)
+      }
+    }
+
+    private def getCreaturePosition(chosenId: Int, json: JsValue): Option[(Int, Int)] = {
+      // Try battle panel first
+      val battlePanelResult = for {
+        posObj <- (json \ "screenInfo" \ "battlePanelLoc" \ chosenId.toString).asOpt[JsObject]
+        x <- (posObj \ "PosX").asOpt[Int]
+        y <- (posObj \ "PosY").asOpt[Int]
+      } yield (x, y)
+
+      battlePanelResult.orElse {
+        // Fallback to screen UI
+        val battleInfo = (json \ "battleInfo").as[Map[String, JsValue]]
+        val tileIdOpt = battleInfo.values
+          .find(obj => (obj \ "Id").asOpt[Int].contains(chosenId))
+          .flatMap { obj =>
+            for {
+              x <- (obj \ "PositionX").asOpt[Int]
+              y <- (obj \ "PositionY").asOpt[Int]
+              z <- (obj \ "PositionZ").asOpt[Int]
+            } yield {
+              val zStr = f"$z%02d"
+              s"$x$y$zStr"
+            }
+          }
+
+        val mapTiles = (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
+        mapTiles.values
+          .find(obj => (obj \ "id").asOpt[String] == tileIdOpt)
+          .flatMap { obj =>
+            for {
+              x <- (obj \ "x").asOpt[Int]
+              y <- (obj \ "y").asOpt[Int]
+            } yield (x, y)
+          }
+      }
+    }
+  }
 
   private def runMovementToCreature(
                                      creatureData: CreatureInfo,
@@ -1255,7 +1666,7 @@ object AutoTargetFeature {
                                               state:          GameState,
                                               json:           JsValue
                                             ): GameState = {
-//    println("[generateSubwaypointsToCreature] Starting.")
+    println("[generateSubwaypointsToCreature] Starting.")
 
     // 1) pull all tiles and build grid
     val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
@@ -1264,7 +1675,7 @@ object AutoTargetFeature {
     val gridBounds @ (minX, minY, maxX, maxY) = (xs.min, ys.min, xs.max, ys.max)
 
     val (grid, (offX, offY)) = createBooleanGrid(tiles, minX, minY)
-//    println(s"[generateSubwaypointsToCreature] Grid bounds = $gridBounds, offset = ($offX,$offY)")
+    println(s"[generateSubwaypointsToCreature] Grid bounds = $gridBounds, offset = ($offX,$offY)")
 
     // 2) get character position
     val presentLoc = Vec(
@@ -1272,7 +1683,7 @@ object AutoTargetFeature {
       (json \ "characterInfo" \ "PositionY").as[Int]
     )
 
-//    println(s"[generateSubwaypointsToCreature] Character: $presentLoc → Target: $targetLocation")
+    println(s"[generateSubwaypointsToCreature] Character: $presentLoc → Target: $targetLocation")
 
     // 3) grid bounds warning
     if (
@@ -1293,7 +1704,7 @@ object AutoTargetFeature {
       }
 
     val filteredPath = rawPath.filterNot(_ == presentLoc)
-//    println(s"[generateSubwaypointsToCreature] Final path: $filteredPath")
+    println(s"[generateSubwaypointsToCreature] Final path: $filteredPath")
 
     // 5) debug visualization with printGridCreatures
     printGridCreatures(
@@ -1508,7 +1919,6 @@ object AutoTargetFeature {
     }
   }
 
-
   private object GetAttackInfo extends Step {
     private val taskName = "GetAttackInfo"
 
@@ -1517,33 +1927,47 @@ object AutoTargetFeature {
                       json:     JsValue,
                       settings: UISettings
                     ): Option[(GameState, MKTask)] = {
-      // try to pull the attacked creature's ID
-      (json \ "attackInfo" \ "Id").asOpt[Int].map { targetId =>
-        // switch into attacking state
 
-        // pull name & position safely
-        val targetName = (json \ "attackInfo" \ "Name").asOpt[String].getOrElse("Unknown")
-        val xPos = (json \ "attackInfo" \ "Position" \ "x").asOpt[Int].getOrElse(0)
-        val yPos = (json \ "attackInfo" \ "Position" \ "y").asOpt[Int].getOrElse(0)
-        val zPos = (json \ "attackInfo" \ "Position" \ "z").asOpt[Int].getOrElse(0)
+      val targetId = state.autoTarget.chosenTargetId
 
-        printInColor(ANSI_BLUE,
-          s"[GetAttackInfo] Current target: $targetName ($targetId) at [$xPos,$yPos,$zPos]")
-        val newCaveBotState = state.caveBot.copy(stateHunting = "stop")
-        val newAutoTargetState = state.autoTarget.copy(
-          lastTargetName  = targetName,
-          lastTargetPos   = (xPos, yPos, zPos),
-          creatureTarget  = targetId
-        )
+      // Skip if no target is chosen
+      if (targetId == 0) {
+        return None
+      }
 
-        // build the updated GameState
-        val newState = state.copy(
-          caveBot = newCaveBotState,
-          autoTarget = newAutoTargetState
-        )
+      // look up position from battleInfo using chosenTargetId
+      val battleInfo = (json \ "battleInfo").as[Map[String, JsValue]]
+      val creatureOpt = battleInfo.values
+        .find(creatureData => (creatureData \ "Id").asOpt[Int].contains(targetId))
 
-        // return a no-action task to stop any further Steps this tick
-        newState -> MKTask(taskName, MKActions.empty)
+      creatureOpt match {
+        case Some(creatureData) =>
+          val targetName = (creatureData \ "Name").asOpt[String].getOrElse("Unknown")
+          val x = (creatureData \ "PositionX").asOpt[Int].getOrElse(0)
+          val y = (creatureData \ "PositionY").asOpt[Int].getOrElse(0)
+          val z = (creatureData \ "PositionZ").asOpt[Int].getOrElse(0)
+
+          printInColor(ANSI_BLUE,
+            s"[GetAttackInfo] Current target: $targetName ($targetId) at [$x,$y,$z]")
+
+          val newCaveBotState = state.caveBot.copy(stateHunting = "stop")
+          val newAutoTargetState = state.autoTarget.copy(
+            lastTargetName  = targetName,
+            lastTargetPos   = (x, y, z),
+            creatureTarget  = targetId
+          )
+
+          val newState = state.copy(
+            caveBot = newCaveBotState,
+            autoTarget = newAutoTargetState
+          )
+
+          Some(newState -> MKTask(taskName, MKActions.empty))
+
+        case None =>
+          // Target not found in battleInfo, possibly dead or out of range
+          printInColor(ANSI_BLUE, s"[GetAttackInfo] Target $targetId not found in battleInfo")
+          None
       }
     }
   }
@@ -2200,17 +2624,18 @@ object AutoTargetFeature {
           case _ => s"${red}[X]$reset" // Non-walkable tile
         }
 
-//        print(symbol)ss
+        print(symbol)
       }
-//      println() // New line after each row
+      println() // New line after each row
     }
   }
 
   // Adjusted function to use the x and y values of Vec as min and max
   def generateRandomDelay(timeRange: (Int, Int)): Long = {
-    val rand = new Random
+//    val rand = new Random
     val (minDelay, maxDelay) = timeRange
-    minDelay + (rand.nextLong() % (maxDelay - minDelay + 1))
+    minDelay
+//    + (rand.nextLong() % (maxDelay - minDelay + 1))
   }
 
   def moveToTarget(target: Vec, state0: GameState, json: JsValue): (GameState, List[KeyboardAction]) = {
@@ -2234,10 +2659,178 @@ object AutoTargetFeature {
         (updatedState, keyboardActions)
 
       case None =>
-        println(s"[moveToTarget - chase] No direction found from $presentLoc")
-        (gs1, Nil)
+        val currentTime = System.currentTimeMillis()
+        val at = gs1.autoTarget
+
+        // Get current creature position from lastTargetPos
+        val (creatureX, creatureY, _) = at.lastTargetPos
+        val creaturePos = Vec(creatureX, creatureY)
+
+        // Check if we need to track creature movement detection
+        val shouldTrackMovement = at.lastKnownCreaturePosition.isEmpty || at.lastKnownCreaturePosition.get != creaturePos
+
+        if (shouldTrackMovement) {
+          // Creature has moved - reset throttle but don't move yet
+          val newThrottle = RandomUtils.between(1500, 5000).toLong
+          val updatedState = gs1.copy(autoTarget = at.copy(
+            lastRandomMovementTime = currentTime,
+            randomMovementThrottle = newThrottle,
+            lastKnownCreaturePosition = Some(creaturePos)
+          ))
+
+          println(s"[moveToTarget - chase] Creature moved to $creaturePos, resetting throttle (will consider moving in ${newThrottle}ms)")
+          return (updatedState, Nil)
+        }
+
+        // Check throttling - only move if enough time has passed since throttle reset
+        if (currentTime - at.lastRandomMovementTime < at.randomMovementThrottle) {
+          println(s"[moveToTarget - chase] Random movement throttled, waiting ${at.randomMovementThrottle - (currentTime - at.lastRandomMovementTime)}ms")
+          return (gs1, Nil)
+        }
+
+        // Generate intelligent movement direction
+        generateHumanLikeDirection(presentLoc, creaturePos, gs1, json) match {
+          case Some(direction) =>
+            val keyboardAction = DirectionalKey(direction)
+
+            val updatedState = gs1.copy(autoTarget = at.copy(
+              lastKnownCreaturePosition = Some(creaturePos)
+            ))
+
+            println(s"[moveToTarget - chase] No path found, using intelligent movement: $direction")
+            (updatedState, List(keyboardAction))
+
+          case None =>
+            println(s"[moveToTarget - chase] No valid movement directions available")
+            (gs1, Nil)
+        }
     }
   }
+
+  private def generateHumanLikeDirection(
+                                          characterPos: Vec,
+                                          creaturePos: Vec,
+                                          state: GameState,
+                                          json: JsValue
+                                        ): Option[String] = {
+    println(s"[generateHumanLikeDirection] Character: $characterPos, Creature: $creaturePos")
+
+    // 1) Build grid from tiles (same as generateSubwaypointsToCreature)
+    val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+    val xs = tiles.keys.map(_.substring(0, 5).toInt)
+    val ys = tiles.keys.map(_.substring(5, 10).toInt)
+    val gridBounds @ (minX, minY, maxX, maxY) = (xs.min, ys.min, xs.max, ys.max)
+
+    val (grid, (offX, offY)) = createBooleanGrid(tiles, minX, minY)
+
+    // 2) Check current position relative to creature
+    val dx = creaturePos.x - characterPos.x
+    val dy = creaturePos.y - characterPos.y
+
+    // If already orthogonal (only horizontal or only vertical difference), don't move
+    val isOrthogonal = (dx == 0 && dy != 0) || (dy == 0 && dx != 0)
+    if (isOrthogonal) {
+      println(s"[generateHumanLikeDirection] Already orthogonal to creature, no movement needed")
+      return None
+    }
+
+    println(s"[generateHumanLikeDirection] Currently diagonal to creature (dx=$dx, dy=$dy), need to move")
+
+    // 3) Generate movement options that go "around" the creature (never away)
+    val movementOptions = List(
+      ("MoveUp", Vec(characterPos.x, characterPos.y - 1)),
+      ("MoveDown", Vec(characterPos.x, characterPos.y + 1)),
+      ("MoveLeft", Vec(characterPos.x - 1, characterPos.y)),
+      ("MoveRight", Vec(characterPos.x + 1, characterPos.y))
+    ).filter { case (_, newPos) =>
+      // Only allow moves that don't increase distance to creature
+      val newDx = creaturePos.x - newPos.x
+      val newDy = creaturePos.y - newPos.y
+      val currentDistance = math.abs(dx) + math.abs(dy)
+      val newDistance = math.abs(newDx) + math.abs(newDy)
+
+      newDistance <= currentDistance // Never move away (maintain or reduce distance)
+    }
+
+    // 4) Filter by walkability
+    val walkableOptions = movementOptions.filter { case (_, pos) =>
+      isWalkable(pos, grid, offX, offY, gridBounds)
+    }
+
+    println(s"[generateHumanLikeDirection] Walkable movement options: ${walkableOptions.map(_._1)}")
+
+    if (walkableOptions.isEmpty) {
+      println(s"[generateHumanLikeDirection] No valid movement options available")
+      return None
+    }
+
+    // 5) Prioritize moves that make us orthogonal
+    val orthogonalMoves = walkableOptions.filter { case (_, newPos) =>
+      val newDx = creaturePos.x - newPos.x
+      val newDy = creaturePos.y - newPos.y
+      (newDx == 0 && newDy != 0) || (newDy == 0 && newDx != 0) // Results in orthogonal position
+    }
+
+    val chosenDirection = if (orthogonalMoves.nonEmpty) {
+      // Prefer moves that achieve orthogonal positioning
+      val chosen = orthogonalMoves(RandomUtils.between(0, orthogonalMoves.length - 1))._1
+      println(s"[generateHumanLikeDirection] Choosing orthogonal move: $chosen")
+      chosen
+    } else {
+      // Fallback to any valid move that doesn't increase distance
+      val chosen = walkableOptions(RandomUtils.between(0, walkableOptions.length - 1))._1
+      println(s"[generateHumanLikeDirection] Choosing distance-maintaining move: $chosen")
+      chosen
+    }
+
+    Some(chosenDirection)
+  }
+
+  private def isWalkable(pos: Vec, grid: Array[Array[Boolean]], offX: Int, offY: Int, gridBounds: (Int, Int, Int, Int)): Boolean = {
+    val (minX, minY, maxX, maxY) = gridBounds
+
+    // Check if position is within grid bounds
+    if (pos.x < minX || pos.x > maxX || pos.y < minY || pos.y > maxY) {
+      return false
+    }
+
+    // Convert world coordinates to grid coordinates
+    // The grid is indexed as grid[y][x], where:
+    // - y corresponds to (pos.y - offY)
+    // - x corresponds to (pos.x - offX)
+    val gridX = pos.x - offX
+    val gridY = pos.y - offY
+
+    // Check grid bounds - grid is [height][width]
+    if (gridY < 0 || gridY >= grid.length || gridX < 0 || gridX >= grid(0).length) {
+      return false
+    }
+
+    // Check if tile is walkable - correct indexing: grid[y][x]
+    grid(gridY)(gridX)
+  }
+
+
+//  private def isWalkable(pos: Vec, grid: Array[Array[Boolean]], offX: Int, offY: Int, gridBounds: (Int, Int, Int, Int)): Boolean = {
+//    val (minX, minY, maxX, maxY) = gridBounds
+//
+//    // Check if position is within grid bounds
+//    if (pos.x < minX || pos.x > maxX || pos.y < minY || pos.y > maxY) {
+//      return false
+//    }
+//
+//    // Convert world coordinates to grid coordinates
+//    val gridX = pos.x - offX
+//    val gridY = pos.y - offY
+//
+//    // Check grid bounds
+//    if (gridX < 0 || gridX >= grid.length || gridY < 0 || gridY >= grid(0).length) {
+//      return false
+//    }
+//
+//    // Check if tile is walkable (true = walkable)
+//    grid(gridX)(gridY)
+//  }
 
   case class CreatureInfo(
                            id: Int,
