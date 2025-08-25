@@ -121,7 +121,10 @@ case class AutoLootState(
                           stateLootPlunder: String = "free",
                           carsassToLoot: List[(String, Long)] = List(),
                           lastAutoLootActionTime: Long = 0,
-
+                          startTimeOfLooting: Long = 0,
+                          unfreezeAutoLootCooldown: Long = 15000L,
+                          throttleCoefficient: Double = 1.3,
+                          lastContainerContent: String = "",
                           autoLootActionThrottle: Long = 600L,
 //                          lastItemActionCommandSend: Long = 0,
                           carcassTileToLoot: Option[(String, Long)] = None,
@@ -164,7 +167,20 @@ case class AutoTargetState(
                             updateAttackChangeTime: Long = 0,
                             updateAttackThrottleTime: Long = 4000L,
                             lastTargetActionTime: Long = 0,
+                            plannedMarkingMode: Option[String] = None,
                             targetActionThrottle: Long = 600L,
+
+                            creaturePositionHistory: Map[Int, List[(Vec, Long)]] = Map.empty,
+                            chaseMode: String = "chase_to", // "chase_to" or "chase_after"
+//                            lastCreatureMovementCheck: Long = 0,
+                            creatureMovementVector: Option[Vec] = None,
+
+
+                            randomMovementThrottle: Long = RandomUtils.randomBetween(1500, 5000),
+                            lastRandomMovementTime: Long = 0,
+                            isActivelyMoving: Boolean = false,
+                            lastKnownCreaturePosition: Option[Vec] = None,
+
                             dangerLevelHealing: String = "low",
                             lastMarkingAttemptedId: Int = 0,
                             lastTargetLookoutTime: Long = 0,

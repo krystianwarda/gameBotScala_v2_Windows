@@ -310,6 +310,8 @@ object AutoTargetFeature {
             chosenTargetId = chosen.id,
             chosenTargetName = chosen.name,
             stateAutoTarget = "fight",
+            chaseMode = "chase_to",
+            creaturePositionHistory = Map.empty,
             lastTargetPos = (chosen.posX, chosen.posY, chosen.posZ)
           )
 
@@ -1391,6 +1393,7 @@ object AutoTargetFeature {
     override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
       val at = state.autoTarget
 
+      println(s"[EngageMovement] Activating with status: ${at.stateAutoTarget}")
       if (at.stateAutoTarget != "fight") return None
 
       val presentLoc = Vec(
@@ -1412,6 +1415,255 @@ object AutoTargetFeature {
       Some(newState -> task)
     }
   }
+
+  private def runMovementToCreature(
+                                     creatureData: CreatureInfo,
+                                     presentLoc: Vec,
+                                     json: JsValue,
+                                     state: GameState,
+                                     settings: UISettings
+                                   ): (GameState, MKTask) = {
+
+    val baseState = state
+    val csOpt = transformToObject(creatureData, settings.autoTargetSettings.creatureList)
+
+    csOpt match {
+      case None =>
+        println(s"[Movement] no settings for ${creatureData.name}")
+        (baseState, MKTask("empty", MKActions(Nil, Nil)))
+
+      case Some(cs) =>
+        val mode = cs.chase match {
+          case true if cs.keepDistance => "lureCreatureToTeam"
+          case true => "chase"
+          case false if cs.keepDistance => "keepDistance"
+          case _ => "free"
+        }
+
+        mode match {
+          case "chase" =>
+            println(s"[runMovementToCreature-chase] Processing chase for creature ${creatureData.id}")
+            val (stateAfterChase, targetPos) = determineChaseTarget(
+              Vec(creatureData.posX, creatureData.posY),
+              presentLoc,
+              state,
+              System.currentTimeMillis(),
+              creatureData.id
+            )
+
+            val (finalState, keys) = moveToTarget(targetPos, stateAfterChase, json)
+            (finalState, MKTask("Chase", MKActions(Nil, keys)))
+
+          case "keepDistance" =>
+            println(s"[runMovementToCreature-chase] Processing keepDistance for creature ${creatureData.id}")
+            val dist = math.max(
+              math.abs(creatureData.posX - presentLoc.x),
+              math.abs(creatureData.posY - presentLoc.y)
+            )
+
+            if (dist < 3) {
+              val gs1 = generateSubwaypointsToEscape(
+                creatureLocation = Vec(creatureData.posX, creatureData.posY),
+                state = baseState,
+                json = json
+              )
+              gs1.autoTarget.subWaypoints.headOption match {
+                case Some(next) =>
+                  val dirOpt = calculateDirection(presentLoc, next, gs1.characterInfo.lastDirection)
+                  println(s"[runMovementToCreature] Calculated direction: $dirOpt from $presentLoc to $next")
+                  val updatedChar = gs1.characterInfo.copy(
+                    lastDirection = dirOpt,
+                    presentCharLocation = presentLoc
+                  )
+                  val updatedAuto = gs1.autoTarget.copy(subWaypoints = gs1.autoTarget.subWaypoints.tail)
+                  val updatedState = gs1.copy(characterInfo = updatedChar, autoTarget = updatedAuto)
+                  val keyboardActions = dirOpt.toList.map(DirectionalKey(_))
+                  (updatedState, MKTask("runMovementToCreature", MKActions(Nil, keyboardActions)))
+
+                case None =>
+                  println(s"[moveToTarget] No direction found from $presentLoc")
+                  (gs1, NoOpTask)
+              }
+            } else {
+              println("[Movement-keepDistance] safe distance")
+              (baseState, NoOpTask)
+            }
+
+          case "lureCreatureToTeam" =>
+            println(s"[runMovementToCreature-chase] Processing lureCreatureToTeam for creature ${creatureData.id}")
+            val targetPos = getClosestTeamMemberPosition(json, Vec(creatureData.posX, creatureData.posY), settings)
+              .getOrElse(Vec(creatureData.posX, creatureData.posY))
+
+            val (newState, keys) = moveToTarget(targetPos, baseState, json)
+            (newState, MKTask("LureToTeam", MKActions(Nil, keys)))
+
+          case _ =>
+            println("[Movement] no valid movement mode")
+            (baseState, NoOpTask)
+        }
+    }
+  }
+
+
+  private def determineChaseTarget(
+                                    creaturePos: Vec,
+                                    playerPos: Vec,
+                                    state: GameState,
+                                    currentTime: Long,
+                                    creatureId: Int
+                                  ): (GameState, Vec) = {
+
+    val at = state.autoTarget
+    val historyRetentionMs = 1500L
+
+    println(s"[Chase-Debug] Creature ID: $creatureId")
+
+    // Get this creature's position history from the map
+    val creatureHistory = at.creaturePositionHistory.getOrElse(creatureId, List.empty)
+    println(s"[Chase-Debug] Current history size: ${creatureHistory.length}")
+    println(s"[Chase-Debug] Current chase mode: ${at.chaseMode}")
+
+    val workingHistory = creatureHistory
+
+    // Analyze movement pattern and determine chase strategy
+    val updatedChaseMode = if (workingHistory.size >= 2) {
+      // Use the analyzeChaseMode method here
+      val updatedMode = analyzeChaseMode(
+        creaturePos,
+        playerPos,
+        workingHistory.map(_._1),
+        at.chaseMode
+      )
+      updatedMode
+    } else {
+      println(s"[Chase-Debug] Not enough history (${workingHistory.size}), defaulting to chase_to")
+      "chase_to"
+    }
+
+    println(s"[Chase] Mode: $updatedChaseMode, Character position: $playerPos, Current creature: $creaturePos")
+
+
+    // Update the map with this creature's updated history
+    val updatedHistoryMap = at.creaturePositionHistory.updated(creatureId, workingHistory)
+
+    val updatedAT = at.copy(
+      creaturePositionHistory = updatedHistoryMap,
+      chaseMode = updatedChaseMode
+    )
+
+    (state.copy(autoTarget = updatedAT), creaturePos)
+  }
+
+  private def analyzeChaseMode(
+                                currentCreaturePos: Vec,
+                                characterPos: Vec,
+                                positionHistory: List[Vec],
+                                currentChaseMode: String  // Add current mode parameter
+                              ): String = {
+
+    val subtaskName = "analyzeChaseMode"
+    val reachableDistance = 1 // Only immediate adjacent tiles are reachable (8 surrounding tiles)
+
+    val currentDistance = chebyshevDistance(currentCreaturePos, characterPos)
+
+    // If already in chase_after mode, STAY in chase_after mode (don't switch back)
+    if (currentChaseMode == "chase_after") {
+      println(s"[$subtaskName] Maintaining chase_after mode, distance: $currentDistance")
+      "chase_after"
+    } else {
+      // Currently in chase_to mode, check if creature is running away
+      if (positionHistory.size >= 2) {
+        val previousPos = positionHistory(1)
+        val prevDistance = chebyshevDistance(previousPos, characterPos)
+
+        println(s"[$subtaskName] Previous distance: $prevDistance, Current distance: $currentDistance")
+
+        if (currentDistance > prevDistance && currentDistance > reachableDistance) {
+          println(s"[$subtaskName] Creature is running away! Distance increased from $prevDistance to $currentDistance, switching to chase_after")
+          "chase_after"
+        } else {
+          println(s"[$subtaskName] Creature not running away, staying in chase_to mode")
+          "chase_to"
+        }
+      } else {
+        println(s"[$subtaskName] Not enough history (${positionHistory.size}), staying in chase_to")
+        "chase_to"
+      }
+    }
+  }
+
+
+  private def analyzeCreatureMovement(
+                                       creaturePos: Vec,
+                                       state: GameState,
+                                       currentTime: Long
+                                     ): (String, Option[Vec], Vec) = {
+    // Get the current creature's history from the map
+    val creatureId = state.autoTarget.chosenTargetId
+    val history = state.autoTarget.creaturePositionHistory.getOrElse(creatureId, List.empty)
+
+    val isWithinAttackRange = chebyshevDistance(
+      Vec(state.characterInfo.presentCharLocation.x, state.characterInfo.presentCharLocation.y),
+      creaturePos
+    ) <= 1
+
+    println(s"[Chase-Analysis] Creature at $creaturePos, within attack range: $isWithinAttackRange")
+    println(s"[Chase-Analysis] Position history size: ${history.length}")
+
+    val result = if (isWithinAttackRange) {
+      // Check for any movement immediately - don't wait for history to build up
+      if (history.length >= 2) {
+        val lastPos = history(1)._1  // Get the Vec from the tuple
+        val vec = Vec(creaturePos.x - lastPos.x, creaturePos.y - lastPos.y)
+
+        vec match {
+          case Vec(0, 0) =>
+            ("chase_after", None, creaturePos) // Creature is stationary, stay close
+          case _ =>
+            val predicted = Vec(creaturePos.x + vec.x, creaturePos.y + vec.y)
+            ("chase_after", Some(vec), predicted) // Creature is moving, predict next position
+        }
+      } else {
+        ("chase_after", None, creaturePos) // Not enough history, stay close
+      }
+    } else {
+      ("chase_to", None, creaturePos) // Too far, chase directly
+    }
+
+    result
+  }
+
+  private def chebyshevDistance(pos1: Vec, pos2: Vec): Int = {
+    val distance = math.max(math.abs(pos1.x - pos2.x), math.abs(pos1.y - pos2.y))
+    println(s"[Chase-Distance] Distance between $pos1 and $pos2 = $distance")
+    distance
+  }
+
+  private def executeMovementStep(state: GameState, json: JsValue): MKTask = {
+    val px = (json \ "characterInfo" \ "PositionX").as[Int]
+    val py = (json \ "characterInfo" \ "PositionY").as[Int]
+    val presentLoc = Vec(px, py)
+
+    // Use autoTarget subWaypoints (generated by generateSubwaypointsToCreature)
+    state.autoTarget.subWaypoints.headOption match {
+      case Some(next) =>
+        val dirOpt = calculateDirection(presentLoc, next, state.characterInfo.lastDirection)
+        println(s"[Chase] Moving from $presentLoc to $next, direction: $dirOpt")
+
+        dirOpt match {
+          case Some(direction) =>
+            val key = DirectionalKey(direction)
+            MKTask("chase_movement", MKActions(Nil, List(key)))
+          case None =>
+            MKTask("empty", MKActions(Nil, Nil))
+        }
+      case None =>
+        println("[Chase] No waypoints available")
+        MKTask("empty", MKActions(Nil, Nil))
+    }
+  }
+
+
 
 
   private object PrepareToLoot extends Step {
@@ -1577,88 +1829,88 @@ object AutoTargetFeature {
     }
   }
 
-  private def runMovementToCreature(
-                                     creatureData: CreatureInfo,
-                                     presentLoc:   Vec,
-                                     json:         JsValue,
-                                     state:        GameState,
-                                     settings:     UISettings
-                                   ): (GameState, MKTask) = {
-
-    val baseState = state
-
-    val csOpt = transformToObject(creatureData, settings.autoTargetSettings.creatureList)
-
-    csOpt match {
-      case None =>
-        println(s"[Movement] no settings for ${creatureData.name}")
-        (baseState, NoOpTask)
-
-      case Some(cs) =>
-        val mode =
-          if (cs.chase) "chase"
-          else if (cs.keepDistance) "keepDistance"
-          else if (cs.lureCreatureToTeam) "lureCreatureToTeam"
-          else "none"
-
-
-        mode match {
-          case "chase" =>
-            val target = Vec(creatureData.posX, creatureData.posY)
-            val (newState, keys) = moveToTarget(target, baseState, json)
-            (newState, MKTask("Chase", MKActions(Nil, keys)))
-
-          case "keepDistance" =>
-            val dist = math.max(
-              math.abs(creatureData.posX - presentLoc.x),
-              math.abs(creatureData.posY - presentLoc.y)
-            )
-
-            if (dist < 3) {
-              val gs1 = generateSubwaypointsToEscape(
-                creatureLocation = Vec(creatureData.posX, creatureData.posY),
-                state = baseState,
-                json = json
-              )
-              gs1.autoTarget.subWaypoints.headOption match {
-                case Some(next) =>
-                  val dirOpt = calculateDirection(presentLoc, next, gs1.characterInfo.lastDirection)
-                  println(s"[runMovementToCreature] Calculated direction: $dirOpt from $presentLoc to $next")
-                  val updatedChar = gs1.characterInfo.copy(
-                    lastDirection = dirOpt,
-                    presentCharLocation = presentLoc
-                  )
-                  val updatedAuto = gs1.autoTarget.copy(subWaypoints = gs1.autoTarget.subWaypoints.tail)
-                  val updatedState = gs1.copy(characterInfo = updatedChar, autoTarget = updatedAuto)
-                  val keyboardActions = dirOpt.toList.map(DirectionalKey(_))
-                  (updatedState, MKTask("runMovementToCreature", MKActions(Nil, keyboardActions)))
-
-                case None =>
-                  println(s"[moveToTarget] No direction found from $presentLoc")
-                  (gs1, NoOpTask)
-              }
-            } else {
-              println("[Movement-keepDistance] safe distance")
-              (baseState, NoOpTask)
-            }
-
-          case "lureCreatureToTeam" =>
-            val dist = math.max(
-              math.abs(creatureData.posX - presentLoc.x),
-              math.abs(creatureData.posY - presentLoc.y)
-            )
-            val targetPos =
-              if (dist > 5) Vec(creatureData.posX, creatureData.posY)
-              else getClosestTeamMemberPosition(json, presentLoc, settings).getOrElse(presentLoc)
-
-            val (newState, keys) = moveToTarget(targetPos, baseState, json)
-            (newState, MKTask("lureCreatureToTeam", MKActions(Nil, keys)))
-
-          case _ =>
-            (baseState, NoOpTask)
-        }
-    }
-  }
+//  private def runMovementToCreature(
+//                                     creatureData: CreatureInfo,
+//                                     presentLoc:   Vec,
+//                                     json:         JsValue,
+//                                     state:        GameState,
+//                                     settings:     UISettings
+//                                   ): (GameState, MKTask) = {
+//
+//    val baseState = state
+//
+//    val csOpt = transformToObject(creatureData, settings.autoTargetSettings.creatureList)
+//
+//    csOpt match {
+//      case None =>
+//        println(s"[Movement] no settings for ${creatureData.name}")
+//        (baseState, NoOpTask)
+//
+//      case Some(cs) =>
+//        val mode =
+//          if (cs.chase) "chase"
+//          else if (cs.keepDistance) "keepDistance"
+//          else if (cs.lureCreatureToTeam) "lureCreatureToTeam"
+//          else "none"
+//
+//
+//        mode match {
+//          case "chase" =>
+//            val target = Vec(creatureData.posX, creatureData.posY)
+//            val (newState, keys) = moveToTarget(target, baseState, json)
+//            (newState, MKTask("Chase", MKActions(Nil, keys)))
+//
+//          case "keepDistance" =>
+//            val dist = math.max(
+//              math.abs(creatureData.posX - presentLoc.x),
+//              math.abs(creatureData.posY - presentLoc.y)
+//            )
+//
+//            if (dist < 3) {
+//              val gs1 = generateSubwaypointsToEscape(
+//                creatureLocation = Vec(creatureData.posX, creatureData.posY),
+//                state = baseState,
+//                json = json
+//              )
+//              gs1.autoTarget.subWaypoints.headOption match {
+//                case Some(next) =>
+//                  val dirOpt = calculateDirection(presentLoc, next, gs1.characterInfo.lastDirection)
+//                  println(s"[runMovementToCreature] Calculated direction: $dirOpt from $presentLoc to $next")
+//                  val updatedChar = gs1.characterInfo.copy(
+//                    lastDirection = dirOpt,
+//                    presentCharLocation = presentLoc
+//                  )
+//                  val updatedAuto = gs1.autoTarget.copy(subWaypoints = gs1.autoTarget.subWaypoints.tail)
+//                  val updatedState = gs1.copy(characterInfo = updatedChar, autoTarget = updatedAuto)
+//                  val keyboardActions = dirOpt.toList.map(DirectionalKey(_))
+//                  (updatedState, MKTask("runMovementToCreature", MKActions(Nil, keyboardActions)))
+//
+//                case None =>
+//                  println(s"[moveToTarget] No direction found from $presentLoc")
+//                  (gs1, NoOpTask)
+//              }
+//            } else {
+//              println("[Movement-keepDistance] safe distance")
+//              (baseState, NoOpTask)
+//            }
+//
+//          case "lureCreatureToTeam" =>
+//            val dist = math.max(
+//              math.abs(creatureData.posX - presentLoc.x),
+//              math.abs(creatureData.posY - presentLoc.y)
+//            )
+//            val targetPos =
+//              if (dist > 5) Vec(creatureData.posX, creatureData.posY)
+//              else getClosestTeamMemberPosition(json, presentLoc, settings).getOrElse(presentLoc)
+//
+//            val (newState, keys) = moveToTarget(targetPos, baseState, json)
+//            (newState, MKTask("lureCreatureToTeam", MKActions(Nil, keys)))
+//
+//          case _ =>
+//            (baseState, NoOpTask)
+//        }
+//    }
+//  }
 
 
   private def generateSubwaypointsToCreature(
@@ -1946,15 +2198,40 @@ object AutoTargetFeature {
           val x = (creatureData \ "PositionX").asOpt[Int].getOrElse(0)
           val y = (creatureData \ "PositionY").asOpt[Int].getOrElse(0)
           val z = (creatureData \ "PositionZ").asOpt[Int].getOrElse(0)
+          val currentPos = Vec(x, y)
+          val currentTime = System.currentTimeMillis()
 
           printInColor(ANSI_BLUE,
             s"[GetAttackInfo] Current target: $targetName ($targetId) at [$x,$y,$z]")
+
+          // Update creature position history - preserve old position when creature hasn't moved
+          val currentHistory = state.autoTarget.creaturePositionHistory.getOrElse(targetId, List.empty)
+
+          val updatedHistory = currentHistory match {
+            case (lastPos, lastTime) :: tail if lastPos == currentPos =>
+              // Same position - update timestamp but keep old position in history
+              println(s"[GetAttackInfo] Creature hasn't moved, updating timestamp only")
+              (currentPos, currentTime) :: tail
+            case (lastPos, lastTime) :: tail =>
+              // Different position - add new entry and keep previous as history
+              println(s"[GetAttackInfo] Creature moved from $lastPos to $currentPos")
+              (currentPos, currentTime) :: List((lastPos, lastTime))
+            case Nil =>
+              // Empty history - add first entry
+              println(s"[GetAttackInfo] First position recorded: $currentPos")
+              List((currentPos, currentTime))
+          }
+
+          val updatedHistoryMap = state.autoTarget.creaturePositionHistory.updated(targetId, updatedHistory)
+
+          println(s"[GetAttackInfo] Position history for creature $targetId: ${updatedHistory.map(_._1)}")
 
           val newCaveBotState = state.caveBot.copy(stateHunting = "stop")
           val newAutoTargetState = state.autoTarget.copy(
             lastTargetName  = targetName,
             lastTargetPos   = (x, y, z),
-            creatureTarget  = targetId
+            creatureTarget  = targetId,
+            creaturePositionHistory = updatedHistoryMap
           )
 
           val newState = state.copy(
@@ -1971,7 +2248,6 @@ object AutoTargetFeature {
       }
     }
   }
-
 
   private def extractInfoAndSortMonstersFromBattle(json: JsValue, settings: UISettings): List[CreatureInfo] = {
     // Extract battleInfo from the JSON
@@ -2221,6 +2497,7 @@ object AutoTargetFeature {
     (grid, (min_x, min_y))
   }
 
+//  aStarSearch(presentLoc, actualTarget, modifiedGrid, offX, offY)
   def aStarSearch(start: Vec, goal: Vec, grid: Array[Array[Boolean]], min_x: Int, min_y: Int): List[Vec] = {
 //    println(s"Starting aStarSearch with start=$start, goal=$goal, min_x=$min_x, min_y=$min_y")
 
@@ -2638,8 +2915,86 @@ object AutoTargetFeature {
 //    + (rand.nextLong() % (maxDelay - minDelay + 1))
   }
 
+//  def moveToTarget(target: Vec, state0: GameState, json: JsValue): (GameState, List[KeyboardAction]) = {
+//    val gs1 = generateSubwaypointsToCreature(target, state0, json)
+//
+//    val px = (json \ "characterInfo" \ "PositionX").as[Int]
+//    val py = (json \ "characterInfo" \ "PositionY").as[Int]
+//    val presentLoc = Vec(px, py)
+//
+//    gs1.autoTarget.subWaypoints.headOption match {
+//      case Some(next) =>
+//        val dirOpt = calculateDirection(presentLoc, next, gs1.characterInfo.lastDirection)
+//        println(s"[runMovementToCreature-chase] Calculated direction: $dirOpt from $presentLoc to $next")
+//        val updatedChar = gs1.characterInfo.copy(
+//          lastDirection = dirOpt,
+//          presentCharLocation = presentLoc
+//        )
+//        val updatedAuto = gs1.autoTarget.copy(subWaypoints = gs1.autoTarget.subWaypoints.tail)
+//        val updatedState = gs1.copy(characterInfo = updatedChar, autoTarget = updatedAuto)
+//        val keyboardActions = dirOpt.toList.map(DirectionalKey(_))
+//        (updatedState, keyboardActions)
+//
+//      case None =>
+//        val currentTime = System.currentTimeMillis()
+//        val at = gs1.autoTarget
+//
+//        // Get current creature position from lastTargetPos
+//        val (creatureX, creatureY, _) = at.lastTargetPos
+//        val creaturePos = Vec(creatureX, creatureY)
+//
+//        // Check if we need to track creature movement detection
+//        val shouldTrackMovement = at.lastKnownCreaturePosition.isEmpty || at.lastKnownCreaturePosition.get != creaturePos
+//
+//        if (shouldTrackMovement) {
+//          // Creature has moved - reset throttle but don't move yet
+//          val newThrottle = RandomUtils.between(1500, 5000).toLong
+//          val updatedState = gs1.copy(autoTarget = at.copy(
+//            lastRandomMovementTime = currentTime,
+//            randomMovementThrottle = newThrottle,
+//            lastKnownCreaturePosition = Some(creaturePos)
+//          ))
+//
+//          println(s"[moveToTarget - chase] Creature moved to $creaturePos, resetting throttle (will consider moving in ${newThrottle}ms)")
+//          return (updatedState, Nil)
+//        }
+//
+//        // Check throttling - only move if enough time has passed since throttle reset
+//        if (currentTime - at.lastRandomMovementTime < at.randomMovementThrottle) {
+//          println(s"[moveToTarget - chase] Random movement throttled, waiting ${at.randomMovementThrottle - (currentTime - at.lastRandomMovementTime)}ms")
+//          return (gs1, Nil)
+//        }
+//
+//        // Generate intelligent movement direction
+//        generateHumanLikeDirection(presentLoc, creaturePos, gs1, json) match {
+//          case Some(direction) =>
+//            val keyboardAction = DirectionalKey(direction)
+//
+//            val updatedState = gs1.copy(autoTarget = at.copy(
+//              lastKnownCreaturePosition = Some(creaturePos)
+//            ))
+//
+//            println(s"[moveToTarget - chase] No path found, using intelligent movement: $direction")
+//            (updatedState, List(keyboardAction))
+//
+//          case None =>
+//            println(s"[moveToTarget - chase] No valid movement directions available")
+//            (gs1, Nil)
+//        }
+//    }
+//  }
   def moveToTarget(target: Vec, state0: GameState, json: JsValue): (GameState, List[KeyboardAction]) = {
-    val gs1 = generateSubwaypointsToCreature(target, state0, json)
+    val chaseMode = state0.autoTarget.chaseMode
+    val creatureId = state0.autoTarget.chosenTargetId
+
+    // Use different path generation based on chase mode
+    val gs1 = if (chaseMode == "chase_after") {
+      println(s"[moveToTarget] Using predictive pathfinding for chase_after mode")
+      generateSubwaypointsToCreatureWithBlocking(target, state0, json, creatureId)
+    } else {
+      println(s"[moveToTarget] Using normal pathfinding for chase_to mode")
+      generateSubwaypointsToCreature(target, state0, json)
+    }
 
     val px = (json \ "characterInfo" \ "PositionX").as[Int]
     val py = (json \ "characterInfo" \ "PositionY").as[Int]
@@ -2648,7 +3003,7 @@ object AutoTargetFeature {
     gs1.autoTarget.subWaypoints.headOption match {
       case Some(next) =>
         val dirOpt = calculateDirection(presentLoc, next, gs1.characterInfo.lastDirection)
-        println(s"[runMovementToCreature-chase] Calculated direction: $dirOpt from $presentLoc to $next")
+        println(s"[moveToTarget] Calculated direction: $dirOpt from $presentLoc to $next")
         val updatedChar = gs1.characterInfo.copy(
           lastDirection = dirOpt,
           presentCharLocation = presentLoc
@@ -2659,51 +3014,307 @@ object AutoTargetFeature {
         (updatedState, keyboardActions)
 
       case None =>
-        val currentTime = System.currentTimeMillis()
-        val at = gs1.autoTarget
+        handleNarrowCorridorCase(presentLoc, target, gs1, json)
+    }
+  }
 
-        // Get current creature position from lastTargetPos
-        val (creatureX, creatureY, _) = at.lastTargetPos
-        val creaturePos = Vec(creatureX, creatureY)
+  def generateSubwaypointsToCreatureWithBlocking(target: Vec, state: GameState, json: JsValue, creatureId: Int): GameState = {
+    val at = state.autoTarget
 
-        // Check if we need to track creature movement detection
-        val shouldTrackMovement = at.lastKnownCreaturePosition.isEmpty || at.lastKnownCreaturePosition.get != creaturePos
+    // Get movement vector from creature's position history
+    val movementVector = at.creaturePositionHistory.get(creatureId) match {
+      case Some(history) if history.length >= 2 =>
+        val current = history.head._1
+        val previous = history(1)._1
+        println(s"[generateSubwaypointsToCreatureWithBlocking] Previous: $previous, Current: $current")
+        val vector = Vec(current.x - previous.x, current.y - previous.y)
+        println(s"[generateSubwaypointsToCreatureWithBlocking] Movement vector: $vector")
+        Some(vector)
+      case _ =>
+        println(s"[generateSubwaypointsToCreatureWithBlocking] Insufficient history for creature $creatureId")
+        None
+    }
 
-        if (shouldTrackMovement) {
-          // Creature has moved - reset throttle but don't move yet
-          val newThrottle = RandomUtils.between(1500, 5000).toLong
-          val updatedState = gs1.copy(autoTarget = at.copy(
-            lastRandomMovementTime = currentTime,
-            randomMovementThrottle = newThrottle,
-            lastKnownCreaturePosition = Some(creaturePos)
-          ))
+    val finalTarget = movementVector match {
+      case Some(vector) =>
+        val predictedPos = Vec(target.x + vector.x, target.y + vector.y)
+        println(s"[generateSubwaypointsToCreatureWithBlocking] Predicted position: $predictedPos")
 
-          println(s"[moveToTarget - chase] Creature moved to $creaturePos, resetting throttle (will consider moving in ${newThrottle}ms)")
-          return (updatedState, Nil)
+        // Use areaInfo/tiles instead of screenInfo/mapPanelLoc
+        val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+        val xs = tiles.keys.map(_.substring(0, 5).trim.toInt)
+        val ys = tiles.keys.map(_.substring(5, 10).trim.toInt)
+        val minX = xs.min
+        val maxX = xs.max
+        val minY = ys.min
+        val maxY = ys.max
+        println(s"[generateSubwaypointsToCreatureWithBlocking] Grid bounds = ($minX,$minY,$maxX,$maxY), offset = ($minX,$minY)")
+
+        // Create boolean grid using the existing method
+        val (grid, (offX, offY)) = createBooleanGrid(tiles, minX, minY)
+
+        // Check if predicted position is walkable
+        val gridX = predictedPos.x - offX
+        val gridY = predictedPos.y - offY
+
+        if (predictedPos.x >= minX && predictedPos.x <= maxX &&
+          predictedPos.y >= minY && predictedPos.y <= maxY &&
+          gridY >= 0 && gridY < grid.length &&
+          gridX >= 0 && gridX < grid(0).length &&
+          grid(gridY)(gridX)) {
+          println(s"[generateSubwaypointsToCreatureWithBlocking] Predicted position walkable, using: $predictedPos")
+          predictedPos
+        } else {
+          println(s"[generateSubwaypointsToCreatureWithBlocking] Predicted position not walkable, using current: $target")
+          target
         }
+      case None =>
+        println(s"[generateSubwaypointsToCreatureWithBlocking] No movement vector, using current position: $target")
+        target
+    }
 
-        // Check throttling - only move if enough time has passed since throttle reset
-        if (currentTime - at.lastRandomMovementTime < at.randomMovementThrottle) {
-          println(s"[moveToTarget - chase] Random movement throttled, waiting ${at.randomMovementThrottle - (currentTime - at.lastRandomMovementTime)}ms")
-          return (gs1, Nil)
+    generateSubwaypointsToCreature(finalTarget, state, json)
+  }
+
+  private def handleNarrowCorridorCase(
+                                        presentLoc: Vec,
+                                        target: Vec,
+                                        state: GameState,
+                                        json: JsValue
+                                      ): (GameState, List[KeyboardAction]) = {
+
+    println(s"[handleNarrowCorridorCase] No path found, checking for narrow corridor movement")
+
+    // In narrow corridors, follow the creature directly
+    val directions = List(
+      ("north", Vec(0, -1)),
+      ("south", Vec(0, 1)),
+      ("east", Vec(1, 0)),
+      ("west", Vec(-1, 0)),
+      ("northeast", Vec(1, -1)),
+      ("northwest", Vec(-1, -1)),
+      ("southeast", Vec(1, 1)),
+      ("southwest", Vec(-1, 1))
+    )
+
+    val walkablePositions = extractWalkablePositions(json)
+
+    // Find direction that gets us closer to target and is walkable
+    val bestDirection = directions
+      .map { case (name, dir) =>
+        val nextPos = Vec(presentLoc.x + dir.x, presentLoc.y + dir.y)
+        val distance = chebyshevDistance(nextPos, target)
+        val isWalkable = walkablePositions.contains(nextPos)
+        (name, dir, nextPos, distance, isWalkable)
+      }
+      .filter(_._5) // Only walkable positions
+      .sortBy(_._4) // Sort by distance to target
+      .headOption
+
+    bestDirection match {
+      case Some((dirName, _, _, _, _)) =>
+        println(s"[handleNarrowCorridorCase] Moving $dirName towards target")
+        val keyboardAction = DirectionalKey(dirName)
+        (state, List(keyboardAction))
+
+      case None =>
+        println(s"[handleNarrowCorridorCase] No valid movement directions available")
+        (state, Nil)
+    }
+  }
+
+  private def extractWalkablePositions(json: JsValue): Set[Vec] = {
+    val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+
+    tiles.flatMap { case (key, tileObj) =>
+      val isWalkable = (tileObj \ "walkable").asOpt[Boolean].getOrElse(false)
+      if (isWalkable) {
+        val x = key.substring(0, 5).toInt
+        val y = key.substring(5, 10).toInt
+        Some(Vec(x, y))
+      } else {
+        None
+      }
+    }.toSet
+  }
+
+
+  private def blockOnlyCreaturePosition(
+                                         grid: Array[Array[Boolean]],
+                                         creaturePos: Vec,
+                                         offX: Int,
+                                         offY: Int
+                                       ): Array[Array[Boolean]] = {
+    val modifiedGrid = grid.map(_.clone) // Deep copy
+
+    val gridX = creaturePos.x - offX
+    val gridY = creaturePos.y - offY
+
+    // Block only the creature's exact position
+    if (gridY >= 0 && gridY < modifiedGrid.length && gridX >= 0 && gridX < modifiedGrid(0).length) {
+      modifiedGrid(gridY)(gridX) = false // Block creature's position only
+      println(s"[blockOnlyCreaturePosition] Blocked creature at grid position ($gridX, $gridY)")
+    }
+
+    modifiedGrid
+  }
+
+  private def findBestAdjacentPosition(
+                                        creaturePos: Vec,
+                                        characterPos: Vec,
+                                        grid: Array[Array[Boolean]],
+                                        offX: Int,
+                                        offY: Int
+                                      ): Vec = {
+    // Get all adjacent positions around the creature
+    val adjacentPositions = List(
+      Vec(creaturePos.x - 1, creaturePos.y),     // Left
+      Vec(creaturePos.x + 1, creaturePos.y),     // Right
+      Vec(creaturePos.x, creaturePos.y - 1),     // Up
+      Vec(creaturePos.x, creaturePos.y + 1),     // Down
+      Vec(creaturePos.x - 1, creaturePos.y - 1), // Up-Left
+      Vec(creaturePos.x + 1, creaturePos.y - 1), // Up-Right
+      Vec(creaturePos.x - 1, creaturePos.y + 1), // Down-Left
+      Vec(creaturePos.x + 1, creaturePos.y + 1)  // Down-Right
+    )
+
+    // Filter walkable positions
+    val walkableAdjacent = adjacentPositions.filter { pos =>
+      val gridX = pos.x - offX
+      val gridY = pos.y - offY
+      gridY >= 0 && gridY < grid.length &&
+        gridX >= 0 && gridX < grid(0).length &&
+        grid(gridY)(gridX)
+    }
+
+    // Choose the closest walkable position to character, or fallback
+    val bestPosition = walkableAdjacent
+      .sortBy(_.distanceTo(characterPos))
+      .headOption
+      .getOrElse(creaturePos) // Fallback to creature position if no adjacent walkable
+
+    println(s"[findBestAdjacentPosition] Best adjacent position: $bestPosition from options: $walkableAdjacent")
+    bestPosition
+  }
+
+  private def blockCreaturePosition(
+                                     grid: Array[Array[Boolean]],
+                                     creaturePos: Vec,
+                                     offX: Int,
+                                     offY: Int
+                                   ): Array[Array[Boolean]] = {
+    val modifiedGrid = grid.map(_.clone) // Deep copy
+
+    val gridX = creaturePos.x - offX
+    val gridY = creaturePos.y - offY
+
+    // Block creature's current position and adjacent tiles for better pathfinding
+    if (gridY >= 0 && gridY < modifiedGrid.length && gridX >= 0 && gridX < modifiedGrid(0).length) {
+      modifiedGrid(gridY)(gridX) = false // Block creature's position
+
+      // Optionally block adjacent tiles to force wider pathfinding
+      val adjacentOffsets = List((-1, 0), (1, 0), (0, -1), (0, 1))
+      adjacentOffsets.foreach { case (dx, dy) =>
+        val adjX = gridX + dx
+        val adjY = gridY + dy
+        if (adjY >= 0 && adjY < modifiedGrid.length && adjX >= 0 && adjX < modifiedGrid(0).length) {
+          // Only block if it was originally walkable (don't unblock walls)
+          if (grid(adjY)(adjX)) {
+            modifiedGrid(adjY)(adjX) = false
+          }
         }
+      }
 
-        // Generate intelligent movement direction
-        generateHumanLikeDirection(presentLoc, creaturePos, gs1, json) match {
-          case Some(direction) =>
-            val keyboardAction = DirectionalKey(direction)
+      println(s"[blockCreaturePosition] Blocked creature at grid position ($gridX, $gridY)")
+    }
 
-            val updatedState = gs1.copy(autoTarget = at.copy(
-              lastKnownCreaturePosition = Some(creaturePos)
-            ))
+    modifiedGrid
+  }
 
-            println(s"[moveToTarget - chase] No path found, using intelligent movement: $direction")
-            (updatedState, List(keyboardAction))
+  private def generateTacticalMovement(
+                                        characterPos: Vec,
+                                        creaturePos: Vec,
+                                        state: GameState,
+                                        json: JsValue
+                                      ): (GameState, List[KeyboardAction]) = {
+    println(s"[generateTacticalMovement] Character: $characterPos, Creature: $creaturePos")
 
+    val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+    val xs = tiles.keys.map(_.substring(0, 5).toInt)
+    val ys = tiles.keys.map(_.substring(5, 10).toInt)
+    val gridBounds @ (minX, minY, maxX, maxY) = (xs.min, ys.min, xs.max, ys.max)
+    val (grid, (offX, offY)) = createBooleanGrid(tiles, minX, minY)
+
+    // Find tactical positions around the creature (flanking positions)
+    val tacticalPositions = generateFlankingPositions(creaturePos, characterPos)
+      .filter(pos => isWalkable(pos, grid, offX, offY, gridBounds))
+      .sortBy(_.distanceTo(characterPos)) // Prefer closer positions
+
+    println(s"[generateTacticalMovement] Available tactical positions: $tacticalPositions")
+
+    tacticalPositions.headOption match {
+      case Some(tacticalPos) =>
+        val direction = calculateOptimalDirection(characterPos, tacticalPos, creaturePos)
+        direction match {
+          case Some(dir) =>
+            val keyboardAction = DirectionalKey(dir)
+            println(s"[generateTacticalMovement] Moving tactically: $dir towards $tacticalPos")
+            (state, List(keyboardAction))
           case None =>
-            println(s"[moveToTarget - chase] No valid movement directions available")
-            (gs1, Nil)
+            println(s"[generateTacticalMovement] No valid tactical direction found")
+            (state, Nil)
         }
+      case None =>
+        println(s"[generateTacticalMovement] No tactical positions available")
+        (state, Nil)
+    }
+  }
+
+  private def generateFlankingPositions(creaturePos: Vec, characterPos: Vec): List[Vec] = {
+    // Generate positions that allow attacking from sides rather than head-on
+    val flankingOffsets = List(
+      Vec(-1, -1), Vec(-1, 1), Vec(1, -1), Vec(1, 1), // Diagonal positions
+      Vec(-2, 0), Vec(2, 0), Vec(0, -2), Vec(0, 2),   // Extended orthogonal
+      Vec(-1, 0), Vec(1, 0), Vec(0, -1), Vec(0, 1)    // Adjacent orthogonal
+    )
+
+    flankingOffsets.map(offset => Vec(creaturePos.x + offset.x, creaturePos.y + offset.y))
+      .filter(_ != characterPos) // Don't include current position
+  }
+
+  private def calculateOptimalDirection(
+                                         currentPos: Vec,
+                                         targetPos: Vec,
+                                         creaturePos: Vec
+                                       ): Option[String] = {
+    val deltaX = targetPos.x - currentPos.x
+    val deltaY = targetPos.y - currentPos.y
+
+    // Prefer moves that don't directly approach the creature head-on
+    val direction = chooseDirection(deltaX, deltaY)
+
+    // Validate that this move doesn't put us in a worse position
+    direction.filter { dir =>
+      val nextPos = getNextPosition(currentPos, dir)
+      val currentDist = currentPos.distanceTo(creaturePos)
+      val nextDist = nextPos.distanceTo(creaturePos)
+
+      // Allow moves that maintain or slightly reduce distance, but avoid getting too close
+      nextDist >= 1.0 && nextDist <= currentDist + 1.0
+    }
+  }
+
+  private def getNextPosition(currentPos: Vec, direction: String): Vec = {
+    direction match {
+      case "MoveUp" => Vec(currentPos.x, currentPos.y - 1)
+      case "MoveDown" => Vec(currentPos.x, currentPos.y + 1)
+      case "MoveLeft" => Vec(currentPos.x - 1, currentPos.y)
+      case "MoveRight" => Vec(currentPos.x + 1, currentPos.y)
+      case "MoveUpLeft" => Vec(currentPos.x - 1, currentPos.y - 1)
+      case "MoveUpRight" => Vec(currentPos.x + 1, currentPos.y - 1)
+      case "MoveDownLeft" => Vec(currentPos.x - 1, currentPos.y + 1)
+      case "MoveDownRight" => Vec(currentPos.x + 1, currentPos.y + 1)
+      case _ => currentPos
     }
   }
 

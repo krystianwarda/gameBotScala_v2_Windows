@@ -102,9 +102,12 @@ object AutoLootFeature {
       // Retrieve battle info
       val shootable = getBattleShootableCreaturesList(json)
 
-      if (state.caveBot.stateHunting == "stop" || state.autoTarget.stateAutoTarget == "stop")  {
+      if (state.autoTarget.stateAutoTarget == "stop")  {
         println(s"[$taskName] Entered function.")
         println(s"[$taskName] Evaluating loot queues: immediate=${state.autoLoot.carcassToLootImmediately}, postFight=${state.autoLoot.carcassToLootAfterFight}")
+
+        println(s"[$taskName] Start stateLooting: ${state.autoLoot.stateLooting}, stateLootPlunder: ${state.autoLoot.stateLootPlunder}.")
+        println(s"[$taskName] Start stateHunting: ${state.caveBot.stateHunting}, stateAutoTarget: ${state.autoTarget.stateAutoTarget}.")
 
         if (state.autoLoot.carcassToLootImmediately.nonEmpty) {
           val updatedState = startLooting(state, json, state.autoLoot.carcassToLootImmediately, true)
@@ -284,13 +287,14 @@ object AutoLootFeature {
   }
 
   def handleOpenedLootContainerDetection(json: JsValue, settings: UISettings, state: GameState): Option[(GameState, MKTask)] = {
-    val currentTime = System.currentTimeMillis()
-    val autoLoot = state.autoLoot
+
+    val al = state.autoLoot
     val taskName = "handleOpenedLootContainerDetection"
+    val currentTime = System.currentTimeMillis()
 
-    println(s"[$taskName] Entered — stateLooting = ${autoLoot.stateLooting}")
+    println(s"[$taskName] Entered — stateLooting = ${al.stateLooting}")
 
-    if (state.autoLoot.autoLootActionThrottle > currentTime - autoLoot.lastAutoLootActionTime) {
+    if (al.autoLootActionThrottle * al.throttleCoefficient  > currentTime - al.lastAutoLootActionTime) {
       println(s"[$taskName] Too soon since last action → NoOp")
       return Some(state -> NoOpTask)
     }
@@ -312,19 +316,19 @@ object AutoLootFeature {
                   case Some(itemsValue) =>
                     val currentContainerContent = itemsValue.toString
                     println(s"[$taskName] Found lastContainerKey: $lastContainerKey with items: $itemsValue")
-                    println(s"[$taskName] Previous content: ${autoLoot.lastContainerContent}")
+                    println(s"[$taskName] Previous content: ${al.lastContainerContent}")
                     println(s"[$taskName] Current content: $currentContainerContent")
 
-                    if (currentContainerContent != autoLoot.lastContainerContent) {
+                    if (currentContainerContent != al.lastContainerContent) {
                       println(s"[$taskName] Container content changed → proceeding to loot plunder")
-                      val newState = state.copy(autoLoot = autoLoot.copy(
+                      val newState = state.copy(autoLoot = al.copy(
                         stateLooting = "loot plunder",
                         lastAutoLootActionTime = currentTime
                       ))
                       Some((newState, NoOpTask))
                     } else {
                       println(s"[$taskName] Container content unchanged → right-click missed, returning to focus on carcass")
-                      val newState = state.copy(autoLoot = autoLoot.copy(
+                      val newState = state.copy(autoLoot = al.copy(
                         stateLooting = "focus on carcass",
                         lastAutoLootActionTime = currentTime
                       ))
@@ -442,7 +446,7 @@ object AutoLootFeature {
               )
 
               val newState = state.copy(autoLoot = autoLoot.copy(
-                stateLooting = "opened loot container detection",
+                stateLooting = "clicking open button",
                 carcassTileToLoot = Some((finalTileId, deathTime)),
                 lastContainerContent = currentContainerContent,
                 lastAutoLootActionTime = currentTime
@@ -960,7 +964,6 @@ object AutoLootFeature {
     nearbyCreatures
   }
 
-
   def handleClickingOpen(json: JsValue, settings: UISettings, state: GameState): Option[(GameState, MKTask)] = {
     val currentTime = System.currentTimeMillis()
     val al = state.autoLoot
@@ -974,7 +977,6 @@ object AutoLootFeature {
     val extraWindowLoc = (json \ "screenInfo" \ "extraWindowLoc").asOpt[JsObject]
     println(s"[$taskName] extraWindowLoc: $extraWindowLoc")
 
-
     val openButtonOpt = extraWindowLoc
       .flatMap { windowObj =>
         println(s"[$taskName] Available keys: ${windowObj.keys.mkString(", ")}")
@@ -982,15 +984,16 @@ object AutoLootFeature {
         (windowObj \ "Open").asOpt[JsObject] match {
           case Some(openObj) =>
             println(s"[$taskName] Found Open object: $openObj")
+            // Fixed: Use posX and posY instead of x and y
             for {
-              posX <- (openObj \ "posX").asOpt[Int]
-              posY <- (openObj \ "posY").asOpt[Int]
+              x <- (openObj \ "posX").asOpt[Int]
+              y <- (openObj \ "posY").asOpt[Int]
             } yield {
-              println(s"[$taskName] Extracted coordinates: ($posX, $posY)")
-              (posX, posY)
+              println(s"[$taskName] Extracted Open button coordinates: x=$x, y=$y")
+              (x, y)
             }
           case None =>
-            println(s"[$taskName] No 'Open' key found in extraWindowLoc")
+            println(s"[$taskName] No Open button found in extraWindowLoc")
             None
         }
       }
@@ -1000,6 +1003,17 @@ object AutoLootFeature {
     openButtonOpt match {
       case Some((x, y)) =>
         println(s"[$taskName] Clicking Open button at ($x, $y)")
+
+        // Capture current container content before clicking
+        val gen = state.general
+        val ignoreContainers = gen.initialContainersList.toSet
+        val currentContainerContent = (json \ "containersInfo").asOpt[JsObject].flatMap { containersInfo =>
+          val newKeys = containersInfo.keys.toList.filterNot(ignoreContainers.contains).sorted
+          newKeys.lastOption.flatMap { lastContainerKey =>
+            (containersInfo \ lastContainerKey \ "items").asOpt[String]
+          }
+        }.getOrElse("")
+
         val actions = List(
           MoveMouse(x, y),
           LeftButtonPress(x, y),
@@ -1007,7 +1021,9 @@ object AutoLootFeature {
         )
 
         val newState = state.copy(autoLoot = al.copy(
-          stateLooting = "loot plunder",
+          stateLooting = "opened loot container detection",
+          carcassTileToLoot = al.carcassTileToLoot, // Preserve the carcass tile info
+          lastContainerContent = currentContainerContent,
           lastAutoLootActionTime = currentTime
         ))
         Some((newState, MKTask("pressing open", MKActions(mouse = actions, keyboard = Nil))))
@@ -1021,7 +1037,6 @@ object AutoLootFeature {
         Some((resetState, NoOpTask))
     }
   }
-
 
   private def sortTileListByCharacterProximity(
                                                 json: JsValue,
@@ -1524,8 +1539,9 @@ object AutoLootFeature {
                       val bagId   = (containerInfo \ "itemId").as[Int]
 
                       if (state.autoLoot.lastItemIdAndCountEngaged == (bagId, 1)) {
-                        println(s"[$taskName] Bag $bagId already looted, skipping.")
-                        return Some(state -> NoOpTask)
+                        println(s"[$taskName] ")
+                        val updatedState = resetAutoLootState(state, s"[$taskName] Bag $bagId already looted, skipping.")
+                        return Some(updatedState -> NoOpTask)
                       }
 
                       // reuse invPanelLoc & invKeys

@@ -123,10 +123,30 @@ object KeyboardUtils {
 
 
 
+//  private def pressKeyUsingRobot(keyCode: Int, immediateRelease: Boolean): Unit = {
+//    robot.keyPress(keyCode)
+//    println(s"KeyboardActor: Key $keyCode pressed.")
+//    if (immediateRelease) {
+//      robot.keyRelease(keyCode)
+//      println(s"KeyboardActor: Key $keyCode released immediately.")
+//    }
+//  }
+
+
   private def pressKeyUsingRobot(keyCode: Int, immediateRelease: Boolean): Unit = {
     robot.keyPress(keyCode)
     println(s"KeyboardActor: Key $keyCode pressed.")
+
     if (immediateRelease) {
+      // Add delay for arrow keys (50-150ms range)
+      val isArrowKey = keyCode >= KeyEvent.VK_LEFT && keyCode <= KeyEvent.VK_DOWN ||
+        keyCode == KeyEvent.VK_HOME || keyCode == KeyEvent.VK_END ||
+        keyCode == KeyEvent.VK_PAGE_UP || keyCode == KeyEvent.VK_PAGE_DOWN
+
+      if (isArrowKey) {
+        Thread.sleep(100) // 100ms delay for arrow keys
+      }
+
       robot.keyRelease(keyCode)
       println(s"KeyboardActor: Key $keyCode released immediately.")
     }
