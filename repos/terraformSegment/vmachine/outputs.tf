@@ -1,0 +1,20 @@
+output "bucket_name" {
+  value = google_storage_bucket.game_bot_bucket.name
+}
+
+output "vm_ip" {
+  value = google_compute_instance.vm_instance.network_interface[0].access_config[0].nat_ip
+}
+
+output "windows_username" {
+  value = "gamebot"
+}
+
+output "windows_password" {
+  value     = random_password.windows_password.result
+  sensitive = true
+}
+
+output "vm_external_ip" {
+  value = google_compute_instance.vm_instance.network_interface[0].access_config[0].nat_ip
+}

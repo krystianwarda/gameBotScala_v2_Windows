@@ -17,9 +17,10 @@ services:
       - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/dags:/opt/airflow/dags
       - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/plugins:/opt/airflow/plugins
       - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/settings:/opt/airflow/settings
-      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment:/opt/airflow/terraformSegment
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/analytics:/opt/airflow/terraformSegment/analytics
       - C:/Projects/gameBotScala_v2_Windows/repos/flinkSegment:/opt/airflow/flinkSegment
-      - C:\Projects\gameBotScala_v2_Windows\repos\terraformSegment\gcp-key.json:/opt/airflow/gcp-key.json
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/gcp-key.json:/opt/airflow/gcp-key.json
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine:/opt/airflow/terraformSegment/vmachine
     ports:
       - "8080:8080"
     command: webserver
@@ -40,9 +41,10 @@ services:
       - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/dags:/opt/airflow/dags
       - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/plugins:/opt/airflow/plugins
       - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/settings:/opt/airflow/settings
-      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment:/opt/airflow/terraformSegment
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/analytics:/opt/airflow/terraformSegment/analytics
       - C:/Projects/gameBotScala_v2_Windows/repos/flinkSegment:/opt/airflow/flinkSegment
-      - C:\Projects\gameBotScala_v2_Windows\repos\terraformSegment\gcp-key.json:/opt/airflow/gcp-key.json
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/gcp-key.json:/opt/airflow/gcp-key.json
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine:/opt/airflow/terraformSegment/vmachine
     command: scheduler
 
   airflow-init:
@@ -61,9 +63,10 @@ services:
       - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/dags:/opt/airflow/dags
       - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/plugins:/opt/airflow/plugins
       - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/settings:/opt/airflow/settings
-      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment:/opt/airflow/terraformSegment
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/analytics:/opt/airflow/terraformSegment/analytics
       - C:/Projects/gameBotScala_v2_Windows/repos/flinkSegment:/opt/airflow/flinkSegment
-      - C:\Projects/gameBotScala_v2_Windows\repos\terraformSegment\gcp-key.json:/opt/airflow/gcp-key.json
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/gcp-key.json:/opt/airflow/gcp-key.json
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine:/opt/airflow/terraformSegment/vmachine
     command: bash -c "airflow db init && airflow users create \
       --username admin \
       --firstname Admin \
