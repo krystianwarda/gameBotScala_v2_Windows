@@ -21,6 +21,7 @@ services:
       - C:/Projects/gameBotScala_v2_Windows/repos/flinkSegment:/opt/airflow/flinkSegment
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/gcp-key.json:/opt/airflow/gcp-key.json
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine:/opt/airflow/terraformSegment/vmachine
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine/files:/opt/airflow/terraformSegment/vmachine/files
     ports:
       - "8080:8080"
     command: webserver
@@ -45,6 +46,7 @@ services:
       - C:/Projects/gameBotScala_v2_Windows/repos/flinkSegment:/opt/airflow/flinkSegment
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/gcp-key.json:/opt/airflow/gcp-key.json
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine:/opt/airflow/terraformSegment/vmachine
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine/files:/opt/airflow/terraformSegment/vmachine/files
     command: scheduler
 
   airflow-init:
@@ -67,6 +69,7 @@ services:
       - C:/Projects/gameBotScala_v2_Windows/repos/flinkSegment:/opt/airflow/flinkSegment
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/gcp-key.json:/opt/airflow/gcp-key.json
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine:/opt/airflow/terraformSegment/vmachine
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine/files:/opt/airflow/terraformSegment/vmachine/files
     command: bash -c "airflow db init && airflow users create \
       --username admin \
       --firstname Admin \

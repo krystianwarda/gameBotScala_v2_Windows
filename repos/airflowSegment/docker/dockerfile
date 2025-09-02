@@ -34,9 +34,11 @@ RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.
 RUN apt-get install -y gcc python3-dev && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
+
 # ✅ Switch to airflow user BEFORE using pip
 USER airflow
 
+RUN pip install pywinrm
 # Copy and install Python deps (includes compiled crcmod and providers)
 COPY requirements.txt /
 RUN pip install --no-binary :all: --no-cache-dir crcmod && \

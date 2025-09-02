@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import os
 import time
 import json
+import subprocess
 
 default_args = {
     'owner': 'airflow',
@@ -21,7 +22,6 @@ dag = DAG(
     catchup=False
 )
 
-# Use Linux path that corresponds to your mounted volume
 terraform_dir = "/opt/airflow/terraformSegment/vmachine"
 
 # Step 1: Initialize and apply Terraform
@@ -37,7 +37,7 @@ terraform_apply = BashOperator(
     dag=dag
 )
 
-# Step 2: Wait for VM to be ready and credentials file to be generated
+# Step 2: Wait for VM to be ready
 def wait_for_vm_ready():
     max_wait_seconds = 300  # 5 minutes
     sleep_interval = 10
@@ -48,24 +48,24 @@ def wait_for_vm_ready():
         print(f"Attempt {attempt + 1}: Checking if VM is ready...")
         time.sleep(sleep_interval)
 
-        # In a real scenario, you might want to check VM status via GCP API
-        # For now, just wait a reasonable amount of time
         if attempt >= 2:  # Wait at least 30 seconds
             print("✅ VM should be ready now.")
             return
 
     print("⚠️ VM might still be starting up, but proceeding...")
 
+wait_for_vm = PythonOperator(
+    task_id='wait_for_vm_ready',
+    python_callable=wait_for_vm_ready,
+    dag=dag
+)
+
 
 def save_vm_credentials():
-    import subprocess
-    import json
-
     try:
-        # Get terraform output
         result = subprocess.run(
             ['terraform', 'output', '-json'],
-            cwd='/opt/airflow/terraformSegment/vmachine',
+            cwd=terraform_dir,
             capture_output=True,
             text=True,
             check=True
@@ -76,30 +76,32 @@ def save_vm_credentials():
         credentials = {
             "vm_ip": outputs["vm_external_ip"]["value"],
             "username": outputs["windows_username"]["value"],
-            "password": outputs["windows_password"]["value"]
+            "password": outputs["windows_password"]["value"],
+            "bucket_name": outputs.get("bucket_name", {}).get("value", "Unknown"),
+            "created_at": datetime.now().isoformat()
         }
 
-        # Save to file
+        # Save to Docker container
         with open('/opt/airflow/vm-credentials.json', 'w') as f:
             json.dump(credentials, f, indent=2)
 
-        print("✅ VM credentials saved to /opt/airflow/vm-credentials.json")
-        print(f"VM IP: {credentials['vm_ip']}")
-        print(f"Username: {credentials['username']}")
+        # Save to local terraformSegment directory (mounted volume)
+        local_credentials_path = f"{terraform_dir}/vm-credentials.json"
+        with open(local_credentials_path, 'w') as f:
+            json.dump(credentials, f, indent=2)
+
+        print("✅ VM credentials saved to both locations")
+        print(f"🖥️ VM IP: {credentials['vm_ip']}")
+        print(f"👤 Username: {credentials['username']}")
+        print(f"🪣 Bucket: {credentials['bucket_name']}")
 
     except Exception as e:
         print(f"❌ Error saving credentials: {e}")
+        raise
 
-# Add this task after wait_for_vm
 save_credentials = PythonOperator(
     task_id='save_vm_credentials',
     python_callable=save_vm_credentials,
-    dag=dag
-)
-
-wait_for_vm = PythonOperator(
-    task_id='wait_for_vm_ready',
-    python_callable=wait_for_vm_ready,
     dag=dag
 )
 

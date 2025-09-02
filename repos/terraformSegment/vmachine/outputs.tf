@@ -1,20 +1,21 @@
-output "bucket_name" {
-  value = google_storage_bucket.game_bot_bucket.name
-}
-
-output "vm_ip" {
-  value = google_compute_instance.vm_instance.network_interface[0].access_config[0].nat_ip
+# Add these outputs to vmachine/main.tf
+output "vm_external_ip" {
+  description = "External IP address of the VM"
+  value       = module.start_machine.vm_external_ip
 }
 
 output "windows_username" {
-  value = "gamebot"
+  description = "Windows username for the VM"
+  value       = module.start_machine.windows_username
 }
 
 output "windows_password" {
-  value     = random_password.windows_password.result
-  sensitive = true
+  description = "Windows password for the VM"
+  value       = module.start_machine.windows_password
+  sensitive   = true
 }
 
-output "vm_external_ip" {
-  value = google_compute_instance.vm_instance.network_interface[0].access_config[0].nat_ip
+output "bucket_name" {
+  description = "Name of the GCS bucket"
+  value       = module.start_machine.bucket_name
 }
