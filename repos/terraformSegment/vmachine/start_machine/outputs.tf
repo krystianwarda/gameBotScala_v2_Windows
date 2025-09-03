@@ -10,7 +10,3 @@ output "windows_password" {
   value     = random_password.windows_password.result
   sensitive = true
 }
-
-output "bucket_name" {
-  value = var.bucket_name
-}

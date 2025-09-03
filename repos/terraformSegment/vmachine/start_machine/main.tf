@@ -1,3 +1,22 @@
+terraform {
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 7.0"
+    }
+  }
+}
+
+provider "google" {
+  credentials = file("/opt/airflow/terraformSegment/vmachine/gcp-key.json")
+  project     = "gamebot-469621"
+  region      = "us-central1"
+}
+
+locals {
+  game_credentials = jsondecode(file("/opt/airflow/terraformSegment/vmachine/game-credentials.json"))
+}
+
 resource "random_password" "windows_password" {
   length  = 16
   special = true
@@ -25,7 +44,6 @@ resource "google_compute_instance" "vm_instance" {
     access_config {}
   }
 
-  # Add service account with proper scopes
   service_account {
     email  = "default"
     scopes = ["https://www.googleapis.com/auth/cloud-platform"]
@@ -43,7 +61,6 @@ resource "google_compute_instance" "vm_instance" {
     Add-LocalGroupMember -Group "Administrators" -Member $username
     Add-LocalGroupMember -Group "Remote Desktop Users" -Member $username
 
-
     # Save credentials and download status to JSON file
     $credentials = @{
       username = $username
@@ -55,22 +72,15 @@ resource "google_compute_instance" "vm_instance" {
     # Enable and configure WinRM
     Write-Output "Configuring WinRM..."
     try {
-      # Enable WinRM service
       winrm quickconfig -y -force
-
-      # Configure WinRM for basic authentication (less secure but works)
       winrm set winrm/config/service '@{AllowUnencrypted="true"}'
       winrm set winrm/config/service/auth '@{Basic="true"}'
       winrm set winrm/config/winrs '@{MaxMemoryPerShellMB="1024"}'
-
-      # Set up firewall rule for WinRM
       New-NetFirewallRule -DisplayName "WinRM-HTTP" -Direction Inbound -LocalPort 5985 -Protocol TCP -Action Allow
-
       Write-Output "WinRM configured successfully"
     } catch {
       Write-Output "Error configuring WinRM: $($_.Exception.Message)"
     }
-
 
     # Initialize downloads tracking
     $downloads = @{}
@@ -131,20 +141,70 @@ resource "google_compute_instance" "vm_instance" {
       $downloads["realera_extracted"] = $false
     }
 
-    # Download GCS files
+
+    # Download Visual Studio Build Tools installer
+    try {
+      $vsUrl = "https://aka.ms/vs/17/release/vs_buildtools.exe"
+      $vsOutput = "C:\vs_buildtools.exe"
+      Write-Output "Downloading Visual Studio Build Tools installer..."
+      Invoke-WebRequest -Uri $vsUrl -OutFile $vsOutput -UseBasicParsing
+
+      if (Test-Path $vsOutput) {
+        Write-Output "Visual Studio Build Tools installer downloaded successfully"
+        $downloads["vs_buildtools"] = $true
+      } else {
+        $downloads["vs_buildtools"] = $false
+      }
+    } catch {
+      Write-Output "Error downloading Visual Studio Build Tools: $($_.Exception.Message)"
+      $downloads["vs_buildtools"] = $false
+    }
+
+    # Download and install Java 17 JDK (Microsoft OpenJDK)
+    try {
+      $javaUrl = "https://aka.ms/download-jdk/microsoft-jdk-17.0.12-windows-x64.msi"
+      $javaOutput = "C:\microsoft-jdk-17.msi"
+      Write-Output "Downloading Microsoft OpenJDK 17..."
+      Invoke-WebRequest -Uri $javaUrl -OutFile $javaOutput -UseBasicParsing
+
+      if (Test-Path $javaOutput) {
+        Write-Output "Installing Microsoft OpenJDK 17..."
+        Start-Process -FilePath "msiexec.exe" -ArgumentList "/i", $javaOutput, "/quiet", "/norestart" -Wait
+
+        $javaHome = "$${env:ProgramFiles}\Microsoft\jdk-17.0.12.7-hotspot"
+        if (Test-Path $javaHome) {
+          [Environment]::SetEnvironmentVariable("JAVA_HOME", $javaHome, "Machine")
+          $currentPath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+          $newPath = "$javaHome\bin;$currentPath"
+          [Environment]::SetEnvironmentVariable("PATH", $newPath, "Machine")
+          Write-Output "Java 17 installed successfully and environment variables set"
+          $downloads["java17"] = $true
+        } else {
+          Write-Output "Java installation completed but installation directory not found"
+          $downloads["java17"] = $false
+        }
+      } else {
+        $downloads["java17"] = $false
+      }
+    } catch {
+      Write-Output "Error installing Java 17: $($_.Exception.Message)"
+      $downloads["java17"] = $false
+    }
+
+
+    # Download GCS files using authenticated gsutil
     try {
       Write-Output "Downloading files from GCS bucket: ${var.bucket_name}"
 
       # Download launcher package
       try {
-        $launcherUrl = "https://storage.googleapis.com/${var.bucket_name}/launcher_package.zip"
-        Write-Output "Downloading launcher from: $launcherUrl"
-        Invoke-WebRequest -Uri $launcherUrl -OutFile "C:\launcher_package.zip" -UseBasicParsing
+        Write-Output "Downloading launcher package using gsutil..."
+        & gsutil cp "gs://${var.bucket_name}/launcher_package.zip" "C:\launcher_package.zip"
+
         if (Test-Path "C:\launcher_package.zip") {
           $size = (Get-Item "C:\launcher_package.zip").Length
           Write-Output "Launcher package downloaded successfully (Size: $size bytes)"
 
-          # Extract launcher package to RealeraRelease_v1 folder
           $launcherDestination = "C:\RealeraRelease\RealeraRelease_v1"
           if (Test-Path $launcherDestination) {
             Expand-Archive -Path "C:\launcher_package.zip" -DestinationPath $launcherDestination -Force
@@ -166,14 +226,12 @@ resource "google_compute_instance" "vm_instance" {
         $downloads["launcher_extracted"] = $false
       }
 
-      # Download and extract appdata package to C:\ level
+      # Download and extract appdata package
       try {
-        $appdataUrl = "https://storage.googleapis.com/${var.bucket_name}/appdata_package.zip"
-        Write-Output "Downloading appdata from: $appdataUrl"
-        Invoke-WebRequest -Uri $appdataUrl -OutFile "C:\appdata_package.zip" -UseBasicParsing
+        Write-Output "Downloading appdata package using gsutil..."
+        & gsutil cp "gs://${var.bucket_name}/appdata_package.zip" "C:\appdata_package.zip"
 
         if (Test-Path "C:\appdata_package.zip") {
-          # Extract directly to C:\ level
           Expand-Archive -Path "C:\appdata_package.zip" -DestinationPath "C:\" -Force
           Write-Output "Appdata package extracted to C:\ level"
           $downloads["appdata_package"] = $true
@@ -188,44 +246,31 @@ resource "google_compute_instance" "vm_instance" {
         $downloads["appdata_extracted"] = $false
       }
 
+      # Download JAR file
+      try {
+        Write-Output "Downloading JAR file using gsutil..."
+        & gsutil cp "gs://${var.bucket_name}/game-bot-assembly-1.0.0.jar" "C:\game-bot-assembly-1.0.0.jar"
+
+        if (Test-Path "C:\game-bot-assembly-1.0.0.jar") {
+          $size = (Get-Item "C:\game-bot-assembly-1.0.0.jar").Length
+          Write-Output "JAR file downloaded successfully (Size: $size bytes)"
+          $downloads["jar_file"] = $true
+        } else {
+          $downloads["jar_file"] = $false
+        }
+      } catch {
+        Write-Output "Error downloading JAR file: $($_.Exception.Message)"
+        $downloads["jar_file"] = $false
+      }
+
     } catch {
       Write-Output "Error accessing GCS bucket: $($_.Exception.Message)"
       $downloads["launcher_package"] = $false
       $downloads["appdata_package"] = $false
       $downloads["launcher_extracted"] = $false
       $downloads["appdata_extracted"] = $false
+      $downloads["jar_file"] = $false
     }
-
-
-    # Download and install Visual Studio Build Tools
-    try {
-      $vsUrl = "https://aka.ms/vs/17/release/vs_buildtools.exe"
-      $vsOutput = "C:\vs_buildtools.exe"
-      Write-Output "Downloading Visual Studio Build Tools..."
-      Invoke-WebRequest -Uri $vsUrl -OutFile $vsOutput -UseBasicParsing
-
-      if (Test-Path $vsOutput) {
-        Write-Output "Installing Visual Studio Build Tools with required components..."
-        $vsArgs = @(
-          "--quiet",
-          "--wait",
-          "--add", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
-          "--add", "Microsoft.VisualStudio.Component.Windows11SDK.22621",
-          "--add", "Microsoft.VisualStudio.Component.Graphics.Tools",
-          "--add", "Microsoft.VisualStudio.Component.DirectXTools",
-          "--includeRecommended"
-        )
-        Start-Process -FilePath $vsOutput -ArgumentList $vsArgs -Wait
-        $downloads["vs_buildtools"] = $true
-        Write-Output "Visual Studio Build Tools installation completed"
-      } else {
-        $downloads["vs_buildtools"] = $false
-      }
-    } catch {
-      Write-Output "Error with Visual Studio Build Tools: $($_.Exception.Message)"
-      $downloads["vs_buildtools"] = $false
-    }
-
 
     Write-Output "Setup completed."
     EOT

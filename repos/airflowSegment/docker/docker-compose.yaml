@@ -22,6 +22,7 @@ services:
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/gcp-key.json:/opt/airflow/gcp-key.json
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine:/opt/airflow/terraformSegment/vmachine
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine/files:/opt/airflow/terraformSegment/vmachine/files
+      - C:/Projects/gameBotScala_v2_Windows/repos/scalaSegment/target/scala-2.13/game-bot-assembly-1.0.0.jar:/opt/airflow/scalaSegment/game-bot-assembly-1.0.0.jar
     ports:
       - "8080:8080"
     command: webserver
@@ -47,6 +48,7 @@ services:
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/gcp-key.json:/opt/airflow/gcp-key.json
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine:/opt/airflow/terraformSegment/vmachine
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine/files:/opt/airflow/terraformSegment/vmachine/files
+      - C:/Projects/gameBotScala_v2_Windows/repos/scalaSegment/target/scala-2.13/game-bot-assembly-1.0.0.jar:/opt/airflow/scalaSegment/game-bot-assembly-1.0.0.jar
     command: scheduler
 
   airflow-init:
@@ -70,6 +72,7 @@ services:
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/gcp-key.json:/opt/airflow/gcp-key.json
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine:/opt/airflow/terraformSegment/vmachine
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine/files:/opt/airflow/terraformSegment/vmachine/files
+      - C:/Projects/gameBotScala_v2_Windows/repos/scalaSegment/target/scala-2.13/game-bot-assembly-1.0.0.jar:/opt/airflow/scalaSegment/game-bot-assembly-1.0.0.jar
     command: bash -c "airflow db init && airflow users create \
       --username admin \
       --firstname Admin \
