@@ -10,11 +10,12 @@ default_args = {
 }
 
 dag = DAG(
-    'run_terraform_destroy',
+    'stream_analytics_run_terraform_destroy',
     default_args=default_args,
     description='Destroys infrastructure in safe order (cluster before API key)',
     schedule_interval=None,
-    catchup=False
+    catchup=False,
+    tags=[ 'stream_analytics', 'terraform', 'destroy']
 )
 
 terraform_dir = "/opt/airflow/terraformSegment"

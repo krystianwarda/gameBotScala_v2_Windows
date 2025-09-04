@@ -15,7 +15,7 @@ default_args = {
 }
 
 dag = DAG(
-    'vmachine_run_bot_jar_v4',
+    'vmachine_run_bot_jar',
     default_args=default_args,
     description='Run game-bot-assembly JAR on VM',
     schedule_interval=None,

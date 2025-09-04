@@ -14,11 +14,12 @@ default_args = {
 }
 
 dag = DAG(
-    'run_terraform_apply',
+    'stream_analytics_run_terraform_apply',
     default_args=default_args,
     description='Run Terraform with simple safe apply flow',
     schedule_interval=None,
-    catchup=False
+    catchup=False,
+    tags=[ 'stream_analytics', 'terraform', 'apply']
 )
 
 terraform_dir = "/opt/airflow/terraformSegment"

@@ -16,11 +16,12 @@ default_args = {
 }
 
 dag = DAG(
-    'vmachine_start_instance_v6',
+    'vmachine_template_create_instance',
     default_args=default_args,
     description='Start VM instance with game bot setup and complete deployment',
     schedule_interval=None,
-    catchup=False
+    catchup=False,
+    tags=[ 'vmachine', 'template',  'terraform', 'create_instance']
 )
 
 terraform_dir = "/opt/airflow/terraformSegment/vmachine/start_machine"

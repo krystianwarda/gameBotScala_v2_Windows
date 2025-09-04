@@ -12,11 +12,12 @@ default_args = {
 }
 
 dag = DAG(
-    'build_and_upload_flink_jar',
+    'stream_analytics_build_and_upload_flink_jar',
     default_args=default_args,
     description='Builds Flink fat JAR with sbt and uploads to GCS',
     schedule_interval=None,
-    catchup=False
+    catchup=False,
+    tags=[ 'stream_analytics', 'flink', 'build', 'jar']
 )
 
 flink_dir = "/opt/airflow/flinkSegment"

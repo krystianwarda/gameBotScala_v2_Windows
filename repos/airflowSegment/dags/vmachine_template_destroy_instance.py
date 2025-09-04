@@ -12,12 +12,12 @@ default_args = {
 }
 
 dag = DAG(
-    'vmachine_destroy_instance',
+    'vmachine_template_destroy_instance',
     default_args=default_args,
     description='Destroy VM machine without touching bucket',
     schedule_interval=None,  # Manual trigger only
     catchup=False,
-    tags=['terraform', 'gcp', 'destroy', 'vm'],
+    tags=[ 'vmachine', 'template', 'terraform', 'destroy_instance']
 )
 
 def log_destruction_start():

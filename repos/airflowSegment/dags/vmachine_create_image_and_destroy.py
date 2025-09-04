@@ -21,12 +21,12 @@ default_args = {
 }
 
 dag = DAG(
-    'vmachine_create_image_and_destroy_v5',
+    'vmachine_create_image_and_destroy',
     default_args=default_args,
     description='Create machine image and destroy VM instance to save costs',
     schedule_interval=None,
     catchup=False,
-    tags=['vm', 'gcp', 'cost-optimization']
+    tags=['vmachine', 'template', 'create_image', 'destroy_instance']
 )
 
 terraform_dir = "/opt/airflow/terraformSegment/vmachine/start_machine"
