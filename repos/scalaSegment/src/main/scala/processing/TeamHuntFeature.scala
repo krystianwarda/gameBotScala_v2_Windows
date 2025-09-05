@@ -35,7 +35,6 @@ object TeamHuntFeature {
       ChangeLevelAction,
       DesignSmartMovement,
       EngageMovement,
-//      GetLevelSwitchTiles,
 //      ShipTravelAfterTeam,
 
     )
@@ -551,10 +550,18 @@ object TeamHuntFeature {
     // Extract character position
     val (startX, startY, startZ) = searchStartTile
 
-    // Iterate through spiral coordinates and check all tiles
-    for ((tileX, tileY) <- generateSpiral(startX, startY, maxRadius = 10)) {
+    // Iterate through spiral coordinates and check tiles, but limit to 15 tiles
+    val spiralCoordinates = generateSpiral(startX, startY, maxRadius = 10)
+    var tilesChecked = 0
+    val maxTilesToCheck = 15
+
+    for {
+      (tileX, tileY) <- spiralCoordinates
+      if tilesChecked < maxTilesToCheck
+    } {
       val tileId = f"$tileX%05d$tileY%05d$startZ%02d" // Construct tileId
-      println(s"Checking tileId: $tileId, and looking for items: $movementIds")
+      tilesChecked += 1
+      println(s"Checking tileId: $tileId, and looking for items: $movementIds (${tilesChecked}/$maxTilesToCheck)")
 
       tiles.get(tileId).flatMap { tileData =>
         // Extract items from the tile
@@ -571,7 +578,7 @@ object TeamHuntFeature {
       }
     }
 
-    println("No movement enabler tiles found.")
+    println(s"No movement enabler tiles found after checking $tilesChecked tiles.")
     None
   }
 
@@ -660,63 +667,461 @@ object TeamHuntFeature {
   }
 
   private def generateSmartWaypointsToTeamMember(
-                                              targetLocation: Vec,
-                                              state:          GameState,
-                                              json:           JsValue
-                                            ): List[Vec] = {
+                                                  targetLocation: Vec,
+                                                  state: GameState,
+                                                  json: JsValue
+                                                ): List[Vec] = {
     val subTaskName = "generateSmartWaypointsToTeamMember"
-    println(s"[$subTaskName] Starting.")
+    println(s"[$subTaskName] Starting ENHANCED human-like pathfinding.")
 
-    // 1) pull all tiles and build grid
-    val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
-    val xs = tiles.keys.map(_.substring(0, 5).toInt)
-    val ys = tiles.keys.map(_.substring(5, 10).toInt)
-    val gridBounds @ (minX, minY, maxX, maxY) = (xs.min, ys.min, xs.max, ys.max)
+    val currentTime = System.currentTimeMillis()
+    val teamHuntState = state.teamHunt
 
-    val (grid, (offX, offY)) = createBooleanGrid(tiles, minX, minY)
-    println(s"[$subTaskName] Grid bounds = $gridBounds, offset = ($offX,$offY)")
-
-    // 2) get character position
+    // Get character position and battle info
     val presentLoc = Vec(
       (json \ "characterInfo" \ "PositionX").as[Int],
       (json \ "characterInfo" \ "PositionY").as[Int]
     )
 
-    println(s"[$subTaskName] Character: $presentLoc → Target: $targetLocation")
+    val battleInfo = (json \ "battleInfo").asOpt[JsObject].getOrElse(Json.obj())
+    val isTargetShootable = checkIfTargetIsShootable(battleInfo, teamHuntState.teamMemberToFollow)
 
-    // 3) grid bounds warning
-    if (
-      targetLocation.x < minX || targetLocation.x > maxX ||
-        targetLocation.y < minY || targetLocation.y > maxY
-    ) {
-      printInColor(ANSI_BLUE,
-        s"[$subTaskName] Target $targetLocation is outside grid $gridBounds — attempting A* anyway")
-    }
+    println(s"[$subTaskName] Character: $presentLoc → Target: $targetLocation, IsShootable: $isTargetShootable")
 
-    // 4) run A* pathfinding
-    val rawPath =
-      if (presentLoc != targetLocation)
-        aStarSearch(presentLoc, targetLocation, grid, offX, offY)
-      else {
-        println(s"[$subTaskName] Already at creature's location.")
-        Nil
-      }
-
-    val filteredPath = rawPath.filterNot(_ == presentLoc)
-    println(s"[$subTaskName] Final path: $filteredPath")
-
-    // 5) debug visualization with printGridCreatures
-    printGridCreatures(
-      grid = grid,
-      gridBounds = gridBounds,
-      path = rawPath,
-      charPos = presentLoc,
-      waypointPos = targetLocation,
-      creaturePositions = List(targetLocation)
+    // 1. Update movement detection
+    val updatedTimestamps = updateMovementTimestamps(
+      teamHuntState.targetMovementTimestamps,
+      teamHuntState.lastTargetPosition,
+      targetLocation,
+      currentTime
     )
 
-    filteredPath
+    val movementActivity = updatedTimestamps.length
+    println(s"[$subTaskName] Movement activity (last 3s): $movementActivity timestamps")
+
+    // 2. Calculate distance to target
+    val distanceToTarget = calculateDistance(presentLoc, targetLocation)
+    val distanceChanged = math.abs(distanceToTarget - teamHuntState.lastDistanceToTarget) > 1.0
+
+    println(s"[$subTaskName] Distance to target: $distanceToTarget (was: ${teamHuntState.lastDistanceToTarget})")
+
+    // 3. Update no-cross line based on character movement vector
+    val updatedNoCrossLine = updateNoCrossLine(presentLoc, targetLocation, teamHuntState.noCrossLine)
+    println(s"[$subTaskName] No-cross line: $updatedNoCrossLine")
+
+    // 4. Determine if we should update temporary rest position
+    val shouldUpdateRestPosition = shouldUpdateTemporaryRestPosition(
+      movementActivity,
+      currentTime,
+      teamHuntState.lastTemporaryRestUpdate,
+      teamHuntState.movementInfluenceMultiplier,
+      teamHuntState.restPositionChangeBaseProbability,
+      distanceToTarget,
+      teamHuntState.safeDistanceCoefficient,
+      isTargetShootable
+    )
+
+    // 5. Calculate new temporary rest position if needed
+    val newTemporaryRestPosition = if (shouldUpdateRestPosition) {
+      val newPos = calculateTemporaryRestPosition(
+        presentLoc,
+        targetLocation,
+        updatedNoCrossLine,
+        movementActivity,
+        isTargetShootable,
+        distanceToTarget
+      )
+      println(s"[$subTaskName] Updated temporary rest position: ${teamHuntState.temporaryRestPosition} → $newPos")
+      Some(newPos)
+    } else {
+      teamHuntState.temporaryRestPosition
+    }
+
+    // 6. Determine movement behavior based on various factors
+    val movementDecision = determineMovementBehavior(
+      presentLoc,
+      targetLocation,
+      newTemporaryRestPosition,
+      movementActivity,
+      distanceToTarget,
+      currentTime,
+      teamHuntState.lastMovementDecision,
+      isTargetShootable
+    )
+
+    println(s"[$subTaskName] Movement decision: $movementDecision")
+
+    // 7. Generate path based on decision
+    val finalPath = movementDecision match {
+      case "chase" =>
+        newTemporaryRestPosition match {
+          case Some(restPos) => generatePathToPosition(presentLoc, restPos, state, json)
+          case None => generatePathToPosition(presentLoc, targetLocation, state, json)
+        }
+      case "retreat" =>
+        val retreatPos = calculateRetreatPosition(presentLoc, targetLocation, updatedNoCrossLine)
+        generatePathToPosition(presentLoc, retreatPos, state, json)
+      case "wait" =>
+        List.empty[Vec] // Stay in place
+      case _ =>
+        List.empty[Vec]
+    }
+
+    // 8. Debug visualization
+    val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+    val xs = tiles.keys.map(_.substring(0, 5).toInt)
+    val ys = tiles.keys.map(_.substring(5, 10).toInt)
+    val gridBounds = (xs.min, ys.min, xs.max, ys.max)
+    val (grid, (offX, offY)) = createBooleanGrid(tiles, gridBounds._1, gridBounds._2)
+
+    printEnhancedGridVisualization(
+      grid = grid,
+      gridBounds = gridBounds,
+      path = finalPath,
+      charPos = presentLoc,
+      targetPos = targetLocation,
+      temporaryRestPos = newTemporaryRestPosition,
+      noCrossLine = updatedNoCrossLine,
+      movementTimestamps = updatedTimestamps
+    )
+
+    println(s"[$subTaskName] Final path length: ${finalPath.length}")
+    finalPath
   }
+
+  private def calculateRetreatPosition(charPos: Vec, targetPos: Vec, noCrossLine: Option[(Vec, Vec)]): Vec = {
+    val direction = Vec(charPos.x - targetPos.x, charPos.y - targetPos.y)
+    val length = math.sqrt(direction.x * direction.x + direction.y * direction.y)
+
+    if (length > 0) {
+      val retreatDistance = RandomUtils.randomIntBetween(2, 4).toInt
+      val normalizedDir = Vec(
+        (direction.x / length * retreatDistance).toInt,
+        (direction.y / length * retreatDistance).toInt
+      )
+
+      Vec(charPos.x + normalizedDir.x, charPos.y + normalizedDir.y)
+    } else {
+      Vec(
+        charPos.x + RandomUtils.randomIntBetween(-2, 2).toInt,
+        charPos.y + RandomUtils.randomIntBetween(-2, 2).toInt
+      )
+    }
+  }
+
+  private def updateMovementTimestamps(
+                                        currentTimestamps: List[Long],
+                                        lastPosition: Option[Vec],
+                                        currentPosition: Vec,
+                                        currentTime: Long
+                                      ): List[Long] = {
+    val threeSecondsAgo = currentTime - 3000
+    val filteredTimestamps = currentTimestamps.filter(_ > threeSecondsAgo)
+
+    lastPosition match {
+      case Some(lastPos) if lastPos != currentPosition =>
+        (currentTime :: filteredTimestamps).take(10) // Limit to prevent excessive memory usage
+      case _ =>
+        filteredTimestamps
+    }
+  }
+
+  private def checkIfTargetIsShootable(battleInfo: JsObject, targetName: String): Boolean = {
+    battleInfo.fields.exists { case (_, creatureData) =>
+      (creatureData \ "Name").asOpt[String].contains(targetName) &&
+        (creatureData \ "IsShootable").asOpt[Boolean].getOrElse(false)
+    }
+  }
+
+  private def updateNoCrossLine(charPos: Vec, targetPos: Vec, currentLine: Option[(Vec, Vec)]): Option[(Vec, Vec)] = {
+    // Create a line perpendicular to character's movement vector, positioned at target location
+    val direction = Vec(targetPos.x - charPos.x, targetPos.y - charPos.y)
+    if (direction.x == 0 && direction.y == 0) return currentLine
+
+    // Create perpendicular vector
+    val perpendicular = Vec(-direction.y, direction.x)
+    val length = math.sqrt(perpendicular.x * perpendicular.x + perpendicular.y * perpendicular.y)
+
+    if (length > 0) {
+      val normalizedPerp = Vec(
+        (perpendicular.x / length * 10).toInt,
+        (perpendicular.y / length * 10).toInt
+      )
+
+      val linePoint1 = Vec(targetPos.x + normalizedPerp.x, targetPos.y + normalizedPerp.y)
+      val linePoint2 = Vec(targetPos.x - normalizedPerp.x, targetPos.y - normalizedPerp.y)
+
+      Some((linePoint1, linePoint2))
+    } else {
+      currentLine
+    }
+  }
+
+
+  private def shouldUpdateTemporaryRestPosition(
+                                                 movementActivity: Int,
+                                                 currentTime: Long,
+                                                 lastUpdate: Long,
+                                                 movementMultiplier: Double,
+                                                 baseProbability: Double,
+                                                 distanceToTarget: Double,
+                                                 safeCoefficient: Double,
+                                                 isTargetShootable: Boolean
+                                               ): Boolean = {
+    val timeSinceLastUpdate = currentTime - lastUpdate
+    val minimumUpdateInterval = if (movementActivity > 0) 1000 else 2000 // Reduced from 3s to 2s
+
+    if (timeSinceLastUpdate < minimumUpdateInterval) return false
+
+    // Always update if distance is too large (prioritize staying close)
+    val distanceForceUpdate = distanceToTarget > 4.0 // Reduced from 7.0 to 4.0
+
+    // Higher probability when target is moving frequently
+    val activityProbability = movementActivity * movementMultiplier * baseProbability
+
+    // Force update if target not shootable and we're not very close
+    val shootabilityUpdate = !isTargetShootable && distanceToTarget > 2.5
+
+    val randomCheck = RandomUtils.randomBetween(0, 100) < (activityProbability * 100)
+
+    val shouldUpdate = distanceForceUpdate || shootabilityUpdate || randomCheck
+    println(s"Update rest position? Distance: $distanceForceUpdate, Shootability: $shootabilityUpdate, Random: $randomCheck -> $shouldUpdate")
+
+    shouldUpdate
+  }
+
+  private def calculateTemporaryRestPosition(
+                                              charPos: Vec,
+                                              targetPos: Vec,
+                                              noCrossLine: Option[(Vec, Vec)],
+                                              movementActivity: Int,
+                                              isTargetShootable: Boolean,
+                                              currentDistance: Double
+                                            ): Vec = {
+    // Always stay close to target - distance 2-3 max
+    val baseDistance = if (isTargetShootable) {
+      if (currentDistance > 3.0) 2 else RandomUtils.randomIntBetween(2, 3) // Force closer if too far
+    } else {
+      if (currentDistance > 4.0) 2 else RandomUtils.randomIntBetween(2, 3) // Force closer if too far
+    }
+
+    // Reduce distance variation to keep closer
+    val distanceVariation = if (movementActivity > 2) RandomUtils.randomIntBetween(-1, 0) else 0 // Only reduce, don't increase
+    val finalDistance = math.max(2, math.min(3, baseDistance + distanceVariation)) // Cap at 3
+
+    println(s"Calculating rest position with final distance: $finalDistance (current: $currentDistance)")
+
+    // Calculate direction vector from target to character
+    val direction = Vec(charPos.x - targetPos.x, charPos.y - targetPos.y)
+    val length = math.sqrt(direction.x * direction.x + direction.y * direction.y)
+
+    if (length > 0) {
+      val normalizedDir = Vec(
+        (direction.x / length * finalDistance).toInt,
+        (direction.y / length * finalDistance).toInt
+      )
+
+      // Reduce side offset to stay closer
+      val sideOffset = if (currentDistance > 3.0) 0 else RandomUtils.randomIntBetween(-1, 1).toInt
+      val perpendicular = Vec(-normalizedDir.y, normalizedDir.x)
+
+      Vec(
+        targetPos.x + normalizedDir.x + perpendicular.x * sideOffset,
+        targetPos.y + normalizedDir.y + perpendicular.y * sideOffset
+      )
+    } else {
+      // Fallback: random position around target, but keep very close
+      Vec(
+        targetPos.x + RandomUtils.randomIntBetween(-2, 2).toInt,
+        targetPos.y + RandomUtils.randomIntBetween(-2, 2).toInt
+      )
+    }
+  }
+
+  private def determineMovementBehavior(
+                                         charPos: Vec,
+                                         targetPos: Vec,
+                                         restPosition: Option[Vec],
+                                         movementActivity: Int,
+                                         distanceToTarget: Double,
+                                         currentTime: Long,
+                                         lastDecisionTime: Long,
+                                         isTargetShootable: Boolean
+                                       ): String = {
+    val decisionCooldown = RandomUtils.randomBetween(800, 2000) // Reduced from 1-3s to 0.8-2s
+    val timeSinceLastDecision = currentTime - lastDecisionTime
+
+    // Emergency situations override cooldown - prioritize staying close
+    if (distanceToTarget > 4.0) return "chase" // Reduced from 8.0 to 4.0
+    if (distanceToTarget < 1.0) return "retreat" // Reduced from 1.5 to 1.0
+
+    // If too soon since last decision but distance is concerning, still chase
+    if (timeSinceLastDecision < decisionCooldown) {
+      if (distanceToTarget > 3.5) return "chase" // Override cooldown if getting too far
+      return "wait"
+    }
+
+    // Normal behavior based on movement activity - more aggressive chasing
+    if (movementActivity > 1) {
+      // Target is moving, chase more aggressively
+      if (RandomUtils.randomBetween(0, 100) < 85) "chase" else "wait" // Increased from 70% to 85%
+    } else if (movementActivity == 0) {
+      // Target stopped, decide whether to adjust position
+      if (!isTargetShootable) "chase" // Always move closer if can't shoot
+      else if (distanceToTarget > 3.0) "chase" // Chase if too far even when shootable
+      else if (RandomUtils.randomBetween(0, 100) < 30) "chase" else "wait" // Increased from 20% to 30%
+    } else {
+      if (distanceToTarget > 3.0) "chase" else "wait" // Chase if distance is concerning
+    }
+  }
+
+  private def generatePathToPosition(from: Vec, to: Vec, state: GameState, json: JsValue): List[Vec] = {
+    val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+    val xs = tiles.keys.map(_.substring(0, 5).toInt)
+    val ys = tiles.keys.map(_.substring(5, 10).toInt)
+    val (minX, minY) = (xs.min, ys.min)
+
+    val (grid, (offX, offY)) = createBooleanGrid(tiles, minX, minY)
+    val path = aStarSearch(from, to, grid, offX, offY)
+
+    path.filterNot(_ == from)
+  }
+
+  private def calculateDistance(pos1: Vec, pos2: Vec): Double = {
+    math.sqrt(math.pow(pos1.x - pos2.x, 2) + math.pow(pos1.y - pos2.y, 2))
+  }
+
+  def printEnhancedGridVisualization(
+                                      grid: Array[Array[Boolean]],
+                                      gridBounds: (Int, Int, Int, Int),
+                                      path: List[Vec],
+                                      charPos: Vec,
+                                      targetPos: Vec,
+                                      temporaryRestPos: Option[Vec],
+                                      noCrossLine: Option[(Vec, Vec)],
+                                      movementTimestamps: List[Long]
+                                    ): Unit = {
+    val (min_x, min_y, maxX, maxY) = gridBounds
+
+    // ANSI colors
+    val red = "\u001B[31m"      // Non-walkable
+    val green = "\u001B[32m"    // Walkable
+    val gold = "\u001B[33m"     // Character
+    val pink = "\u001B[35m"     // Path
+    val lightBlue = "\u001B[34m" // Target
+    val cyan = "\u001B[36m"     // Temporary rest
+    val yellow = "\u001B[93m"   // No-cross line
+    val reset = "\u001B[0m"
+
+    val offsetX = min_x
+    val offsetY = min_y
+    val width = maxX - min_x + 1
+    val height = maxY - min_y + 1
+
+    println(s"=== ENHANCED GRID VISUALIZATION ===")
+    println(s"Movement Activity: ${movementTimestamps.length} moves in last 3s")
+    println(s"Temporary Rest Position: $temporaryRestPos")
+    println(s"No-Cross Line: $noCrossLine")
+
+    for (y <- 0 until height) {
+      for (x <- 0 until width) {
+        val gameX = x + offsetX
+        val gameY = y + offsetY
+        val cellVec = Vec(gameX, gameY)
+
+        val isOnNoCrossLine = noCrossLine.exists { case (p1, p2) =>
+          isPointOnLine(cellVec, p1, p2, tolerance = 1)
+        }
+
+        val symbol = (cellVec, isOnNoCrossLine, path.contains(cellVec), cellVec == charPos,
+          cellVec == targetPos, temporaryRestPos.contains(cellVec), grid(y)(x)) match {
+          case (_, _, _, true, _, _, _) => s"${gold}[P]$reset" // Character
+          case (_, _, _, _, true, _, _) => s"${lightBlue}[T]$reset" // Target
+          case (_, _, _, _, _, true, _) => s"${cyan}[R]$reset" // Rest position
+          case (_, true, _, _, _, _, _) => s"${yellow}[L]$reset" // No-cross line
+          case (_, _, true, _, _, _, _) => s"${pink}[W]$reset" // Path
+          case (_, _, _, _, _, _, true) => s"${green}[O]$reset" // Walkable
+          case _ => s"${red}[X]$reset" // Non-walkable
+        }
+
+        print(symbol)
+      }
+      println()
+    }
+    println("Legend: [P]=Player, [T]=Target, [R]=Rest, [L]=Line, [W]=Way, [O]=Open, [X]=Blocked")
+  }
+
+  private def isPointOnLine(point: Vec, lineStart: Vec, lineEnd: Vec, tolerance: Int): Boolean = {
+    val dx = lineEnd.x - lineStart.x
+    val dy = lineEnd.y - lineStart.y
+
+    if (dx == 0 && dy == 0) return false
+
+    val crossProduct = math.abs((point.y - lineStart.y) * dx - (point.x - lineStart.x) * dy)
+    val lineLength = math.sqrt(dx * dx + dy * dy)
+
+    crossProduct / lineLength <= tolerance
+  }
+
+
+//  private def generateSmartWaypointsToTeamMember(
+//                                              targetLocation: Vec,
+//                                              state:          GameState,
+//                                              json:           JsValue
+//                                            ): List[Vec] = {
+//    val subTaskName = "generateSmartWaypointsToTeamMember"
+//    println(s"[$subTaskName] Starting.")
+//
+//    // 1) pull all tiles and build grid
+//    val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+//    val xs = tiles.keys.map(_.substring(0, 5).toInt)
+//    val ys = tiles.keys.map(_.substring(5, 10).toInt)
+//    val gridBounds @ (minX, minY, maxX, maxY) = (xs.min, ys.min, xs.max, ys.max)
+//
+//    val (grid, (offX, offY)) = createBooleanGrid(tiles, minX, minY)
+//    println(s"[$subTaskName] Grid bounds = $gridBounds, offset = ($offX,$offY)")
+//
+//    // 2) get character position
+//    val presentLoc = Vec(
+//      (json \ "characterInfo" \ "PositionX").as[Int],
+//      (json \ "characterInfo" \ "PositionY").as[Int]
+//    )
+//
+//    println(s"[$subTaskName] Character: $presentLoc → Target: $targetLocation")
+//
+//    // 3) grid bounds warning
+//    if (
+//      targetLocation.x < minX || targetLocation.x > maxX ||
+//        targetLocation.y < minY || targetLocation.y > maxY
+//    ) {
+//      printInColor(ANSI_BLUE,
+//        s"[$subTaskName] Target $targetLocation is outside grid $gridBounds — attempting A* anyway")
+//    }
+//
+//    // 4) run A* pathfinding
+//    val rawPath =
+//      if (presentLoc != targetLocation)
+//        aStarSearch(presentLoc, targetLocation, grid, offX, offY)
+//      else {
+//        println(s"[$subTaskName] Already at creature's location.")
+//        Nil
+//      }
+//
+//    val filteredPath = rawPath.filterNot(_ == presentLoc)
+//    println(s"[$subTaskName] Final path: $filteredPath")
+//
+//    // 5) debug visualization with printGridCreatures
+//    printGridCreatures(
+//      grid = grid,
+//      gridBounds = gridBounds,
+//      path = rawPath,
+//      charPos = presentLoc,
+//      waypointPos = targetLocation,
+//      creaturePositions = List(targetLocation)
+//    )
+//
+//    filteredPath
+//  }
 
   def printGridCreatures(grid: Array[Array[Boolean]], gridBounds: (Int, Int, Int, Int), path: List[Vec], charPos: Vec, waypointPos: Vec, creaturePositions: List[Vec]): Unit = {
     val (min_x, min_y, maxX, maxY) = gridBounds
