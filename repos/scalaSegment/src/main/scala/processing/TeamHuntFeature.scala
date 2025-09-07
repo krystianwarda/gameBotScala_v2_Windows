@@ -1,13 +1,15 @@
 package processing
 
 import cats.implicits.{catsSyntaxAlternativeGuard, toFunctorOps}
-import keyboard.{DirectionalKey, KeyboardAction}
+import keyboard.{DirectionalKey, HoldCtrlFor, KeyboardAction, PressCtrl, ReleaseCtrl}
 import play.api.libs.json.{JsObject, JsValue, Json, OFormat}
 import processing.AutoTargetFeature.aStarSearch
 import utils.ProcessingUtils.{MKActions, MKTask, NoOpTask, Step}
 import utils.SettingsUtils.UISettings
 import utils.consoleColorPrint.{ANSI_BLUE, printInColor}
 import utils.{GameState, RandomUtils, StaticGameInfo}
+
+import scala.concurrent.duration.DurationInt
 
 //import scala.util.Random
 import mouse._
@@ -34,6 +36,7 @@ object TeamHuntFeature {
       AnalyseTeamMembersPosition,
       ChangeLevelAction,
       DesignSmartMovement,
+      DesignRestMovement,
       EngageMovement,
 //      ShipTravelAfterTeam,
 
@@ -373,6 +376,208 @@ object TeamHuntFeature {
     }
   }
 
+  private object DesignRestMovement extends Step {
+    private val taskName = "DesignRestMovement"
+
+    override def run(
+                      state: GameState,
+                      json: JsValue,
+                      settings: UISettings
+                    ): Option[(GameState, MKTask)] = {
+
+      val currentTime = System.currentTimeMillis()
+      val teamHuntState = state.teamHunt
+
+      // Only activate if DesignSmartMovement produced no waypoints
+      if (teamHuntState.subWaypoints.nonEmpty) {
+        println(s"[$taskName] Smart movement active, skipping rest movement")
+        return Some(state -> NoOpTask)
+      }
+
+      // Check if target movement timestamps list is empty for more than 3 seconds
+      val timeSinceLastMovement = if (teamHuntState.targetMovementTimestamps.isEmpty) {
+        currentTime - teamHuntState.lastMovementDecision
+      } else {
+        0L
+      }
+
+      if (timeSinceLastMovement < teamHuntState.restMovementIdleThreshold) {
+        println(s"[$taskName] Target movement detected recently, no rest movement needed")
+        return Some(state -> NoOpTask)
+      }
+
+      // Check cooldown between rest movements
+      if (currentTime - teamHuntState.lastRestMovementTime < teamHuntState.restMovementCooldown) {
+        println(s"[$taskName] Rest movement still on cooldown")
+        return Some(state -> NoOpTask)
+      }
+
+      // First time or time to schedule next movement
+      if (teamHuntState.nextRestMovementTime == 0) {
+        val nextDelay = RandomUtils.randomIntBetween(
+          teamHuntState.restMovementDelayMin,
+          teamHuntState.restMovementDelayMax
+        ).toLong
+        val nextMovementTime = currentTime + nextDelay
+
+        println(s"[$taskName] Scheduling next rest movement in ${nextDelay}ms")
+
+        val updatedState = state.copy(teamHunt = teamHuntState.copy(
+          nextRestMovementTime = nextMovementTime
+        ))
+        return Some(updatedState -> NoOpTask)
+      }
+
+      // Check if it's time to execute the rest movement
+      if (currentTime < teamHuntState.nextRestMovementTime) {
+        return Some(state -> NoOpTask)
+      }
+
+      println(s"[$taskName] Executing rest movement - character is bored!")
+
+      // Generate rest movement
+      val restMovement = generateRestMovement(state, json)
+
+      restMovement match {
+        case Some((updatedState, task)) =>
+          // Schedule next rest movement
+          val nextDelay = RandomUtils.randomIntBetween(
+            teamHuntState.restMovementDelayMin,
+            teamHuntState.restMovementDelayMax
+          ).toLong
+
+          val finalState = updatedState.copy(teamHunt = updatedState.teamHunt.copy(
+            nextRestMovementTime = currentTime + nextDelay,
+            lastRestMovementTime = currentTime
+          ))
+
+          Some(finalState -> task)
+
+        case None =>
+          // Failed to generate movement, try again later
+          val retryDelay = RandomUtils.randomIntBetween(1000, 3000).toLong
+          val updatedState = state.copy(teamHunt = teamHuntState.copy(
+            nextRestMovementTime = currentTime + retryDelay
+          ))
+          Some(updatedState -> NoOpTask)
+      }
+    }
+
+    private def generateRestMovement(state: GameState, json: JsValue): Option[(GameState, MKTask)] = {
+      val teamHuntState = state.teamHunt
+
+      // Get character position
+      val currentPos = Vec(
+        (json \ "characterInfo" \ "PositionX").as[Int],
+        (json \ "characterInfo" \ "PositionY").as[Int]
+      )
+
+      // Decide if this will be a rotation movement (10% chance)
+      val isRotationMovement = RandomUtils.randomBetween(0, 1) < teamHuntState.restMovementRotationChance
+
+      if (isRotationMovement) {
+        println(s"[$taskName] Generating rotation rest movement")
+        generateRotationMovement(state)
+      } else {
+        println(s"[$taskName] Generating positional rest movement")
+        generatePositionalMovement(state, json, currentPos)
+      }
+    }
+
+    private def generateRotationMovement(state: GameState): Option[(GameState, MKTask)] = {
+      // Generate 1-3 random rotation directions
+      val rotationCount = RandomUtils.randomIntBetween(1, 3).toInt
+
+      val directions = List("MoveUp", "MoveDown", "MoveLeft", "MoveRight")
+      val selectedDirections = (1 to rotationCount).map { _ =>
+        directions(RandomUtils.randomIntBetween(0, directions.length - 1).toInt)
+      }.toList
+
+      println(s"[$taskName] Rotation movement: ${selectedDirections.mkString(" + ")} with Ctrl")
+
+      // Create keyboard actions: Ctrl press, hold, direction presses, Ctrl release
+      val directionActions = selectedDirections.map(DirectionalKey(_))
+      val keyboardActions = List(
+        PressCtrl,
+        HoldCtrlFor(500.milliseconds)
+      ) ++ directionActions ++ List(
+        ReleaseCtrl
+      )
+
+      val task = MKTask("rest_rotation", MKActions(Nil, keyboardActions))
+      Some(state -> task)
+    }
+
+    private def generatePositionalMovement(
+                                            state: GameState,
+                                            json: JsValue,
+                                            currentPos: Vec
+                                          ): Option[(GameState, MKTask)] = {
+
+      // Create grid to check walkability
+      val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+      val xs = tiles.keys.map(_.substring(0, 5).toInt)
+      val ys = tiles.keys.map(_.substring(5, 10).toInt)
+      val (minX, minY) = (xs.min, ys.min)
+
+      val (grid, (offX, offY)) = createBooleanGrid(tiles, minX, minY)
+
+      // Generate random movement distance (1-3 tiles)
+      val moveDistance = RandomUtils.randomIntBetween(
+        state.teamHunt.restMovementMinDistance,
+        state.teamHunt.restMovementMaxDistance
+      ).toInt
+
+      // Generate random direction
+      val directions = List(
+        (0, -1),   // Up
+        (0, 1),    // Down
+        (-1, 0),   // Left
+        (1, 0),    // Right
+        (-1, -1),  // Up-Left
+        (-1, 1),   // Down-Left
+        (1, -1),   // Up-Right
+        (1, 1)     // Down-Right
+      )
+
+      val (dx, dy) = directions(RandomUtils.randomIntBetween(0, directions.length - 1).toInt)
+      val targetPos = Vec(
+        currentPos.x + (dx * moveDistance),
+        currentPos.y + (dy * moveDistance)
+      )
+
+      println(s"[$taskName] Attempting to move ${moveDistance} tiles from $currentPos to $targetPos")
+
+      // Check if target position is walkable
+      val gridX = targetPos.x - offX
+      val gridY = targetPos.y - offY
+
+      if (gridX >= 0 && gridX < grid(0).length &&
+        gridY >= 0 && gridY < grid.length &&
+        grid(gridY)(gridX)) {
+
+        // Generate path to target position
+        val path = generatePathToPosition(currentPos, targetPos, state, json)
+
+        if (path.nonEmpty) {
+          println(s"[$taskName] Generated rest movement path: ${path.take(3)}...")
+
+          val updatedState = state.copy(teamHunt = state.teamHunt.copy(
+            subWaypoints = path
+          ))
+
+          Some(updatedState -> NoOpTask)
+        } else {
+          println(s"[$taskName] Could not generate path to rest position")
+          None
+        }
+      } else {
+        println(s"[$taskName] Target rest position not walkable: $targetPos")
+        None
+      }
+    }
+  }
+
   private object EngageMovement extends Step {
     private val taskName = "EngageMovement"
 
@@ -690,8 +895,7 @@ object TeamHuntFeature {
 
     // 1. Update movement detection
     val updatedTimestamps = updateMovementTimestamps(
-      teamHuntState.targetMovementTimestamps,
-      teamHuntState.lastTargetPosition,
+      state,
       targetLocation,
       currentTime
     )
@@ -810,12 +1014,15 @@ object TeamHuntFeature {
   }
 
   private def updateMovementTimestamps(
-                                        currentTimestamps: List[Long],
-                                        lastPosition: Option[Vec],
+                                        state: GameState,
                                         currentPosition: Vec,
                                         currentTime: Long
                                       ): List[Long] = {
-    val threeSecondsAgo = currentTime - 3000
+
+    val currentTimestamps = state.teamHunt.targetMovementTimestamps
+    val lastPosition = state.teamHunt.lastTargetPosition
+    val threeSecondsAgo = currentTime - state.teamHunt.positionListTimeSpan
+
     val filteredTimestamps = currentTimestamps.filter(_ > threeSecondsAgo)
 
     lastPosition match {
@@ -869,12 +1076,15 @@ object TeamHuntFeature {
                                                  isTargetShootable: Boolean
                                                ): Boolean = {
     val timeSinceLastUpdate = currentTime - lastUpdate
-    val minimumUpdateInterval = if (movementActivity > 0) 1000 else 2000 // Reduced from 3s to 2s
+    val minimumUpdateInterval = if (movementActivity > 0) 1000 else 2000
 
     if (timeSinceLastUpdate < minimumUpdateInterval) return false
 
-    // Always update if distance is too large (prioritize staying close)
-    val distanceForceUpdate = distanceToTarget > 4.0 // Reduced from 7.0 to 4.0
+    // Force update when close to target with low movement activity for more natural positioning
+    val isCloseWithLowActivity = distanceToTarget >= 2.0 && distanceToTarget <= 4.0 && movementActivity <= 2
+
+    // Always update if distance is too large
+    val distanceForceUpdate = distanceToTarget > 4.0
 
     // Higher probability when target is moving frequently
     val activityProbability = movementActivity * movementMultiplier * baseProbability
@@ -884,8 +1094,8 @@ object TeamHuntFeature {
 
     val randomCheck = RandomUtils.randomBetween(0, 100) < (activityProbability * 100)
 
-    val shouldUpdate = distanceForceUpdate || shootabilityUpdate || randomCheck
-    println(s"Update rest position? Distance: $distanceForceUpdate, Shootability: $shootabilityUpdate, Random: $randomCheck -> $shouldUpdate")
+    val shouldUpdate = distanceForceUpdate || shootabilityUpdate || randomCheck || isCloseWithLowActivity
+    println(s"Update rest position? Distance: $distanceForceUpdate, Shootability: $shootabilityUpdate, Random: $randomCheck, CloseWithLowActivity: $isCloseWithLowActivity -> $shouldUpdate")
 
     shouldUpdate
   }
@@ -898,16 +1108,24 @@ object TeamHuntFeature {
                                               isTargetShootable: Boolean,
                                               currentDistance: Double
                                             ): Vec = {
-    // Always stay close to target - distance 2-3 max
-    val baseDistance = if (isTargetShootable) {
-      if (currentDistance > 3.0) 2 else RandomUtils.randomIntBetween(2, 3) // Force closer if too far
-    } else {
-      if (currentDistance > 4.0) 2 else RandomUtils.randomIntBetween(2, 3) // Force closer if too far
+
+    // Check if we should use sideways positioning for more natural movement
+    val shouldUseSidewaysPositioning = movementActivity <= 2 && currentDistance >= 2.0 && currentDistance <= 4.0
+
+    if (shouldUseSidewaysPositioning) {
+      println(s"Using sideways positioning for natural movement (activity: $movementActivity, distance: $currentDistance)")
+      return calculateSidewaysPosition(charPos, targetPos, currentDistance)
     }
 
-    // Reduce distance variation to keep closer
-    val distanceVariation = if (movementActivity > 2) RandomUtils.randomIntBetween(-1, 0) else 0 // Only reduce, don't increase
-    val finalDistance = math.max(2, math.min(3, baseDistance + distanceVariation)) // Cap at 3
+    // Original logic for other scenarios
+    val baseDistance = if (isTargetShootable) {
+      if (currentDistance > 3.0) 2 else RandomUtils.randomIntBetween(2, 3)
+    } else {
+      if (currentDistance > 4.0) 2 else RandomUtils.randomIntBetween(2, 3)
+    }
+
+    val distanceVariation = if (movementActivity > 2) RandomUtils.randomIntBetween(-1, 0) else 0
+    val finalDistance = math.max(2, math.min(3, baseDistance + distanceVariation))
 
     println(s"Calculating rest position with final distance: $finalDistance (current: $currentDistance)")
 
@@ -921,7 +1139,6 @@ object TeamHuntFeature {
         (direction.y / length * finalDistance).toInt
       )
 
-      // Reduce side offset to stay closer
       val sideOffset = if (currentDistance > 3.0) 0 else RandomUtils.randomIntBetween(-1, 1).toInt
       val perpendicular = Vec(-normalizedDir.y, normalizedDir.x)
 
@@ -930,12 +1147,35 @@ object TeamHuntFeature {
         targetPos.y + normalizedDir.y + perpendicular.y * sideOffset
       )
     } else {
-      // Fallback: random position around target, but keep very close
       Vec(
         targetPos.x + RandomUtils.randomIntBetween(-2, 2).toInt,
         targetPos.y + RandomUtils.randomIntBetween(-2, 2).toInt
       )
     }
+  }
+
+
+
+  private def calculateSidewaysPosition(charPos: Vec, targetPos: Vec, currentDistance: Double): Vec = {
+    // Generate a position that's to the side of the target rather than directly behind/in front
+    val baseDistance = RandomUtils.randomIntBetween(2, 3)
+
+    // Choose a random angle that favors sideways positioning (45-135 degrees or 225-315 degrees)
+    val angleChoices = List(
+      RandomUtils.randomBetween(45, 135),    // Right side range
+      RandomUtils.randomBetween(225, 315)    // Left side range
+    )
+    val chosenAngle = angleChoices(RandomUtils.randomIntBetween(0, 1).toInt)
+    val angleRad = math.toRadians(chosenAngle)
+
+    // Calculate position based on angle
+    val offsetX = (math.cos(angleRad) * baseDistance).toInt
+    val offsetY = (math.sin(angleRad) * baseDistance).toInt
+
+    val sidewaysPos = Vec(targetPos.x + offsetX, targetPos.y + offsetY)
+
+    println(s"Calculated sideways position: $sidewaysPos (angle: $chosenAngle°, distance: $baseDistance)")
+    sidewaysPos
   }
 
   private def determineMovementBehavior(
@@ -948,30 +1188,42 @@ object TeamHuntFeature {
                                          lastDecisionTime: Long,
                                          isTargetShootable: Boolean
                                        ): String = {
-    val decisionCooldown = RandomUtils.randomBetween(800, 2000) // Reduced from 1-3s to 0.8-2s
+    val decisionCooldown = RandomUtils.randomBetween(800, 2000)
     val timeSinceLastDecision = currentTime - lastDecisionTime
 
-    // Emergency situations override cooldown - prioritize staying close
-    if (distanceToTarget > 4.0) return "chase" // Reduced from 8.0 to 4.0
-    if (distanceToTarget < 1.0) return "retreat" // Reduced from 1.5 to 1.0
+    // Emergency situations override cooldown
+    if (distanceToTarget > 4.0) return "chase"
+    if (distanceToTarget < 1.0) return "retreat"
 
-    // If too soon since last decision but distance is concerning, still chase
-    if (timeSinceLastDecision < decisionCooldown) {
-      if (distanceToTarget > 3.5) return "chase" // Override cooldown if getting too far
-      return "wait"
-    }
+    // When close with low activity, prefer more deliberate movement
+    val isCloseWithLowActivity = distanceToTarget >= 2.0 && distanceToTarget <= 4.0 && movementActivity <= 2
 
-    // Normal behavior based on movement activity - more aggressive chasing
-    if (movementActivity > 1) {
-      // Target is moving, chase more aggressively
-      if (RandomUtils.randomBetween(0, 100) < 85) "chase" else "wait" // Increased from 70% to 85%
-    } else if (movementActivity == 0) {
-      // Target stopped, decide whether to adjust position
-      if (!isTargetShootable) "chase" // Always move closer if can't shoot
-      else if (distanceToTarget > 3.0) "chase" // Chase if too far even when shootable
-      else if (RandomUtils.randomBetween(0, 100) < 30) "chase" else "wait" // Increased from 20% to 30%
+    if (isCloseWithLowActivity) {
+      // Use longer cooldown for more natural, less robotic movement
+      val extendedCooldown = RandomUtils.randomBetween(1500, 3500)
+      if (timeSinceLastDecision < extendedCooldown) {
+        if (distanceToTarget > 3.5) return "chase"
+        return "wait"
+      }
+
+      // When moving in this scenario, prefer calculated rest positions over direct chasing
+      if (RandomUtils.randomBetween(0, 100) < 70) "chase" else "wait"
     } else {
-      if (distanceToTarget > 3.0) "chase" else "wait" // Chase if distance is concerning
+      // Original logic for other scenarios
+      if (timeSinceLastDecision < decisionCooldown) {
+        if (distanceToTarget > 3.5) return "chase"
+        return "wait"
+      }
+
+      if (movementActivity > 1) {
+        if (RandomUtils.randomBetween(0, 100) < 85) "chase" else "wait"
+      } else if (movementActivity == 0) {
+        if (!isTargetShootable) "chase"
+        else if (distanceToTarget > 3.0) "chase"
+        else if (RandomUtils.randomBetween(0, 100) < 30) "chase" else "wait"
+      } else {
+        if (distanceToTarget > 3.0) "chase" else "wait"
+      }
     }
   }
 
