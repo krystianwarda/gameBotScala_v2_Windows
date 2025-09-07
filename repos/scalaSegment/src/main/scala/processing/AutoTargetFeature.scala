@@ -31,6 +31,7 @@ object AutoTargetFeature {
       DetectDeadCreatures,
       CheckCorpesToLoot,
       UpdateAttackStatus,
+      UnclickCrosshair,
       GetAttackInfo,
       SetUpAttackSupplies,
       CheckAttackSupplies,
@@ -76,6 +77,54 @@ object AutoTargetFeature {
     }
   }
 
+  private object UnclickCrosshair extends Step {
+    private val taskName = "UnclickCrosshair"
+
+    override def run(
+                      state: GameState,
+                      json: JsValue,
+                      settings: UISettings
+                    ): Option[(GameState, MKTask)] = {
+
+      val at = state.autoTarget
+      val characterInfo = json \ "characterInfo"
+      val isCrosshairActive = (characterInfo \ "IsCrosshairActive").asOpt[Boolean].getOrElse(false)
+
+      println(s"[UnclickCrosshair] Checking conditions - isCrosshairActive: $isCrosshairActive, chosenTargetId: ${at.chosenTargetId}")
+      println(s"[UnclickCrosshair] attackRuneMode: ${at.attackRuneMode}")
+
+      // Only proceed if crosshair is active and no target is chosen
+      if (!isCrosshairActive || at.chosenTargetId != 0) {
+        if (!isCrosshairActive) {
+          println(s"[UnclickCrosshair] Skipping - crosshair not active")
+        } else {
+          println(s"[UnclickCrosshair] Skipping - target selected (${at.chosenTargetId})")
+        }
+        return None
+      }
+
+      println(s"[UnclickCrosshair] Crosshair active with no target - canceling attack")
+      println(s"[UnclickCrosshair] Creating right-click actions to cancel crosshair")
+
+      // Simple right-click to cancel crosshair (no mouse movement needed)
+      val mouseActions = List(
+        RightButtonPress(0, 0),
+        RightButtonRelease(0, 0)
+      )
+
+      println(s"[UnclickCrosshair] Mouse actions created: $mouseActions")
+      println(s"[UnclickCrosshair] Resetting attackRuneMode from '${at.attackRuneMode}' to 'free'")
+
+      val updatedState = state.copy(autoTarget = at.copy(
+        attackRuneMode = "free"
+      ))
+
+      val task = MKTask(taskName, MKActions(mouseActions, Nil))
+      println(s"[UnclickCrosshair] Task created successfully")
+
+      Some(updatedState -> task)
+    }
+  }
 
   private object CheckCorpesToLoot extends Step {
     private val taskName = "CheckCorpesToLoot"
@@ -117,39 +166,138 @@ object AutoTargetFeature {
     }
   }
 
+//
+//  private object DetectDeadCreatures extends Step {
+//    private val taskName = "DetectDeadCreatures"
+//
+//    override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
+//      // Skip if AutoTarget is already stopped
+//      if (state.autoTarget.stateAutoTarget == "stop" || !settings.autoLootSettings.enabled) {
+//        return None
+//      }
+//
+//      val currentTime = System.currentTimeMillis()
+//      val lastAttackedInfo = (json \ "lastAttackedCreatureInfo").asOpt[JsObject].getOrElse(Json.obj())
+//
+//      // Check if there's a valid last attacked creature ID and if it's dead
+//      val lastAttackedIdOpt = (lastAttackedInfo \ "LastAttackedId").asOpt[Long]
+//      val isDead = (lastAttackedInfo \ "IsDead").asOpt[Boolean].getOrElse(false)
+//
+//      if (!isDead || lastAttackedIdOpt.isEmpty) {
+//        return None
+//      }
+//
+//      val lastAttackedId = lastAttackedIdOpt.get
+//      val creatureName = state.autoTarget.lastTargetName
+//
+//      val (x, y, z) = state.autoTarget.lastTargetPos
+//
+//      // **ADDED CHECK**: Only process if we have a valid chosen target and it matches the dead creature
+//      if (state.autoTarget.chosenTargetId == 0 || state.autoTarget.chosenTargetId != lastAttackedId.toInt) {
+//        return None
+//      }
+//
+//      // Only process if the dead creature matches our current/last target
+//      if (state.autoTarget.chosenTargetId == lastAttackedId.toInt || creatureName.nonEmpty) {
+//        // Check if this creature has loot settings
+//        settings.autoTargetSettings.creatureList
+//          .map(parseCreature)
+//          .find(_.name.equalsIgnoreCase(creatureName)) match {
+//
+//          case Some(cs) if cs.lootMonsterImmediately =>
+//            println(s"[$taskName] Creature $creatureName died with immediate loot setting - stopping AutoTarget")
+//
+//            // Add to loot queue
+//            val tileKey = generatePositionKey(x, y, z)
+//            val updatedState = state.copy(
+//              autoLoot = state.autoLoot.copy(
+//                carcassToLootImmediately = state.autoLoot.carcassToLootImmediately :+ (tileKey, currentTime, lastAttackedId.toString),
+//                startTimeOfLooting = currentTime
+//              ),
+//              autoTarget = state.autoTarget.copy(
+//                stateAutoTarget = "stop",
+//                chosenTargetId = 0,
+//              )
+//            )
+//            Some((updatedState, NoOpTask))
+//
+//          case Some(cs) if cs.lootMonsterAfterFight =>
+//            println(s"[$taskName] Creature $creatureName died with post-fight loot setting")
+//            val tileKey = generatePositionKey(x, y, z)
+//            val updatedState = state.copy(autoLoot = state.autoLoot.copy(
+//              carcassToLootAfterFight = state.autoLoot.carcassToLootAfterFight :+ (tileKey, currentTime, lastAttackedId.toString)
+//            ))
+//            Some((updatedState, NoOpTask))
+//
+//          case _ =>
+//            println(s"[$taskName] Creature $creatureName died with no loot settings")
+//            None
+//        }
+//      } else {
+//        None
+//      }
+//    }
+//
+//    private def generatePositionKey(x: Int, y: Int, z: Int): String = f"$x$y$z"
+//
+//  }
 
   private object DetectDeadCreatures extends Step {
     private val taskName = "DetectDeadCreatures"
 
     override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
       // Skip if AutoTarget is already stopped
-      if (state.autoTarget.stateAutoTarget == "stop" || !settings.autoLootSettings.enabled) {
+      if (state.autoTarget.stateAutoTarget == "stop") {
+        println(s"[$taskName] Skipping - AutoTarget is stopped")
         return None
       }
 
       val currentTime = System.currentTimeMillis()
-      val lastAttackedInfo = (json \ "lastAttackedCreatureInfo").asOpt[JsObject].getOrElse(Json.obj())
 
-      // Check if there's a valid last attacked creature ID and if it's dead
-      val lastAttackedIdOpt = (lastAttackedInfo \ "LastAttackedId").asOpt[Long]
-      val isDead = (lastAttackedInfo \ "IsDead").asOpt[Boolean].getOrElse(false)
-
-      if (!isDead || lastAttackedIdOpt.isEmpty) {
+      // Check if current chosen target is in lastKilledCreatures
+      if (state.autoTarget.chosenTargetId == 0) {
+        println(s"[$taskName] Skipping - no chosen target")
         return None
       }
 
-      val lastAttackedId = lastAttackedIdOpt.get
+      val chosenTargetId = state.autoTarget.chosenTargetId
+      val lastKilledCreatures = (json \ "lastKilledCreatures").asOpt[JsObject].getOrElse(Json.obj())
+
+      println(s"[$taskName] Checking if target $chosenTargetId is in lastKilledCreatures")
+
+      val killedCreatureOpt = (lastKilledCreatures \ chosenTargetId.toString).asOpt[JsObject]
+      val isDead = killedCreatureOpt.flatMap(obj => (obj \ "IsDead").asOpt[Boolean]).getOrElse(false)
+
+      println(s"[$taskName] killedCreatureData: $killedCreatureOpt, isDead: $isDead")
+
+      if (!isDead) {
+        println(s"[$taskName] Skipping - target $chosenTargetId not dead")
+        return None
+      }
+
+      println(s"[$taskName] Target $chosenTargetId is dead - resetting chosenTargetId")
+
+      // Extract creature info for loot handling
       val creatureName = state.autoTarget.lastTargetName
+      val (x, y, z) = killedCreatureOpt.map { obj =>
+        val killedX = (obj \ "X").asOpt[Int].getOrElse(state.autoTarget.lastTargetPos._1)
+        val killedY = (obj \ "Y").asOpt[Int].getOrElse(state.autoTarget.lastTargetPos._2)
+        val killedZ = (obj \ "Z").asOpt[Int].getOrElse(state.autoTarget.lastTargetPos._3)
+        (killedX, killedY, killedZ)
+      }.getOrElse(state.autoTarget.lastTargetPos)
 
-      val (x, y, z) = state.autoTarget.lastTargetPos
+      // Reset chosenTargetId since the creature is dead
+      val updatedAutoTarget = state.autoTarget.copy(
+        chosenTargetId = 0,
+        chosenTargetName = "",
+        lastTargetName = "",
+        stateAutoTarget = "search" // Reset to search for new targets
+      )
 
-      // **ADDED CHECK**: Only process if we have a valid chosen target and it matches the dead creature
-      if (state.autoTarget.chosenTargetId == 0 || state.autoTarget.chosenTargetId != lastAttackedId.toInt) {
-        return None
-      }
+      val updatedState = state.copy(autoTarget = updatedAutoTarget)
 
-      // Only process if the dead creature matches our current/last target
-      if (state.autoTarget.chosenTargetId == lastAttackedId.toInt || creatureName.nonEmpty) {
+      // Only handle loot if auto-loot is enabled
+      if (settings.autoLootSettings.enabled) {
         // Check if this creature has loot settings
         settings.autoTargetSettings.creatureList
           .map(parseCreature)
@@ -160,39 +308,37 @@ object AutoTargetFeature {
 
             // Add to loot queue
             val tileKey = generatePositionKey(x, y, z)
-            val updatedState = state.copy(
-              autoLoot = state.autoLoot.copy(
-                carcassToLootImmediately = state.autoLoot.carcassToLootImmediately :+ (tileKey, currentTime, lastAttackedId.toString),
+            val updatedStateWithLoot = updatedState.copy(
+              autoLoot = updatedState.autoLoot.copy(
+                carcassToLootImmediately = updatedState.autoLoot.carcassToLootImmediately :+ (tileKey, currentTime, chosenTargetId.toString),
                 startTimeOfLooting = currentTime
               ),
-              autoTarget = state.autoTarget.copy(
-                stateAutoTarget = "stop",
-                chosenTargetId = 0,
-              )
+              autoTarget = updatedAutoTarget.copy(stateAutoTarget = "stop")
             )
-            Some((updatedState, NoOpTask))
+            Some((updatedStateWithLoot, NoOpTask))
 
           case Some(cs) if cs.lootMonsterAfterFight =>
             println(s"[$taskName] Creature $creatureName died with post-fight loot setting")
             val tileKey = generatePositionKey(x, y, z)
-            val updatedState = state.copy(autoLoot = state.autoLoot.copy(
-              carcassToLootAfterFight = state.autoLoot.carcassToLootAfterFight :+ (tileKey, currentTime, lastAttackedId.toString)
-            ))
-            Some((updatedState, NoOpTask))
+            val updatedStateWithLoot = updatedState.copy(
+              autoLoot = updatedState.autoLoot.copy(
+                carcassToLootAfterFight = updatedState.autoLoot.carcassToLootAfterFight :+ (tileKey, currentTime, chosenTargetId.toString)
+              )
+            )
+            Some((updatedStateWithLoot, NoOpTask))
 
           case _ =>
-            println(s"[$taskName] Creature $creatureName died with no loot settings")
-            None
+            println(s"[$taskName] Creature $creatureName died with no loot settings - just reset target")
+            Some((updatedState, NoOpTask))
         }
       } else {
-        None
+        println(s"[$taskName] Auto-loot disabled - just reset target without looting")
+        Some((updatedState, NoOpTask))
       }
     }
 
     private def generatePositionKey(x: Int, y: Int, z: Int): String = f"$x$y$z"
-
   }
-
 
   private object UpdateAttackStatus extends Step {
     private val taskName = "UpdateAttackStatus"
@@ -349,7 +495,7 @@ object AutoTargetFeature {
       val at = state.autoTarget
 
       // only on first pass (mapping empty & still in "init")
-      if (at.autoTargetContainerMapping.nonEmpty || at.stateAutoTarget != "not_set")
+      if (at.autoTargetContainerMapping.nonEmpty || at.isAttackRuneContainerSet)
         None
       else {
         // 1) build rune→container mapping
@@ -382,7 +528,8 @@ object AutoTargetFeature {
           stateAutoTarget                = "free",
           isUsingAmmo                    = isUsingAmmoStr,
           ammoId                         = ammoIdVal,
-          ammoCountForNextResupply       = ammoCountVal
+          ammoCountForNextResupply       = ammoCountVal,
+          isAttackRuneContainerSet = true
         )
 
         // 4) update GameState and emit a marker task
@@ -396,47 +543,90 @@ object AutoTargetFeature {
     private val taskName = "CheckAttackRunes"
     def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
       val at = state.autoTarget
-//      println(s"[CheckAttackRunes] Checking rune supplies in: ${at.autoTargetContainerMapping}")
-//      println(s"stateAutoTarget: ${at.stateAutoTarget }")
-      if (at.stateAutoTarget != "free") return None
+
+      println(s"[CheckAttackRunes] Starting check - stateAutoTarget: ${at.stateAutoTarget}")
+      println(s"[CheckAttackRunes] currentAutoAttackContainerName: '${at.currentAutoAttackContainerName}'")
+      println(s"[CheckAttackRunes] autoTargetContainerMapping: ${at.autoTargetContainerMapping}")
+
+      // Check available containers in JSON
+      val containersInfo = (json \ "containersInfo").asOpt[JsObject]
+      println(s"[CheckAttackRunes] Available containers in JSON: ${containersInfo.map(_.keys).getOrElse(Set.empty)}")
 
       // find the first rune whose container is now empty
       at.autoTargetContainerMapping.collectFirst {
-        case (runeId, cont)
-          if !(json \ "containersInfo" \ cont \ "items").asOpt[JsObject]
-            .exists(_.values.exists(i => (i \ "itemId").asOpt[Int].contains(runeId))) =>
-          (runeId, cont)
-      } match {
-        case Some((runeId, cont)) =>
-          printInColor(ANSI_BLUE, s"[CheckAttackRunes] '$cont' is out of rune $runeId → removing backpack")
+        case (runeId, cont) =>
+          println(s"[CheckAttackRunes] Checking runeId=$runeId in container='$cont'")
 
-          // build the “up backpack” click
+          val containerItems = (json \ "containersInfo" \ cont \ "items").asOpt[JsObject]
+          println(s"[CheckAttackRunes] Container '$cont' items structure: $containerItems")
+
+          val hasRune = containerItems.exists(_.values.exists { item =>
+            val itemId = (item \ "itemId").asOpt[Int]
+            println(s"[CheckAttackRunes] Found item with ID: $itemId")
+            itemId.contains(runeId)
+          })
+
+          println(s"[CheckAttackRunes] Container '$cont' has rune $runeId: $hasRune")
+
+          if (!hasRune) {
+            println(s"[CheckAttackRunes] Container '$cont' is empty of rune $runeId")
+            Some((runeId, cont))
+          } else {
+            None
+          }
+      }.flatten match {
+        case Some((runeId, cont)) =>
+          println(s"[CheckAttackRunes] Found empty container: '$cont' missing rune $runeId")
+
+          // Check inventory panel structure
+          val invObj = (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
+          println(s"[CheckAttackRunes] Inventory panel keys: ${invObj.map(_.keys).getOrElse(Set.empty)}")
+
+          // build the "up backpack" click
           val upSeqOpt = for {
-            invObj   <- (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
-            key      <- invObj.keys.find(_.contains(cont))
-            upBtn    <- (invObj \ key \ "upButton").asOpt[JsObject]
+            invPanel <- invObj
+            key      <- {
+              val matchingKey = invPanel.keys.find(_.contains(cont))
+              println(s"[CheckAttackRunes] Looking for key containing '$cont', found: $matchingKey")
+              matchingKey
+            }
+            upBtn    <- {
+              val upButton = (invPanel \ key \ "upButton").asOpt[JsObject]
+              println(s"[CheckAttackRunes] Up button for key '$key': $upButton")
+              upButton
+            }
             x        <- (upBtn \ "x").asOpt[Int]
             y        <- (upBtn \ "y").asOpt[Int]
-          } yield List(
-            MoveMouse(x, y),
-            LeftButtonPress(x, y),
-            LeftButtonRelease(x, y)
-          )
+          } yield {
+            println(s"[CheckAttackRunes] Up button coordinates: ($x, $y)")
+            List(
+              MoveMouse(x, y),
+              LeftButtonPress(x, y),
+              LeftButtonRelease(x, y)
+            )
+          }
 
-          val actions = upSeqOpt.getOrElse(Nil)
+          val actions = upSeqOpt.getOrElse {
+            println(s"[CheckAttackRunes] Failed to generate up button actions for container '$cont'")
+            Nil
+          }
+
           val newAT = at.copy(
             currentAutoAttackContainerName = cont,
-            stateAutoTarget       = "remove_backpack"
+            stateAutoTarget = "remove_backpack"
           )
+
+          println(s"[CheckAttackRunes] Updated state - currentAutoAttackContainerName: '${newAT.currentAutoAttackContainerName}'")
+          println(s"[CheckAttackRunes] Updated state - stateAutoTarget: '${newAT.stateAutoTarget}'")
+
           Some(state.copy(autoTarget = newAT) -> MKTask(taskName, MKActions(actions, Nil)))
 
         case None =>
-//          println("[CheckAttackRunes] All containers still have their runes.")
+          println("[CheckAttackRunes] All containers still have their runes.")
           None
       }
     }
   }
-
 
   private object TargetFocusing extends Step {
     private val taskName = "TargetFocusing"
@@ -1112,9 +1302,12 @@ object AutoTargetFeature {
 
 
   private object EngageAttack extends Step {
-    private val taskName = "AttackStep"
+    private val taskName = "EngageAttack"
 
     override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
+      val currentTime = System.currentTimeMillis()
+      val autoTarget = state.autoTarget
+
 
       if ((state.autoTarget.stateAutoTarget == "stop") || state.autoTarget.chosenTargetId == 0) return None
 
@@ -1129,24 +1322,18 @@ object AutoTargetFeature {
       val battleInfo = (json \ "battleInfo").as[Map[String, JsValue]]
       val creatureOpt = findCreatureInfoById(chosenId, battleInfo, settings)
 
-      if (creatureOpt.isEmpty)
+      if (creatureOpt.isEmpty) {
         println(s"[$taskName] Chosen target ID $chosenId not found in battleInfo.")
-
-//      val (st1, moveTask) = creatureOpt match {
-//        case Some(creature) => runMovementToCreature(creature, presentLoc, json, state, settings)
-//        case None => (state, MKTask("empty", MKActions(Nil, Nil)))
-//      }
-
-//      val moveMouse = moveTask.actions.mouse
-//      val moveKeys = moveTask.actions.keyboard
+        return Some((state, NoOpTask))
+      }
 
       val st2 = state
       val trapMouse = Nil
       val trapKeys = Nil
 
       val (st3, runeTask) = creatureOpt match {
-        case Some(creature) => runRuneAttack(creature, json, st2, settings)
-        case None => (st2, MKTask("empty", MKActions(Nil, Nil)))
+        case Some(creature) => runRuneAttack(st2, json, settings, creature).getOrElse((st2, MKTask("empty", MKActions(Nil, Nil))))
+        case None => (st2, NoOpTask)
       }
 
       val runeMouse = runeTask.actions.mouse
@@ -1161,134 +1348,301 @@ object AutoTargetFeature {
   }
 
   private def runRuneAttack(
-                             creatureData: CreatureInfo,
-                             json:         JsValue,
-                             state:        GameState,
-                             settings:     UISettings
-                           ): (GameState, MKTask) = {
+                             state: GameState,
+                             json: JsValue,
+                             settings: UISettings,
+                             creature: CreatureInfo
+                           ): Option[(GameState, MKTask)] = {
 
-    val chosenId   = creatureData.id
+    val at = state.autoTarget
+    val characterInfo = json \ "characterInfo"
+    val isCrosshairActive = (characterInfo \ "IsCrosshairActive").asOpt[Boolean].getOrElse(false)
+    val currentTime = System.currentTimeMillis()
+
+
+    println(s"[runRuneAttack] Entered function with mode=${at.attackRuneMode}, crosshairActive=$isCrosshairActive")
+    println(s"[runRuneAttack] at.currentAutoAttackContainerName=${at.currentAutoAttackContainerName}, crosshairActive=$isCrosshairActive")
+    println(s"[runRuneAttack] chosenTargetId=${at.chosenTargetId}, currentTime=$currentTime")
+
+    // Get current creature info and map position
     val battleInfo = (json \ "battleInfo").as[Map[String, JsValue]]
-    val cfg        = effectiveRuneSettings(creatureData, battleInfo, settings)
-    val now        = System.currentTimeMillis()
+    println(s"[runRuneAttack] battleInfo keys: ${battleInfo.keys}")
 
-    println(s"[RuneAttack] settings: useBattle=${cfg.useRuneOnBattle}, useScreen=${cfg.useRuneOnScreen}")
+    val creatureOpt = findCreatureInfoById(at.chosenTargetId, battleInfo, settings)
+    println(s"[runRuneAttack] creatureOpt result: $creatureOpt")
 
-    // 1) Battle rune attack
-    val battleOpt: Option[(GameState, List[MouseAction])] =
-      if (cfg.useRuneOnBattle &&
-        now - state.autoTarget.lastRuneUseTime >= state.autoTarget.runeUseCooldown + state.autoTarget.runeUseRandomness
-      ) {
-        for {
-          runeStr  <- cfg.runeType
-          runeID   <- runeStr.split('.').lastOption.flatMap(_.toIntOption)
-          contName <- state.autoTarget.autoTargetContainerMapping.get(runeID)
-          slot     <- (0 until 4).find { i =>
-            (json \ "containersInfo" \ contName \ "items" \ s"slot$i" \ "itemId").asOpt[Int].contains(runeID)
-          }
-          invPanel <- (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
-          panelKey <- invPanel.keys.find(_.contains(contName))
-          contents <- (invPanel \ panelKey \ "contentsPanel").asOpt[JsObject]
-          runeObj  <- (contents \ s"item$slot").asOpt[JsObject]
-          rx       <- (runeObj \ "x").asOpt[Int]
-          ry       <- (runeObj \ "y").asOpt[Int]
-          battleObj<- (json \ "screenInfo" \ "battlePanelLoc" \ s"$chosenId").asOpt[JsObject]
-          mx       <- (battleObj \ "PosX").asOpt[Int]
-          my       <- (battleObj \ "PosY").asOpt[Int]
-          if mx >= 2 && my >= 2
-        } yield {
-          println(s"[RuneAttack] runeStr: $runeStr, parsed runeID: $runeID")
-          println(s"[RuneAttack] containerMapping: ${state.autoTarget.autoTargetContainerMapping}")
-          println(s"[RuneAttack] container slot check: slot $slot")
-          println(s"[RuneAttack] screen positions: rune=($rx,$ry), target=($mx,$my)")
+    creatureOpt match {
+      case Some(updatedCreature) =>
+        println(s"[runRuneAttack] Found creature: $updatedCreature")
 
-          val actions = List(
-            MoveMouse(rx, ry),
-            RightButtonPress(rx, ry),
-            RightButtonRelease(rx, ry),
-            MoveMouse(mx, my),
-            LeftButtonPress(mx, my),
-            LeftButtonRelease(mx, my)
-          )
-          val rnd      = generateRandomDelay(state.autoTarget.runeUseTimeRange)
-          val newAT    = state.autoTarget.copy(lastRuneUseTime = now, runeUseRandomness = rnd)
-          val newState = state.copy(autoTarget = newAT)
-          (newState, actions)
+        // Get creature's battle panel position instead of 8x6
+        val creaturePositionOpt = for {
+          battleObj <- (json \ "screenInfo" \ "battlePanelLoc" \ at.chosenTargetId.toString).asOpt[JsObject]
+          mx <- (battleObj \ "PosX").asOpt[Int]
+          my <- (battleObj \ "PosY").asOpt[Int]
+        } yield (mx, my)
+
+        creaturePositionOpt match {
+          case Some((mx, my)) =>
+            println(s"[runRuneAttack] Creature battle position: mx=$mx, my=$my")
+
+            at.attackRuneMode match {
+              case "free" =>
+                println(s"[runRuneAttack] Processing 'free' mode")
+
+                // Check if too soon since last action
+                val timeSinceLastAction = currentTime - at.lastEngageAttackActionTime
+
+                if (timeSinceLastAction < at.engageAttackActionThrottle) {
+                  println(s"[runRuneAttack] Too soon since last action → NoOp (${timeSinceLastAction}ms < ${at.engageAttackActionThrottle}ms)")
+                  return Some((state, MKTask("NoOp", MKActions(Nil, Nil))))
+                }
+
+                // Phase 1: Right-click rune and prepare for targeting
+                val invPanel = (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
+                println(s"[runRuneAttack] inventoryPanelLoc available: ${invPanel.isDefined}")
+
+                val runeCoords = for {
+                  contName <- Some(at.currentAutoAttackContainerName)
+                  _ = println(s"[runRuneAttack] Looking for container: $contName")
+                  invPanel <- (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
+                  _ = println(s"[runRuneAttack] Available inventory keys: ${invPanel.keys}")
+                  runeKey <- invPanel.keys.find(_.contains(contName))
+                  _ = println(s"[runRuneAttack] Found matching runeKey: $runeKey")
+                  item <- (invPanel \ runeKey \ "contentsPanel" \ "item0").asOpt[JsObject]
+                  _ = println(s"[runRuneAttack] Found item0: $item")
+                  rx <- (item \ "x").asOpt[Int]
+                  ry <- (item \ "y").asOpt[Int]
+                  _ = println(s"[runRuneAttack] Rune coordinates: rx=$rx, ry=$ry")
+                } yield (rx, ry)
+
+                println(s"[runRuneAttack] Final runeCoords result: $runeCoords")
+
+                runeCoords match {
+                  case Some((rx, ry)) =>
+                    println(s"[runRuneAttack] Creating mouse actions for rune at ($rx, $ry)")
+                    val mouseActions = List(
+                      MoveMouse(rx, ry),
+                      RightButtonPress(rx, ry),
+                      RightButtonRelease(rx, ry),
+                      MoveMouse(mx, my)
+                    )
+                    println(s"[runRuneAttack] Mouse actions created: $mouseActions")
+
+                    val newAT = at.copy(
+                      attackRuneMode = "engaged",
+                      lastEngageAttackActionTime = currentTime
+                    )
+                    println(s"[runRuneAttack] Updating attackRuneMode to 'engaged'")
+
+                    val newState = state.copy(autoTarget = newAT)
+                    Some(newState -> MKTask("runRuneAttack - free_phase", MKActions(mouseActions, Nil)))
+
+                  case None =>
+                    println("[runRuneAttack] Could not find rune coordinates - returning None")
+                    None
+                }
+
+              case "engaged" =>
+                println(s"[runRuneAttack] Processing 'engaged' mode, crosshairActive=$isCrosshairActive")
+
+
+                // Check if crosshair is active - if not, something went wrong
+                if (!isCrosshairActive) {
+                  println(s"[runRuneAttack] Crosshair not active")
+
+                    // Check if too soon since last action
+                  val timeSinceLastAction = currentTime - at.lastEngageAttackActionTime
+                  if (timeSinceLastAction < 1500L) {
+                    println(s"[runRuneAttack] Lets wait for crosshair → NoOp (${timeSinceLastAction}ms < 1500 ms)")
+                    return Some((state, MKTask("NoOp", MKActions(Nil, Nil))))
+                  } else {
+                    val newAT = at.copy(attackRuneMode = "free")
+                    val newState = state.copy(autoTarget = newAT)
+                    Some(newState -> MKTask("runRuneAttack - crosshair_reset", MKActions.empty))
+                  }
+                } else {
+                  println(s"[runRuneAttack] Crosshair active - proceeding with left-click at creature position ($mx, $my)")
+
+                  val timeSinceLastRuneUsage = currentTime - at.lastRuneUseTime
+                  if (timeSinceLastRuneUsage < at.runeUseCooldown) {
+                    println(s"[runRuneAttack] Still on attack rune cooldown → NoOp (${timeSinceLastRuneUsage} ms < ${at.runeUseCooldown} ms)")
+                    return Some((state, MKTask("NoOp", MKActions(Nil, Nil))))
+                  }
+                  println(s"[runRuneAttack]  attackTEST  (${timeSinceLastRuneUsage} ms > ${at.runeUseCooldown} ms)")
+
+                  // Phase 2: Left-click at creature's battle position
+                  val mouseActions = List(
+                    MoveMouse(mx, my),
+                    LeftButtonPress(mx, my),
+                    LeftButtonRelease(mx, my)
+                  )
+                  println(s"[runRuneAttack] Final attack mouse actions: $mouseActions")
+
+                  val newAT = at.copy(
+                    attackRuneMode = "free",
+                    lastRuneUseTime = currentTime
+                  )
+
+
+                  val newState = state.copy(autoTarget = newAT)
+                  Some(newState -> MKTask("runRuneAttack - engaged_phase", MKActions(mouseActions, Nil)))
+                }
+
+              case unknownMode =>
+                println(s"[runRuneAttack] Unknown attackRuneMode: '$unknownMode' - resetting to 'free'")
+
+                // Unknown mode, reset to free
+                val newAT = at.copy(
+                  attackRuneMode = "free",
+                  lastEngageAttackActionTime = currentTime
+                )
+                val newState = state.copy(autoTarget = newAT)
+                Some(newState -> MKTask("runRuneAttack - unknown_reset", MKActions.empty))
+            }
+
+          case None =>
+            println(s"[runRuneAttack] Could not find creature battle position for ID ${at.chosenTargetId}")
+            None
         }
-      } else None
 
-    val (afterBattleState, battleMouse) = battleOpt.getOrElse((state, List.empty))
-
-    // 2) Screen rune attack
-    val screenMouse: List[MouseAction] =
-      if (cfg.useRuneOnScreen &&
-        now - state.autoTarget.lastRuneUseTime >= state.autoTarget.runeUseCooldown + state.autoTarget.runeUseRandomness
-      ) {
-        println("[RuneAttack-SCREEN] Attempting screen rune attack")
-
-        (for {
-          runeStr  <- cfg.runeType
-          _ = println(s"[RuneAttack-SCREEN] runeType from cfg: $runeStr")
-
-          runeID   <- runeStr.split('.').lastOption.flatMap(_.toIntOption)
-          _ = println(s"[RuneAttack-SCREEN] parsed runeID: $runeID")
-
-          contName <- state.autoTarget.autoTargetContainerMapping.get(runeID)
-          _ = println(s"[RuneAttack-SCREEN] container name for runeID: $contName")
-
-          invPanel <- (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
-          _ = println(s"[RuneAttack-SCREEN] invPanel keys: ${invPanel.keys}")
-
-          panelKey <- invPanel.keys.find(_.contains(contName))
-          _ = println(s"[RuneAttack-SCREEN] matched panelKey: $panelKey")
-
-          contents <- (invPanel \ panelKey \ "contentsPanel").asOpt[JsObject]
-          _ = println(s"[RuneAttack-SCREEN] contents keys: ${contents.keys}")
-
-          runeObj  <- (contents \ "item0").asOpt[JsObject]
-          rx       <- (runeObj \ "x").asOpt[Int]
-          ry       <- (runeObj \ "y").asOpt[Int]
-          _ = println(s"[RuneAttack-SCREEN] Rune screen position: ($rx,$ry)")
-
-          // Extract tile screen position
-          tileId   = s"${creatureData.posX}${creatureData.posY}${creatureData.posZ}"
-          tileRaw  = (json \ "areaInfo" \ "tiles" \ tileId)
-          _ = println(s"[RuneAttack-SCREEN] Looking for tileId: $tileId")
-
-          val mapPanel = (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
-          val screenTargetOpt = mapPanel.values.find(obj => (obj \ "id").asOpt[String].contains(tileId))
-
-          tx <- screenTargetOpt.flatMap(obj => (obj \ "x").asOpt[Int])
-          ty <- screenTargetOpt.flatMap(obj => (obj \ "y").asOpt[Int])
-          _ = println(s"[RuneAttack-SCREEN] Target screen position: ($tx,$ty)")
-
-        } yield {
-          val actions = List(
-            MoveMouse(rx, ry),
-            RightButtonPress(rx, ry),
-            RightButtonRelease(rx, ry),
-            MoveMouse(tx, ty),
-            LeftButtonPress(tx, ty),
-            LeftButtonRelease(tx, ty)
-          )
-          val rnd      = generateRandomDelay(state.autoTarget.runeUseTimeRange)
-          val newAT    = state.autoTarget.copy(lastRuneUseTime = now, runeUseRandomness = rnd)
-          val newState = state.copy(autoTarget = newAT)
-          return (newState, MKTask("runeAttack", MKActions(actions, Nil)))
-        }).getOrElse {
-          println("[RuneAttack-SCREEN] ❌ Missing data to cast rune on screen.")
-          List.empty
-        }
-      } else {
-        println("[RuneAttack-SCREEN] Skipped (either flag false or cooldown not ready)")
-        List.empty
-      }
-
-
-
-    val task = MKTask("runeAttack", MKActions(battleMouse ++ screenMouse, Nil))
-    (afterBattleState, task)
+      case None =>
+        println(s"[runRuneAttack] Target creature not found - chosenTargetId=${at.chosenTargetId}")
+        println(s"[runRuneAttack] Available battleInfo creature IDs: ${battleInfo.values.flatMap(v => (v \ "Id").asOpt[Int]).toList}")
+        None
+    }
   }
+
+//  private def runRuneAttack(
+//                             creatureData: CreatureInfo,
+//                             json:         JsValue,
+//                             state:        GameState,
+//                             settings:     UISettings
+//                           ): (GameState, MKTask) = {
+//
+//    val chosenId   = creatureData.id
+//    val battleInfo = (json \ "battleInfo").as[Map[String, JsValue]]
+//    val cfg        = effectiveRuneSettings(creatureData, battleInfo, settings)
+//    val now        = System.currentTimeMillis()
+//
+//    println(s"[RuneAttack] settings: useBattle=${cfg.useRuneOnBattle}, useScreen=${cfg.useRuneOnScreen}")
+//
+//    // 1) Battle rune attack
+//    val battleOpt: Option[(GameState, List[MouseAction])] =
+//      if (cfg.useRuneOnBattle &&
+//        now - state.autoTarget.lastRuneUseTime >= state.autoTarget.runeUseCooldown + state.autoTarget.runeUseRandomness
+//      ) {
+//        for {
+//          runeStr  <- cfg.runeType
+//          runeID   <- runeStr.split('.').lastOption.flatMap(_.toIntOption)
+//          contName <- state.autoTarget.autoTargetContainerMapping.get(runeID)
+//          slot     <- (0 until 4).find { i =>
+//            (json \ "containersInfo" \ contName \ "items" \ s"slot$i" \ "itemId").asOpt[Int].contains(runeID)
+//          }
+//          invPanel <- (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
+//          panelKey <- invPanel.keys.find(_.contains(contName))
+//          contents <- (invPanel \ panelKey \ "contentsPanel").asOpt[JsObject]
+//          runeObj  <- (contents \ s"item$slot").asOpt[JsObject]
+//          rx       <- (runeObj \ "x").asOpt[Int]
+//          ry       <- (runeObj \ "y").asOpt[Int]
+//          battleObj<- (json \ "screenInfo" \ "battlePanelLoc" \ s"$chosenId").asOpt[JsObject]
+//          mx       <- (battleObj \ "PosX").asOpt[Int]
+//          my       <- (battleObj \ "PosY").asOpt[Int]
+//          if mx >= 2 && my >= 2
+//        } yield {
+//          println(s"[RuneAttack] runeStr: $runeStr, parsed runeID: $runeID")
+//          println(s"[RuneAttack] containerMapping: ${state.autoTarget.autoTargetContainerMapping}")
+//          println(s"[RuneAttack] container slot check: slot $slot")
+//          println(s"[RuneAttack] screen positions: rune=($rx,$ry), target=($mx,$my)")
+//
+//          val actions = List(
+//            MoveMouse(rx, ry),
+//            RightButtonPress(rx, ry),
+//            RightButtonRelease(rx, ry),
+//            MoveMouse(mx, my),
+//            LeftButtonPress(mx, my),
+//            LeftButtonRelease(mx, my)
+//          )
+//
+//          val rnd      = generateRandomDelay(state.autoTarget.runeUseTimeRange)
+//          val newAT    = state.autoTarget.copy(lastRuneUseTime = now, runeUseRandomness = rnd)
+//          val newState = state.copy(autoTarget = newAT)
+//          (newState, actions)
+//        }
+//      } else None
+//
+//    val (afterBattleState, battleMouse) = battleOpt.getOrElse((state, List.empty))
+//
+//    // 2) Screen rune attack
+//    val screenMouse: List[MouseAction] =
+//      if (cfg.useRuneOnScreen &&
+//        now - state.autoTarget.lastRuneUseTime >= state.autoTarget.runeUseCooldown + state.autoTarget.runeUseRandomness
+//      ) {
+//        println("[RuneAttack-SCREEN] Attempting screen rune attack")
+//
+//        (for {
+//          runeStr  <- cfg.runeType
+//          _ = println(s"[RuneAttack-SCREEN] runeType from cfg: $runeStr")
+//
+//          runeID   <- runeStr.split('.').lastOption.flatMap(_.toIntOption)
+//          _ = println(s"[RuneAttack-SCREEN] parsed runeID: $runeID")
+//
+//          contName <- state.autoTarget.autoTargetContainerMapping.get(runeID)
+//          _ = println(s"[RuneAttack-SCREEN] container name for runeID: $contName")
+//
+//          invPanel <- (json \ "screenInfo" \ "inventoryPanelLoc").asOpt[JsObject]
+//          _ = println(s"[RuneAttack-SCREEN] invPanel keys: ${invPanel.keys}")
+//
+//          panelKey <- invPanel.keys.find(_.contains(contName))
+//          _ = println(s"[RuneAttack-SCREEN] matched panelKey: $panelKey")
+//
+//          contents <- (invPanel \ panelKey \ "contentsPanel").asOpt[JsObject]
+//          _ = println(s"[RuneAttack-SCREEN] contents keys: ${contents.keys}")
+//
+//          runeObj  <- (contents \ "item0").asOpt[JsObject]
+//          rx       <- (runeObj \ "x").asOpt[Int]
+//          ry       <- (runeObj \ "y").asOpt[Int]
+//          _ = println(s"[RuneAttack-SCREEN] Rune screen position: ($rx,$ry)")
+//
+//          // Extract tile screen position
+//          tileId   = s"${creatureData.posX}${creatureData.posY}${creatureData.posZ}"
+//          tileRaw  = (json \ "areaInfo" \ "tiles" \ tileId)
+//          _ = println(s"[RuneAttack-SCREEN] Looking for tileId: $tileId")
+//
+//          val mapPanel = (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
+//          val screenTargetOpt = mapPanel.values.find(obj => (obj \ "id").asOpt[String].contains(tileId))
+//
+//          tx <- screenTargetOpt.flatMap(obj => (obj \ "x").asOpt[Int])
+//          ty <- screenTargetOpt.flatMap(obj => (obj \ "y").asOpt[Int])
+//          _ = println(s"[RuneAttack-SCREEN] Target screen position: ($tx,$ty)")
+//
+//        } yield {
+//          val actions = List(
+//            MoveMouse(rx, ry),
+//            RightButtonPress(rx, ry),
+//            RightButtonRelease(rx, ry),
+//            MoveMouse(tx, ty),
+//            LeftButtonPress(tx, ty),
+//            LeftButtonRelease(tx, ty)
+//          )
+//          val rnd      = generateRandomDelay(state.autoTarget.runeUseTimeRange)
+//          val newAT    = state.autoTarget.copy(lastRuneUseTime = now, runeUseRandomness = rnd)
+//          val newState = state.copy(autoTarget = newAT)
+//          return (newState, MKTask("runeAttack", MKActions(actions, Nil)))
+//        }).getOrElse {
+//          println("[RuneAttack-SCREEN] ❌ Missing data to cast rune on screen.")
+//          List.empty
+//        }
+//      } else {
+//        println("[RuneAttack-SCREEN] Skipped (either flag false or cooldown not ready)")
+//        List.empty
+//      }
+//
+//
+//
+//    val task = MKTask("runeAttack", MKActions(battleMouse ++ screenMouse, Nil))
+//    (afterBattleState, task)
+//  }
 
 
 
@@ -2456,45 +2810,29 @@ object AutoTargetFeature {
     }
   }
 
+  private def createBooleanGrid(tiles: Map[String, JsObject], minX: Int, minY: Int): (Array[Array[Boolean]], (Int, Int)) = {
+    val xs = tiles.keys.map(_.substring(0, 5).toInt) // Remove .trim
+    val ys = tiles.keys.map(_.substring(5, 10).toInt) // Remove .trim
+    val maxX = xs.max
+    val maxY = ys.max
 
-  def createBooleanGrid(tiles: Map[String, JsObject], min_x: Int, min_y: Int): (Array[Array[Boolean]], (Int, Int)) = {
-    val allMovementEnablerIds: List[Int] = StaticGameInfo.LevelMovementEnablers.AllIds
-
-    val maxX = tiles.keys.map(key => key.take(5).trim.toInt).max
-    val maxY = tiles.keys.map(key => key.drop(5).take(5).trim.toInt).max
-    val width = maxX - min_x + 1
-    val height = maxY - min_y + 1
-
-//    println(s"Creating boolean grid with dimensions: width=$width, height=$height, maxX=$maxX, maxY=$maxY, min_x=$min_x, min_y=$min_y")
-
-    val grid = Array.fill(height, width)(false)
+    val width = maxX - minX + 1
+    val height = maxY - minY + 1
+    val grid = Array.ofDim[Boolean](height, width)
 
     tiles.foreach { case (key, tileObj) =>
-      val x = key.take(5).trim.toInt - min_x
-      val y = key.drop(5).take(5).trim.toInt - min_y
-      try {
-        val tileElevation = (tileObj \ "getElevation").asOpt[Int].getOrElse(0)
-        val tileIsWalkable = (tileObj \ "isWalkable").asOpt[Boolean].getOrElse(false)
-        val tileItems = (tileObj \ "items").as[JsObject]
-        val hasBlockingItem = tileItems.values.exists(item =>
-          allMovementEnablerIds.contains((item \ "id").as[Int])
-        )
+      val x = key.substring(0, 5).toInt // Remove .trim
+      val y = key.substring(5, 10).toInt // Remove .trim
+      val isWalkable = (tileObj \ "isWalkable").asOpt[Boolean].getOrElse(false)
 
-        // Consider tile non-walkable if elevation is 2, otherwise use other conditions
-        if (tileElevation >= 2) {
-          grid(y)(x) = false
-        } else {
-          grid(y)(x) = tileIsWalkable && !hasBlockingItem
-        }
-      } catch {
-        case e: ArrayIndexOutOfBoundsException =>
-          println(s"Exception accessing grid position: x=$x, y=$y, width=$width, height=$height")
-          throw e
+      val gridX = x - minX
+      val gridY = y - minY
+      if (gridY >= 0 && gridY < height && gridX >= 0 && gridX < width) {
+        grid(gridY)(gridX) = isWalkable
       }
     }
 
-    //    println(s"Grid: ${grid.map(_.mkString(" ")).mkString("\n")}")
-    (grid, (min_x, min_y))
+    (grid, (minX, minY))
   }
 
 //  aStarSearch(presentLoc, actualTarget, modifiedGrid, offX, offY)
