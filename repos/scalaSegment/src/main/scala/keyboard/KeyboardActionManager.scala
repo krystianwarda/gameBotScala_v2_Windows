@@ -145,6 +145,19 @@ class KeyboardActionManager(
       IO(robot.keyPress(KeyEvent.VK_CONTROL)) *> IO.sleep(duration) *> IO(robot.keyRelease(KeyEvent.VK_CONTROL))
 
 
+    case PressShift(_) =>
+      println("Pressing Shift key")
+      IO(robot.keyPress(KeyEvent.VK_SHIFT)) *> IO.sleep(20.millis)
+
+    case ReleaseShift(_) =>
+      println("Releasing Shift key")
+      IO(robot.keyRelease(KeyEvent.VK_SHIFT)) *> IO.sleep(20.millis)
+
+
+    case HoldShiftFor(duration, _) =>
+      println(s"Holding Shift for $duration")
+      IO(robot.keyPress(KeyEvent.VK_SHIFT)) *> IO.sleep(duration) *> IO(robot.keyRelease(KeyEvent.VK_SHIFT))
+
   }
 
 
@@ -176,7 +189,10 @@ class KeyboardActionManager(
         case DirectionalKey(_, meta)      => ("directional", meta)
         case PressCtrl(meta)              => ("ctrl_press", meta)
         case ReleaseCtrl(meta)            => ("ctrl_release", meta)
+        case PressShift(meta)             => ("shift_press", meta)
+        case ReleaseShift(meta)           => ("shift_release", meta)
         case HoldCtrlFor(_, meta)         => ("ctrl_hold", meta)
+        case HoldShiftFor(_, meta)        => ("shift_hold", meta)
       }
 
       val json = Json.obj(

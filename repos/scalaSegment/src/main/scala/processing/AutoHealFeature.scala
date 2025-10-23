@@ -1307,6 +1307,10 @@ object AutoHealFeature {
       val currentTime = System.currentTimeMillis()
       val metaId: String = (json \ "metaGeneratedId").asOpt[String].getOrElse("null")
 
+      if ((currentTime - ah.lastHealUseTime) < (ah.healingUseCooldown + ah.healUseRandomness) ) {
+        return None
+      }
+
       // Check if team healing is enabled
       println(s"[$taskName] Checking team healing")
 
@@ -1382,7 +1386,7 @@ object AutoHealFeature {
             println(s"[$taskName] DEBUG: Searching for hotkey matching friendName='$friendName'")
 
             hotkeys.fields.collectFirst {
-              case (key, value: JsValue)  // Changed from JsObject to JsValue
+              case (key, value: JsValue)
                 if key.endsWith("_value") &&
                   (value).asOpt[String].exists { v =>
                     println(s"[$taskName] DEBUG: Checking key='$key', value='$v'")
@@ -1394,14 +1398,31 @@ object AutoHealFeature {
 
                 val hotkeyStr = key.stripSuffix("_value")
                 println(s"[$taskName] DEBUG: MATCH FOUND - Using hotkey: $hotkeyStr")
-                GeneralKey(KeyboardUtils.fromHotkeyString(hotkeyStr), metaId)
+
+                // Parse the hotkey string to handle modifier keys
+                val parts = hotkeyStr.split("\\+").toList
+                val baseKey = parts.lastOption.getOrElse(hotkeyStr)
+                val hasShift = parts.exists(_.equalsIgnoreCase("Shift"))
+
+                // Build the keyboard actions with modifier support
+                val keyActions = if (hasShift) {
+                  List(
+                    keyboard.PressShift(metaId),
+                    GeneralKey(KeyboardUtils.fromHotkeyString(baseKey), metaId),
+                    keyboard.ReleaseShift(metaId)
+                  )
+                } else {
+                  List(GeneralKey(KeyboardUtils.fromHotkeyString(baseKey), metaId))
+                }
+
+                keyActions
             }
           }.getOrElse {
             println(s"[$taskName] DEBUG: No hotkey found, typing spell: $spell")
-            TextType(spell, metaId)
+            List(TextType(spell, metaId))
           }
 
-          val keyboardActions = List(keyboardAction)
+          val keyboardActions = keyboardAction
 
           // Update state with new heal time
           val updatedAh = ah.copy(

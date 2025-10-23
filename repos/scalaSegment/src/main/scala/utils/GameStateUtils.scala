@@ -151,6 +151,9 @@ case class AutoHealState(
 
 
 case class GeneralState(
+
+                         lastPlayerPosition: (Int, Int, Int) = (0,0,0),
+                         lastPlayerChange: Long = 0,
                          initialSettingsSet: Boolean = false,
                          areInitialContainerSet: Boolean = false,
                          initialContainersList: List[String] = List(),
