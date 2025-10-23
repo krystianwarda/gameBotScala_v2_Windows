@@ -6,12 +6,12 @@ import org.apache.flink.table.api.EnvironmentSettings
 import org.apache.flink.table.api.bridge.scala.StreamTableEnvironment
 import org.slf4j.LoggerFactory
 
-object KafkaToIceberg {
+object KafkaToIcebergActions {
   private val logger = LoggerFactory.getLogger(getClass)
 
   def main(args: Array[String]): Unit = {
     try {
-      logger.info("Starting Kafka to Iceberg Flink Table API Job")
+      logger.info("Starting Kafka to Iceberg Actions Flink Table API Job")
 
       ConfigLoader.initialize()
       ConfigLoader.validate()
@@ -28,41 +28,32 @@ object KafkaToIceberg {
 
       val conf = tableEnv.getConfig.getConfiguration
       conf.setLong("execution.checkpointing.interval", checkpointInterval)
+      conf.setString("execution.checkpointing.mode", ConfigLoader.Flink.Checkpointing.mode)
       conf.setString("table.local-time-zone", "UTC")
-      logger.info(s"Checkpointing configured: interval=${checkpointInterval}ms")
+      logger.info(s"Checkpointing configured: interval=${checkpointInterval}ms, mode=${ConfigLoader.Flink.Checkpointing.mode}")
 
-      val eventsGroupId = s"${ConfigLoader.Kafka.groupId}-events-${System.currentTimeMillis()}"
+      val actionsGroupId = s"${ConfigLoader.Kafka.groupId}-actions-${System.currentTimeMillis()}"
 
-      val createKafkaSourceDDL =
+      val createKafkaActionSourceDDL =
         s"""
-           |CREATE TEMPORARY TABLE kafka_source (
-           |  `screenInfo` STRING,
-           |  `battleInfo` STRING,
-           |  `textTabsInfo` STRING,
-           |  `EqInfo` STRING,
-           |  `containersInfo` STRING,
-           |  `attackInfo` STRING,
-           |  `areaInfo` STRING,
-           |  `spyLevelInfo` STRING,
-           |  `lastAttackedCreatureInfo` STRING,
-           |  `lastKilledCreatures` STRING,
-           |  `hotkeysBinds` STRING,
-           |  `characterInfo` STRING,
-           |  `focusedTabInfo` STRING,
-           |  `metaGeneratedDate` STRING,
+           |CREATE TEMPORARY TABLE IF NOT EXISTS kafka_actions_source (
+           |  `device` STRING,
+           |  `action` STRING,
+           |  `x` STRING,
+           |  `y` STRING,
            |  `metaGeneratedTimestamp` STRING,
-           |  `metaGeneratedId` STRING,
-           |  `metaProcessedTimestamp` STRING
+           |  `metaGeneratedDate` STRING,
+           |  `metaGeneratedId` STRING
            |) WITH (
            |  'connector' = 'kafka',
-           |  'topic' = '${ConfigLoader.Kafka.topic}',
+           |  'topic' = '${ConfigLoader.Kafka.actionsTopic}',
            |  'properties.bootstrap.servers' = '${ConfigLoader.Kafka.bootstrapServers}',
-           |  'properties.group.id' = '${eventsGroupId}',
+           |  'properties.group.id' = '${actionsGroupId}',
            |  'scan.startup.mode' = 'earliest-offset',
            |  'properties.auto.offset.reset' = 'earliest',
            |  'value.format' = 'json',
-           |  'value.json.ignore-parse-errors' = 'true',
            |  'value.json.fail-on-missing-field' = 'false',
+           |  'value.json.ignore-parse-errors' = 'true',
            |  'properties.security.protocol' = '${ConfigLoader.Kafka.securityProtocol}',
            |  'properties.sasl.mechanism' = '${ConfigLoader.Kafka.saslMechanism}',
            |  'properties.sasl.jaas.config' = '${ConfigLoader.Kafka.getJaasConfig}',
@@ -70,6 +61,7 @@ object KafkaToIceberg {
            |  'properties.client.dns.lookup' = 'use_all_dns_ips'
            |)
            |""".stripMargin
+      tableEnv.executeSql(createKafkaActionSourceDDL)
 
       val catalogProps = {
         val props = collection.mutable.ListBuffer[String](
@@ -86,71 +78,51 @@ object KafkaToIceberg {
            |  ${catalogProps}
            |)
            |""".stripMargin
-
-      tableEnv.executeSql(createKafkaSourceDDL)
       tableEnv.executeSql(createCatalogDDL)
       tableEnv.useCatalog(ConfigLoader.Iceberg.catalogName)
       tableEnv.executeSql(s"CREATE DATABASE IF NOT EXISTS ${ConfigLoader.Iceberg.database}")
       tableEnv.useDatabase(ConfigLoader.Iceberg.database)
 
-      val createIcebergTableDDL =
+      // Recreate sink with all STRING columns and no partitioning
+//      tableEnv.executeSql(
+//        s"DROP TABLE IF EXISTS ${ConfigLoader.Iceberg.catalogName}.${ConfigLoader.Iceberg.database}.${ConfigLoader.Iceberg.actionTable}"
+//      )
+
+      // scala
+      val createIcebergActionsTableDDL =
         s"""
-           |CREATE TABLE IF NOT EXISTS ${ConfigLoader.Iceberg.table} (
-           |  `screenInfo` STRING,
-           |  `battleInfo` STRING,
-           |  `textTabsInfo` STRING,
-           |  `EqInfo` STRING,
-           |  `containersInfo` STRING,
-           |  `attackInfo` STRING,
-           |  `areaInfo` STRING,
-           |  `spyLevelInfo` STRING,
-           |  `lastAttackedCreatureInfo` STRING,
-           |  `lastKilledCreatures` STRING,
-           |  `hotkeysBinds` STRING,
-           |  `characterInfo` STRING,
-           |  `focusedTabInfo` STRING,
-           |  `metaGeneratedDate` STRING,
+           |CREATE TABLE IF NOT EXISTS ${ConfigLoader.Iceberg.catalogName}.${ConfigLoader.Iceberg.database}.${ConfigLoader.Iceberg.actionTable} (
+           |  `device` STRING,
+           |  `action` STRING,
+           |  `x` STRING,
+           |  `y` STRING,
            |  `metaGeneratedTimestamp` STRING,
-           |  `metaGeneratedId` STRING,
-           |  `metaProcessedTimestamp` STRING
-           |) PARTITIONED BY (`metaGeneratedDate`)
-           |WITH (
+           |  `metaGeneratedDate` STRING,
+           |  `metaGeneratedId` STRING
+           |) WITH (
            |  'format-version' = '2',
            |  'write.target-file-size-bytes' = '67108864'
            |)
            |""".stripMargin
 
-      tableEnv.executeSql(createIcebergTableDDL)
 
-      val insertSql =
+      tableEnv.executeSql(createIcebergActionsTableDDL)
+
+      // No CAST, no functions, plain pass-through
+      val insertActionsSql =
         s"""
-           |INSERT INTO ${ConfigLoader.Iceberg.table}
-           |SELECT
-           |  screenInfo,
-           |  battleInfo,
-           |  textTabsInfo,
-           |  EqInfo,
-           |  containersInfo,
-           |  attackInfo,
-           |  areaInfo,
-           |  spyLevelInfo,
-           |  lastAttackedCreatureInfo,
-           |  lastKilledCreatures,
-           |  hotkeysBinds,
-           |  characterInfo,
-           |  focusedTabInfo,
-           |  metaGeneratedDate,
-           |  metaGeneratedTimestamp,
-           |  metaGeneratedId,
-           |  metaProcessedTimestamp
-           |FROM `default_catalog`.`default_database`.kafka_source
+           |INSERT INTO ${ConfigLoader.Iceberg.catalogName}.${ConfigLoader.Iceberg.database}.${ConfigLoader.Iceberg.actionTable}
+           |SELECT device, action, x, y, metaGeneratedTimestamp, metaGeneratedDate, metaGeneratedId
+           |FROM `default_catalog`.`default_database`.kafka_actions_source
            |""".stripMargin
 
-      val tableResult = tableEnv.executeSql(insertSql)
+      val tableResult = tableEnv.executeSql(insertActionsSql)
       tableResult.await()
+
+      logger.info(s"Actions job submitted: Kafka `${ConfigLoader.Kafka.actionsTopic}` -> Iceberg `${ConfigLoader.Iceberg.catalogName}.${ConfigLoader.Iceberg.database}.${ConfigLoader.Iceberg.actionTable}`")
     } catch {
       case e: Exception =>
-        logger.error("Failed to start Kafka to Iceberg job", e)
+        logger.error("Failed to start Kafka to Iceberg Actions job", e)
         throw e
     }
   }
