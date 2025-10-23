@@ -1,0 +1,50 @@
+pipeline {
+    agent any
+
+    environment {
+        PROJECT_DIR = '/workspace/scalaSegment'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "Checking project directory..."
+                sh "ls -la ${PROJECT_DIR}"
+            }
+        }
+
+        stage('Build') {
+            steps {
+                dir("${PROJECT_DIR}") {
+                    sh 'sbt clean assembly'
+                }
+            }
+        }
+
+//         stage('Test') {
+//             steps {
+//                 dir("${PROJECT_DIR}") {
+//                     sh 'sbt test'
+//                 }
+//             }
+//         }
+
+        stage('Archive Jar') {
+            steps {
+                dir("${PROJECT_DIR}") {
+                    // Changed from scala-2.12 to scala-2.13
+                    archiveArtifacts artifacts: 'target/scala-2.13/*.jar', fingerprint: true
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Build successful!'
+        }
+        failure {
+            echo '❌ Build failed. Check logs.'
+        }`
+    }
+}

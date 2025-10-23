@@ -1,0 +1,21 @@
+services:
+  jenkins:
+    user: root
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jenkins-local
+    ports:
+      - "8090:8080"
+      - "50000:50000"
+    volumes:
+      - C:/Projects/gameBotScala_v2_Windows/repos/scalaSegment:/workspace/scalaSegment
+      - C:/Projects/gameBotScala_v2_Windows/repos/jenkinsSegment:/var/jenkins_home
+
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false -Duser.language=en -Duser.country=US -Dorg.jenkinsci.plugins.durabletask.BourneShellScript.LAUNCH_DIAGNOSTICS=false
+
+    restart: unless-stopped
+
+volumes:
+  jenkins_home:
