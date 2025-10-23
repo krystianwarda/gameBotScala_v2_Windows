@@ -1,16 +1,32 @@
 name: 'gamebot_project'
 version: '1.0'
 config-version: 2
-profile: 'gamebot_iceberg_test'
+
+profile: 'gamebot_bq'  # This maps to your BigQuery connection in profiles.yml
 
 model-paths: ["models"]
 target-path: "target"
 
-vars:
-  iceberg_catalog: spark_catalog
-
+# Global model configs
 models:
-  gamebot_iceberg_test:
-    +catalog: spark_catalog
-    +materialized: view
+  gamebot_project:
+    +materialized: table       # default, can override per folder
+    +persist_docs: {relation: true, columns: true}
+
+    # ----- BRONZE -----
+    bronze:
+      +schema: gamebot_bronze
+      +materialized: table
+      +tags: ["bronze"]
     
+    # ----- SILVER -----
+    silver:
+      +schema: gamebot_silver
+      +materialized: table
+      +tags: ["silver"]
+
+    # ----- GOLD -----
+    gold:
+      +schema: gamebot_gold
+      +materialized: table
+      +tags: ["gold"]

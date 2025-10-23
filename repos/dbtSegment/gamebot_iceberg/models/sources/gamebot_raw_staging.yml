@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: gamebot_raw_staging
+    database: gamebot-469621
+    schema: gamebot_raw_staging
+    tables:
+      - name: raw_game_events    # Two spaces from tables
+      - name: raw_gamebot_actions # Two spaces from tables

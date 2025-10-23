@@ -1,0 +1,82 @@
+version: 2
+
+models:
+  - name: silver_character_info
+    description: Parsed character information from game events with all character attributes.
+    columns:
+      - name: event_id
+        description: Unique event identifier (metaGeneratedId from source)
+        tests:
+          - not_null
+          - unique
+      
+      - name: event_timestamp
+        description: Timestamp when the event was generated
+        tests:
+          - not_null
+      
+      - name: character_id
+        description: Unique character identifier
+        tests:
+          - not_null
+      
+      - name: character_name
+        description: Character display name
+      
+      - name: character_level
+        description: Character level (1-∞)
+      
+      - name: experience_points
+        description: Total accumulated experience points
+      
+      - name: vocation_id
+        description: Character class/vocation identifier
+      
+      - name: magic_level
+        description: Magic skill level
+      
+      - name: current_health
+        description: Current HP value
+      
+      - name: health_percent
+        description: Health as percentage of maximum (0-100)
+      
+      - name: current_mana
+        description: Current mana points
+      
+      - name: max_mana
+        description: Maximum mana capacity
+      
+      - name: position_x
+        description: X coordinate in game world
+      
+      - name: position_y
+        description: Y coordinate in game world
+      
+      - name: position_z
+        description: Z coordinate (floor level) in game world
+      
+      - name: total_capacity
+        description: Total carrying capacity
+      
+      - name: free_capacity
+        description: Available carrying capacity
+      
+      - name: chase_mode
+        description: Chase mode setting (0=off, 1=on)
+      
+      - name: fight_mode
+        description: Fight mode setting (0=offensive, 1=balanced, 2=defensive)
+
+  - name: silver_player_states
+    description: Player status effects and conditions parsed from game events.
+    columns:
+      - name: event_id
+        description: Links to silver_meta
+        tests:
+          - not_null
+      
+      - name: character_id
+        description: Character identifier
+        tests:
+          - not_null
