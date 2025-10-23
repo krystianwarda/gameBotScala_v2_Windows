@@ -12,6 +12,25 @@ import scala.util.Try
 object SettingsUtils {
   import play.api.libs.json.{Format, Json}
 
+  // Provide a default UISettings instance with all required fields
+  def defaultUISettings: UISettings = UISettings(
+    healingSettings = HealingSettings(),
+    runeMakingSettings = RuneMakingSettings(),
+    hotkeysSettings = HotkeysSettings(),
+    guardianSettings = GuardianSettings(),
+    fishingSettings = FishingSettings(),
+    autoResponderSettings = AutoResponderSettings(),
+    trainingSettings = TrainingSettings(),
+    mouseMovements = true,
+    caveBotSettings = CaveBotSettings(),
+    autoLootSettings = AutoLootSettings(),
+    autoTargetSettings = AutoTargetSettings(),
+    teamHuntSettings = TeamHuntSettings(),
+    debugMode = false,
+    shareDataMode = false,
+    hotkeyMode = false,
+  )
+
   // Define the nested case classes
   case class HealingSettings(
                               enabled: Boolean = false,
@@ -25,22 +44,16 @@ object SettingsUtils {
                               hPotionHealMana: Int = 0,
                               mPotionHealManaMin: Int = 0,
                               mPotionHealManaMax: Int = 0,
+                              lifeRingManaMin: Int = 0,
+                              lifeRingManaMax: Int = 0,
+                              healingRingManaMin: Int = 0,
+                              healingRingManaMax: Int = 0,
+                              energyRingHealthMin: Int = 0,
+                              energyRingHealthMax: Int = 0,
+                              energyRingManaMin: Int = 0,
+                              energyRingManaMax: Int = 0,
                               friendsHealSettings: List[HealingFriendsSettings] = List.empty
                             )
-
-
-  case class HealingSpellsSettings(
-                                    lightHealSpell: String = "",
-                                    lightHealHealthPercent: Int = 0,
-                                    lightHealMana: Int = 0,
-                                    lightHealHotkeyEnabled: Boolean = false,
-                                    lightHealHotkey: String = "",
-                                    strongHealSpell: String = "",
-                                    strongHealHealthPercent: Int = 0,
-                                    strongHealMana: Int = 0,
-                                    strongHealHotkeyEnabled: Boolean = false,
-                                    strongHealHotkey: String = ""
-                                  )
 
   case class HealingFriendsSettings(
                                      friend1HealSpell: String = "",
@@ -62,6 +75,20 @@ object SettingsUtils {
                                      friend3HealHotkeyEnabled: Boolean = false,
                                      friend3HealHotkey: String = ""
                                    )
+
+  case class HealingSpellsSettings(
+                                    lightHealSpell: String = "",
+                                    lightHealHealthPercent: Int = 0,
+                                    lightHealMana: Int = 0,
+                                    lightHealHotkeyEnabled: Boolean = false,
+                                    lightHealHotkey: String = "",
+                                    strongHealSpell: String = "",
+                                    strongHealHealthPercent: Int = 0,
+                                    strongHealMana: Int = 0,
+                                    strongHealHotkeyEnabled: Boolean = false,
+                                    strongHealHotkey: String = ""
+                                  )
+
 
 
   case class HotkeysSettings(
@@ -266,11 +293,14 @@ object SettingsUtils {
                          fishingSettings: FishingSettings,
                          autoResponderSettings: AutoResponderSettings,
                          trainingSettings: TrainingSettings,
+                         hotkeyMode: Boolean,
                          mouseMovements: Boolean,
                          caveBotSettings: CaveBotSettings,
                          autoLootSettings: AutoLootSettings,
                          autoTargetSettings: AutoTargetSettings,
                          teamHuntSettings: TeamHuntSettings,
+                         debugMode: Boolean,
+                         shareDataMode: Boolean,
                        )
 
 

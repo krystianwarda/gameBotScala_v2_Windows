@@ -264,6 +264,7 @@ class AutoTargetBot(player: Player, uiAppActor: ActorRef, jsonProcessorActor: Ac
         runesOnBattleCheckbox.selected = false
       }
     })
+
     def updateFieldsWithSelectedCreature(creatureInfo: String): Unit = {
       val parts = creatureInfo.split(", ")
       if (parts.length >= 16) { // Ensure you have all needed parts

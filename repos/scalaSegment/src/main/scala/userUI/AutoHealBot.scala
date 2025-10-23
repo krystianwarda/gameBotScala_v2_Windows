@@ -31,6 +31,17 @@ class AutoHealBot(uiAppActor: ActorRef, jsonProcessorActor: ActorRef, settingsRe
   val mPotionHealManaMinField = new TextField()
   val mPotionHealManaMaxField = new TextField()
 
+  val lifeRingManaMinField = new TextField()
+  val lifeRingManaMaxField = new TextField()
+
+  val healingRingManaMinField = new TextField()
+  val healingRingManaMaxField = new TextField()
+
+  val energyRingHealthMinField = new TextField()
+  val energyRingHealthMaxField = new TextField()
+  val energyRingManaMinField = new TextField()
+  val energyRingManaMaxField = new TextField()
+
   val friend1HealSpellField = new TextField()
   val friend1NameField = new TextField()
   val friend1HealHealthField = new TextField()
@@ -286,13 +297,111 @@ class AutoHealBot(uiAppActor: ActorRef, jsonProcessorActor: ActorRef, settingsRe
     mPotionHealManaMaxField.peer.setPreferredSize(new Dimension(standardFieldWidth, mPotionHealManaMaxField.peer.getPreferredSize.height))
     addComponent(mPotionHealManaMaxField, 6, 5)
 
-//    addComponent(mPotionHotkeyCheckbox, 7, 5)
-//    c.gridx = c.gridx + 1
-//    add(new JScrollPane(mPotionHotkeyDropdown), c)
+
+    // life ring
+
+    c.gridx = 0
+    c.gridy = 6
+    addComponent(new Label("Life Ring"), 0, 6)
+
+    c.gridx = 1
+    c.gridy = 6
+    addComponent(new Label(""), 1, 6)
+
+    c.gridx = 3
+    c.gridy = 6
+    addComponent(new Label("ManaMin"), 3, 6)
+
+    c.gridx = 4
+    c.gridy = 6
+    c.fill = GridBagConstraints.HORIZONTAL
+    lifeRingManaMinField.peer.setPreferredSize(new Dimension(standardFieldWidth, lifeRingManaMinField.peer.getPreferredSize.height))
+    addComponent(lifeRingManaMinField, 4, 6)
+
+    c.gridx = 5
+    c.gridy = 6
+    addComponent(new Label("ManaMax"), 5, 6)
+
+    c.gridx = 6
+    c.gridy = 6
+    c.fill = GridBagConstraints.HORIZONTAL
+    lifeRingManaMaxField.peer.setPreferredSize(new Dimension(standardFieldWidth, lifeRingManaMaxField.peer.getPreferredSize.height))
+    addComponent(lifeRingManaMaxField, 6, 6)
+
+    // ring of healing
+
+    c.gridx = 0
+    c.gridy = 7
+    addComponent(new Label("Healing Ring"), 0, 7)
+
+    c.gridx = 1
+    c.gridy = 7
+    addComponent(new Label(""), 1, 7)
+
+    c.gridx = 3
+    c.gridy = 7
+    addComponent(new Label("ManaMin"), 3, 7)
+
+    c.gridx = 4
+    c.gridy = 7
+    c.fill = GridBagConstraints.HORIZONTAL
+    healingRingManaMinField.peer.setPreferredSize(new Dimension(standardFieldWidth, healingRingManaMinField.peer.getPreferredSize.height))
+    addComponent(healingRingManaMinField, 4, 7)
+
+    c.gridx = 5
+    c.gridy = 7
+    addComponent(new Label("ManaMax"), 5, 7)
+
+    c.gridx = 6
+    c.gridy = 7
+    c.fill = GridBagConstraints.HORIZONTAL
+    healingRingManaMaxField.peer.setPreferredSize(new Dimension(standardFieldWidth, healingRingManaMaxField.peer.getPreferredSize.height))
+    addComponent(healingRingManaMaxField, 6, 7)
+
+
+    // energy ring
+    c.gridx = 0
+    c.gridy = 8
+    addComponent(new Label("Energy Ring"), 0, 8)
+
+    c.gridx = 1
+    c.gridy = 8
+    c.fill = GridBagConstraints.HORIZONTAL
+    energyRingHealthMinField.peer.setPreferredSize(new Dimension(standardFieldWidth, energyRingHealthMinField.peer.getPreferredSize.height))
+    addComponent(energyRingHealthMinField, 1, 8)
+
+    c.gridx = 2
+    c.gridy = 8
+    c.fill = GridBagConstraints.HORIZONTAL
+    energyRingHealthMaxField.peer.setPreferredSize(new Dimension(standardFieldWidth, energyRingHealthMaxField.peer.getPreferredSize.height))
+    addComponent(energyRingHealthMaxField, 2, 8)
+
+
+    c.gridx = 3
+    c.gridy = 8
+    addComponent(new Label("ManaMin"), 3, 8)
+
+    c.gridx = 4
+    c.gridy = 8
+    c.fill = GridBagConstraints.HORIZONTAL
+    energyRingManaMinField.peer.setPreferredSize(new Dimension(standardFieldWidth, energyRingManaMinField.peer.getPreferredSize.height))
+    addComponent(energyRingManaMinField, 4, 8)
+
+    c.gridx = 5
+    c.gridy = 8
+    addComponent(new Label("ManaMax"), 5, 8)
+
+    c.gridx = 6
+    c.gridy = 8
+    c.fill = GridBagConstraints.HORIZONTAL
+    energyRingManaMaxField.peer.setPreferredSize(new Dimension(standardFieldWidth, energyRingManaMaxField.peer.getPreferredSize.height))
+    addComponent(energyRingManaMaxField, 6, 8)
+
+
 
     // Heal friend 1
     c.gridx = 0
-    c.gridy = 6
+    c.gridy = 9
     addComponent(new Label("Heal F Spell"), 0, c.gridy)
 
     addTextField(friend1HealSpellField, 1, c.gridy, 1, standardFieldWidth)
@@ -323,7 +432,7 @@ class AutoHealBot(uiAppActor: ActorRef, jsonProcessorActor: ActorRef, settingsRe
 
     // Heal friend 2
     c.gridx = 0
-    c.gridy = 7
+    c.gridy = 10
     addComponent(new Label("Heal F Spell"), 0, c.gridy)
 
     addTextField(friend2HealSpellField, 1, c.gridy, 1, standardFieldWidth)
@@ -354,7 +463,7 @@ class AutoHealBot(uiAppActor: ActorRef, jsonProcessorActor: ActorRef, settingsRe
 
     // Heal friend 3
     c.gridx = 0
-    c.gridy = 8
+    c.gridy = 11
     addComponent(new Label("Heal F Spell"), 0, c.gridy)
 
     addTextField(friend3HealSpellField, 1, c.gridy, 1, standardFieldWidth)

@@ -11,6 +11,7 @@ import scala.util.Try
 
 object KeyboardUtils {
   val user32 = User32.INSTANCE
+  System.setProperty("java.awt.headless", "false")
   val robot = new Robot()
 
 //  def pressControlAndArrows(robot: Robot, ctrlKey: Int, arrowKeys: List[String]): IO[Unit] = IO.blocking {
@@ -152,6 +153,23 @@ object KeyboardUtils {
     }
   }
 
+  def getKeyCode(key: String): Int = {
+    key.toUpperCase match {
+      case "F1" => KeyEvent.VK_F1
+      case "F2" => KeyEvent.VK_F2
+      case "F3" => KeyEvent.VK_F3
+      case "F4" => KeyEvent.VK_F4
+      case "F5" => KeyEvent.VK_F5
+      case "F6" => KeyEvent.VK_F6
+      case "F7" => KeyEvent.VK_F7
+      case "F8" => KeyEvent.VK_F8
+      case "F9" => KeyEvent.VK_F9
+      case "F10" => KeyEvent.VK_F10
+      case "F11" => KeyEvent.VK_F11
+      case "F12" => KeyEvent.VK_F12
+      case _ => KeyEvent.VK_UNDEFINED
+    }
+  }
 
   private def pressKeyUsingJNA(keyCode: Int): Unit = {
     val input = new INPUT()

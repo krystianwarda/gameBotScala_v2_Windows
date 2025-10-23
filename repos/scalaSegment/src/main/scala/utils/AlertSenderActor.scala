@@ -70,12 +70,12 @@ object DiscordNotifier {
     // Combine all parts
     val bodyParts = List(textPart) ++ screenshotPart.toList ++ jsonFilePart.toList
 
-    // Construct and send the request
-    val request = basicRequest.post(uri"${Credentials.discordWebhookUrl}")
-      .multipartBody(bodyParts)
-      .response(asStringAlways)
-
-    val response = request.send(backend)
+//    // Construct and send the request
+//    val request = basicRequest.post(uri"${Credentials.discordWebhookUrl}")
+//      .multipartBody(bodyParts)
+//      .response(asStringAlways)
+//
+//    val response = request.send(backend)
   }
 }
 

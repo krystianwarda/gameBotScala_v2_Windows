@@ -32,7 +32,9 @@ object TeamHuntFeature {
   private object Steps {
     // ordered list of steps
     val allSteps: List[Step] = List(
+      UpdatePartyComposition,
       GetTeamPositionInfo,
+      ManageParty,
       AnalyseTeamMembersPosition,
       ChangeLevelAction,
       DesignSmartMovement,
@@ -73,6 +75,8 @@ object TeamHuntFeature {
     }
   }
 
+
+
   private object ChangeLevelAction extends Step {
     private val taskName = "ChangeLevelAction"
 
@@ -83,174 +87,416 @@ object TeamHuntFeature {
                     ): Option[(GameState, MKTask)] = {
 
       val currentTime = System.currentTimeMillis()
-      val taskName = "ChangeLevelAction"
-      val teamHuntState = state.teamHunt
+      val th = state.teamHunt
+      val metaId: String = (json \ "metaGeneratedId").asOpt[String].getOrElse("null")
 
-      if (teamHuntState.teamHuntActionThrottle*teamHuntState.throttleCoefficient > currentTime - teamHuntState.lastTeamHuntActionTime) {
+      // Throttle gate
+      if (th.teamHuntActionThrottle * th.throttleCoefficient > currentTime - th.lastTeamHuntActionTime) {
         println(s"[$taskName] Too soon since last action → NoOp")
         return Some(state -> NoOpTask)
       }
 
-      println(s"[$taskName] Entered function.")
+      th.changeLevelStatus match {
+        case "free" =>
+          println(s"[$taskName] Change level state is not active. Skipping step.")
+          Some(state -> NoOpTask)
 
+        case "clicking use" =>
+          // Try to find and click the "Use" button
+          val maybeUseBtn = (json \ "screenInfo" \ "extraWindowLoc").validate[JsObject].asOpt
+            .filter(loc => loc.keys.exists(_ == "Use"))
+            .flatMap { loc =>
+              (loc \ "Use").validate[JsObject].asOpt.flatMap { okBtn =>
+                for {
+                  x <- (okBtn \ "posX").validate[Int].asOpt
+                  y <- (okBtn \ "posY").validate[Int].asOpt
+                } yield (x, y)
+              }
+            }
 
+          maybeUseBtn match {
+            case Some((x, y)) =>
+              val mkActions = MKActions(
+                List(
+                  MoveMouse(x, y, metaId),
+                  LeftButtonPress(x, y, metaId),
+                  LeftButtonRelease(x, y, metaId)
+                ),
+                Nil
+              )
+              val task = MKTask("pressOkButton", mkActions)
+              val newGeneral = state.general.copy(
+                lastActionCommand = Some("pressOkButton"),
+                lastActionTimestamp = Some(currentTime)
+              )
+              val updatedState = state.copy(
+                general = newGeneral,
+                teamHunt = th.copy(
+                  changeLevelStatus = "active",
+                  lastTeamHuntActionTime = currentTime
+                )
+              )
+              Some(updatedState -> task)
+            case None =>
+              // If button not found, reset to active for retry
+              val updatedState = state.copy(teamHunt = th.copy(changeLevelStatus = "active"))
+              Some(updatedState -> NoOpTask)
+          }
 
-      // Check if changeLevelState is not "active"
-      if (teamHuntState.changeLevelState != "active") {
-        println(s"[$taskName] Change level state is not active. Skipping step.")
-        return Some(state -> NoOpTask)
+        case "active" =>
+          val (_, _, _, newPosZ) = th.followedTeamMemberPos
+          val characterZ = (json \ "characterInfo" \ "PositionZ").as[Int]
+          val spyLevelInfo = (json \ "spyLevelInfo").asOpt[JsObject].getOrElse(Json.obj())
+          val followedName = th.teamMemberToFollow
+          val isFollowedPresent = spyLevelInfo.fields.exists {
+            case (_, creatureData) => (creatureData \ "Name").asOpt[String].contains(followedName)
+          }
+
+          if (!isFollowedPresent) {
+            println(s"[$taskName] Followed member [$followedName] not in spy info → assuming he changed level (likely went down).")
+            // Continue with movementIds logic below
+          } else if (characterZ == newPosZ) {
+            println(s"[$taskName] On the same level as the followed team member again. Back to following blocker.")
+            val updatedState = state.copy(teamHunt = th.copy(changeLevelStatus = "free"))
+            return Some(updatedState -> NoOpTask)
+          }
+
+          val (_, oldPosX, oldPosY, oldPosZ) = th.lastPosFollowedTeamMemberOnTheSameLevel
+          val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+          val level = f"$characterZ%02d"
+          val filteredTilesList = filterTilesByLevel(tiles, level)
+          val searchStartTile = (oldPosX, oldPosY, oldPosZ)
+
+          val movementIds =
+            if (!isFollowedPresent && characterZ != newPosZ) {
+              StaticGameInfo.LevelMovementEnablers.AllDownIds
+            } else if (newPosZ < characterZ) {
+              StaticGameInfo.LevelMovementEnablers.AllUpIds
+            } else if (newPosZ > characterZ) {
+              StaticGameInfo.LevelMovementEnablers.AllDownIds
+            } else {
+              StaticGameInfo.LevelMovementEnablers.AllDownIds
+            }
+
+          val movementTile = findChangeLevelTile(filteredTilesList, movementIds, searchStartTile)
+
+          movementTile match {
+            case Some((tileId, tileIndex, movementId)) =>
+              println(s"Found movement enabler tile: $tileId at $tileIndex with movementId: $movementId")
+              val (updatedState, mouseActions, keyboardActions) = analyzeTileTactic(tileId, tileIndex, movementId, json, state, settings)
+              // After clicking, set status to "clicking use" for next run
+              val nextState = updatedState.copy(teamHunt = updatedState.teamHunt.copy(
+                changeLevelStatus = "clicking use",
+                lastTeamHuntActionTime = currentTime
+              ))
+              Some((nextState, MKTask("changing level", MKActions(mouse = mouseActions, keyboard = keyboardActions))))
+            case None =>
+              println("No movement enabler tiles found.")
+              Some(state -> NoOpTask)
+          }
+        case other =>
+          println(s"[$taskName] Unknown changeLevelStatus: $other")
+          Some(state -> NoOpTask)
       }
-
-      val (_, _, _, newPosZ) = teamHuntState.followedTeamMemberPos
-
-      val characterZ = (json \ "characterInfo" \ "PositionZ").as[Int]
-
-      if (characterZ == newPosZ && !teamHuntState.spyInfoIssue) {
-        println(s"[$taskName] On the same level as the followed team member again. Back to following blocker.")
-        val updatedState = state.copy(teamHunt = teamHuntState.copy(
-          changeLevelState = "free",
-        ))
-        return Some(updatedState -> NoOpTask)
-      }
-
-      val (_, oldPosX, oldPosY, oldPosZ) = teamHuntState.lastPosFollowedTeamMemberOnTheSameLevel
-
-      println(s"[$taskName] Checking tiles around followed team member at ($oldPosX, $oldPosY, $oldPosZ)")
-
-
-      // Determine if the team member went up or down
-      val movementIds = if (newPosZ < characterZ) {
-        println(s"[$taskName] Team member moved up. Looking for AllUpIds.")
-        StaticGameInfo.LevelMovementEnablers.AllUpIds
-      } else if (newPosZ > characterZ) {
-        println(s"[$taskName] Team member moved down. Looking for AllDownIds.")
-        StaticGameInfo.LevelMovementEnablers.AllDownIds
-      } else {
-        println(s"[$taskName] Team member is gone somewhere not available in spyInfo. Look for all. ")
-        StaticGameInfo.LevelMovementEnablers.AllIds
-      }
-
-
-      val tiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
-      val level = f"$characterZ%02d" // Convert to two-digit string
-      val filteredTilesList = filterTilesByLevel(tiles, level)
-      val searchStartTile = (oldPosX, oldPosY, oldPosZ)
-      // Search for level movement enabler tiles around the team member's position
-      val movementTile = findChangeLevelTile(filteredTilesList, movementIds, searchStartTile)
-
-      movementTile match {
-        case Some((tileId, tileIndex, movementId)) =>
-          println(s"Found movement enabler tile: $tileId at $tileIndex with movementId: $movementId")
-
-          val (updatedState, mouseActions, keyboardActions) = analyzeTileTactic(tileId, tileIndex, movementId, json, state, settings)
-          return Some((updatedState, MKTask("changing level", MKActions(mouse = mouseActions, keyboard = keyboardActions))))
-
-        case None =>
-          println("No movement enabler tiles found.")
-          return Some(state -> NoOpTask)
-      }
-
     }
   }
 
-  private object GetTeamPositionInfo extends Step {
-    private val taskName = "GetTeamPositionInfo"
-
-    override def run(
-                      state: GameState,
-                      json: JsValue,
-                      settings: UISettings
-                    ): Option[(GameState, MKTask)] = {
-
-      val spyLevelInfo = (json \ "spyLevelInfo").asOpt[JsObject].getOrElse(Json.obj())
+  // Add this object inside TeamHuntFeature
+  private object UpdatePartyComposition extends Step {
+    override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
+      val th = state.teamHunt
       val thSettings = settings.teamHuntSettings
-      val teamHuntState = state.teamHunt
-      val charPosZ = (json \ "characterInfo" \ "PositionZ").as[Int]
+      val spyInfo = (json \ "spyLevelInfo").asOpt[Map[String, JsValue]].getOrElse(Map.empty)
 
+      // Only update if team hunt is enabled and not already in party
+      if (!thSettings.enabled || th.inParty) return Some(state -> NoOpTask)
 
-      println(s"[$taskName] Blocker name: ${thSettings.blockerName}")
-      println(s"[$taskName] Team members: ${thSettings.teamMembersList}")
-      println(s"[$taskName] Team member to follow: ${teamHuntState.teamMemberToFollow}, ${teamHuntState.followedTeamMemberPos}")
+      val partyMembers = spyInfo.values.filter(obj => (obj \ "IsPartyMember").asOpt[Boolean].contains(true))
+      val leaderOpt = partyMembers.find(obj => (obj \ "IsPartyLeader").asOpt[Boolean].contains(true))
+      val detectedBlockerName = leaderOpt.flatMap(obj => (obj \ "Name").asOpt[String]).getOrElse(thSettings.blockerName)
+      val detectedTeamMembers = partyMembers.flatMap(obj => (obj \ "Name").asOpt[String]).toList
 
+      val mergedBlockerName = if (detectedBlockerName.nonEmpty) detectedBlockerName else thSettings.blockerName
+      val mergedTeamMembers = (thSettings.teamMembersList ++ detectedTeamMembers).distinct
 
-      println(s"spyLevelInfo: ${spyLevelInfo}")
-      val filteredSpyLevelInfo = filterSpyLevelInfo(spyLevelInfo, thSettings.blockerName, thSettings.teamMembersList)
-      println(s"filteredSpyLevelInfo: ${filteredSpyLevelInfo}")
+      // Only update if changed
+      if (th.blockerName != mergedBlockerName || th.teamMembersList != mergedTeamMembers) {
+        val updatedTH = th.copy(
+          blockerName = mergedBlockerName,
+          teamMembersList = mergedTeamMembers
+        )
+        Some(state.copy(teamHunt = updatedTH) -> NoOpTask)
+      } else {
+        Some(state -> NoOpTask)
+      }
+    }
+  }
 
-      // Update blocker position
-      val blockerPosition = filteredSpyLevelInfo.fields.collectFirst {
-        case (_, creatureData) if (creatureData \ "Name").asOpt[String].contains(thSettings.blockerName) =>
-          val posX = (creatureData \ "PositionX").asOpt[Int].getOrElse(0)
-          val posY = (creatureData \ "PositionY").asOpt[Int].getOrElse(0)
-          val posZ = (creatureData \ "PositionZ").asOpt[Int].getOrElse(0)
-          println(s"[$taskName] Blocker found at ($posX, $posY, $posZ)")
-          (thSettings.blockerName, posX, posY, posZ)
-      }.getOrElse {
-        println(s"[$taskName] Blocker not found, using last known position: ${state.teamHunt.lastBlockerPos}")
-        state.teamHunt.lastBlockerPos
+  private object ManageParty extends Step {
+    private val taskName = "ManageParty"
+    private val trackingDurationMs = 8000L
+    private val actionDelayMs = 1000L
+
+    override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
+      val th = state.teamHunt
+      val now = System.currentTimeMillis()
+      val metaId: String = (json \ "metaGeneratedId").asOpt[String].getOrElse("null")
+
+      println(s"[$taskName] Entered. partyJoinStatus=${th.partyJoinStatus}, inParty=${th.inParty}, enabled=${settings.teamHuntSettings.enabled}")
+
+      // 1. Only if team hunt is enabled and not already in party
+      if (!settings.teamHuntSettings.enabled || th.inParty) {
+        println(s"[$taskName] EXIT: Team hunt disabled or already in party. enabled=${settings.teamHuntSettings.enabled}, inParty=${th.inParty}")
+        return None
       }
 
-      // Update team members positions
-      val teamPositions = thSettings.teamMembersList.flatMap { teamMember =>
-        filteredSpyLevelInfo.fields.collectFirst {
-          case (_, creatureData) if (creatureData \ "Name").asOpt[String].contains(teamMember) =>
-            val posX = (creatureData \ "PositionX").asOpt[Int].getOrElse(0)
-            val posY = (creatureData \ "PositionY").asOpt[Int].getOrElse(0)
-            val posZ = (creatureData \ "PositionZ").asOpt[Int].getOrElse(0)
-            println(s"[$taskName] Team member $teamMember found at ($posX, $posY, $posZ)")
-            (teamMember, posX, posY, posZ)
-        }
-      }
+      val spyInfo = (json \ "spyLevelInfo").asOpt[Map[String, JsValue]].getOrElse(Map.empty)
 
-      // Update followed player position
-      val followedPlayerPosition = filteredSpyLevelInfo.fields.collectFirst {
-        case (_, creatureData) if (creatureData \ "Name").asOpt[String].contains(teamHuntState.teamMemberToFollow) =>
-          val posX = (creatureData \ "PositionX").asOpt[Int].getOrElse(0)
-          val posY = (creatureData \ "PositionY").asOpt[Int].getOrElse(0)
-          val posZ = (creatureData \ "PositionZ").asOpt[Int].getOrElse(0)
-          println(s"[$taskName] Followed player ${teamHuntState.teamMemberToFollow} found at ($posX, $posY, $posZ)")
-          (teamHuntState.teamMemberToFollow, posX, posY, posZ)
-      }.getOrElse {
-        println(s"[$taskName] Followed player not found, using last known position: ${state.teamHunt.followedTeamMemberPos}")
-        state.teamHunt.lastBlockerPos
-      }
-
-      // Check if teamMemberToFollow exists in filteredSpyLevelInfo
-      val updatedFollowedTeamMemberPosOnTheSameLevel = filteredSpyLevelInfo.fields.collectFirst {
-        case (_, creatureData) if (creatureData \ "Name").asOpt[String].contains(teamHuntState.teamMemberToFollow) =>
-          val posX = (creatureData \ "PositionX").asOpt[Int].getOrElse(0)
-          val posY = (creatureData \ "PositionY").asOpt[Int].getOrElse(0)
-          val posZ = (creatureData \ "PositionZ").asOpt[Int].getOrElse(0)
-
-          if (posZ == charPosZ) {
-            println(s"[$taskName] Updating followed team member position: (${teamHuntState.teamMemberToFollow}, $posX, $posY, $posZ)")
-            (teamHuntState.teamMemberToFollow, posX, posY, posZ)
-          } else {
-            println(s"[$taskName] Team member ${teamHuntState.teamMemberToFollow} is on a different level. Keeping previous position: ${teamHuntState.lastPosFollowedTeamMemberOnTheSameLevel}")
-            teamHuntState.lastPosFollowedTeamMemberOnTheSameLevel
-          }
-      }.getOrElse {
-        println(s"[$taskName] Team member ${teamHuntState.teamMemberToFollow} not found. Keeping previous position: ${teamHuntState.followedTeamMemberPos}")
-        teamHuntState.followedTeamMemberPos
-      }
-
-      // Update the state with the new positions
-      val updatedTeamHunt = state.teamHunt.copy(
-        lastBlockerPos = blockerPosition,
-        lastTeamPos = teamPositions,
-        followedTeamMemberPos = followedPlayerPosition,
-        lastPosFollowedTeamMemberOnTheSameLevel =  updatedFollowedTeamMemberPosOnTheSameLevel
+      // 2. Find party host
+      val hostDataOpt = spyInfo.values.find(obj => (obj \ "IsPartyHost").asOpt[Boolean].contains(true))
+      val hostIdOpt = hostDataOpt.flatMap(obj => (obj \ "Id").asOpt[Int])
+      val hostPosOpt = hostDataOpt.flatMap(obj =>
+        for {
+          x <- (obj \ "PositionX").asOpt[Int]
+          y <- (obj \ "PositionY").asOpt[Int]
+        } yield (x, y)
       )
 
-      val updatedState = state.copy(teamHunt = updatedTeamHunt)
+      println(s"[$taskName] hostIdOpt=$hostIdOpt, hostPosOpt=$hostPosOpt, partyJoinStatus=${th.partyJoinStatus}")
 
-      println(s"[$taskName] Updated team positions: $teamPositions")
-      println(s"[$taskName] Updated blocker position: ${updatedTeamHunt.lastBlockerPos}")
-      println(s"[$taskName] Updated followedTeamMember position: ${updatedTeamHunt.followedTeamMemberPos}")
+      // 3. State machine for party joining
+      th.partyJoinStatus match {
+        case "idle" =>
+          if (hostIdOpt.isDefined && hostPosOpt.isDefined) {
+            val newTH = th.copy(
+              partyJoinStatus = "tracking",
+              partyHostId = hostIdOpt,
+              partyHostMovements = List(hostPosOpt.get),
+              partyHostTrackingStart = now,
+              partyActionTime = now + actionDelayMs
+            )
+            println(s"[$taskName] EXIT: Found host, switching to tracking. hostId=${hostIdOpt.get}, hostPos=${hostPosOpt.get}")
+            Some(state.copy(teamHunt = newTH) -> NoOpTask)
+          } else {
+            println(s"[$taskName] EXIT: No host found in idle state.")
+            None
+          }
 
-      Some(updatedState -> NoOpTask)
+        case "tracking" =>
+          if (hostIdOpt.isEmpty || hostPosOpt.isEmpty) {
+            println(s"[$taskName] EXIT: Host disappeared during tracking. Resetting to idle.")
+            Some(state.copy(teamHunt = th.copy(partyJoinStatus = "idle", partyHostId = None, partyHostMovements = Nil)) -> NoOpTask)
+          } else {
+            val movements = (hostPosOpt.get :: th.partyHostMovements).distinct.take(20)
+            val trackingTime = now - th.partyHostTrackingStart
+            val is8Shape = detect8Shape(movements)
+            println(s"[$taskName] trackingTime=$trackingTime, is8Shape=$is8Shape, movements=$movements")
+            if (is8Shape || trackingTime > trackingDurationMs) {
+              val newTH = th.copy(
+                partyJoinStatus = "moveToHost",
+                partyActionTime = now + actionDelayMs
+              )
+              println(s"[$taskName] EXIT: Ready to join. is8Shape=$is8Shape, trackingTime=$trackingTime")
+              Some(state.copy(teamHunt = newTH) -> NoOpTask)
+            } else {
+              val newTH = th.copy(
+                partyHostMovements = movements
+              )
+              println(s"[$taskName] EXIT: Keep tracking. movements=${movements}")
+              Some(state.copy(teamHunt = newTH) -> NoOpTask)
+            }
+          }
+
+        case "moveToHost" =>
+          if (now < th.partyActionTime || hostPosOpt.isEmpty) {
+            println(s"[$taskName] EXIT: Waiting for action delay or hostPos missing. now=$now, partyActionTime=${th.partyActionTime}, hostPosOpt=$hostPosOpt")
+            return Some(state -> NoOpTask)
+          }
+          val (tileX, tileY) = hostPosOpt.get
+          val charZ = (json \ "characterInfo" \ "PositionZ").as[Int]
+          val tileId = f"${tileX}%05d${tileY}%05d${charZ}%02d"
+          val areaTiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+          val tileIndexOpt = areaTiles.get(tileId).flatMap(tile => (tile \ "index").asOpt[String])
+          val mapPanelLoc = (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
+          val (screenX, screenY) = tileIndexOpt.flatMap(idx =>
+            mapPanelLoc.get(idx).flatMap(obj =>
+              for {
+                x <- (obj \ "x").asOpt[Int]
+                y <- (obj \ "y").asOpt[Int]
+              } yield (x, y)
+            )
+          ).getOrElse((0, 0)) // fallback
+
+          val newTH = th.copy(
+            partyJoinStatus = "openContext",
+            partyActionTime = now + actionDelayMs
+          )
+          val actions = List(MoveMouse(screenX, screenY, metaId))
+          println(s"[$taskName] EXIT: Moving to host at ($screenX, $screenY)")
+          Some(state.copy(teamHunt = newTH) -> MKTask(taskName, MKActions(mouse = actions, keyboard = Nil)))
+
+
+        case "openContext" =>
+          if (now < th.partyActionTime || hostPosOpt.isEmpty) {
+            println(s"[$taskName] EXIT: Waiting for action delay or hostPos missing in openContext. now=$now, partyActionTime=${th.partyActionTime}, hostPosOpt=$hostPosOpt")
+            return Some(state -> NoOpTask)
+          }
+
+
+          val (tileX, tileY) = hostPosOpt.get
+          val newTH = th.copy(
+            partyJoinStatus = "waitForWindow",
+            partyActionTime = now + actionDelayMs
+          )
+
+          // 1. Find the tileId for host's position and character's Z
+          val charZ = (json \ "characterInfo" \ "PositionZ").as[Int]
+          val tileId = f"${tileX}%05d${tileY}%05d${charZ}%02d"
+
+          // 2. Get the index from areaInfo.tiles
+          val areaTiles = (json \ "areaInfo" \ "tiles").as[Map[String, JsObject]]
+          val tileIndexOpt = areaTiles.get(tileId).flatMap(tile => (tile \ "index").asOpt[String])
+
+          // 3. Get screen coordinates from screenInfo.mapPanelLoc
+          val mapPanelLoc = (json \ "screenInfo" \ "mapPanelLoc").as[Map[String, JsObject]]
+          val (screenX, screenY) = tileIndexOpt.flatMap(idx =>
+            mapPanelLoc.get(idx).flatMap(obj =>
+              for {
+                x <- (obj \ "x").asOpt[Int]
+                y <- (obj \ "y").asOpt[Int]
+              } yield (x, y)
+            )
+          ).getOrElse((0, 0)) // fallback
+
+
+
+
+          val mouseActions = List(
+            MoveMouse(screenX, screenY, metaId),
+            RightButtonPress(screenX, screenY, metaId),
+            RightButtonRelease(screenX, screenY, metaId)
+          )
+
+          val keyboardActions = List(
+            PressCtrl(metaId),
+            HoldCtrlFor(1.second, metaId),
+            ReleaseCtrl(metaId)
+          )
+
+          println(s"[$taskName] EXIT: Opened context menu at ($screenX, $screenY)")
+          Some(
+            state.copy(teamHunt = newTH) ->
+              MKTask(taskName, MKActions(mouse = mouseActions, keyboard = keyboardActions))
+          )
+
+        case "waitForWindow" =>
+          val extraWindowLoc = (json \ "screenInfo" \ "extraWindowLoc").asOpt[JsObject]
+          val hasJoinParty = extraWindowLoc.exists(_.keys.exists(_.toLowerCase.trim.startsWith("join")))
+          val waitTime = now - th.partyActionTime
+          println(s"[$taskName] extraWindowLoc keys: ${extraWindowLoc.map(_.keys)}, hasJoinParty=$hasJoinParty, waitTime=$waitTime")
+          if (hasJoinParty && now >= th.partyActionTime) {
+            val newTH = th.copy(
+              partyJoinStatus = "clickJoin",
+              partyActionTime = now + actionDelayMs
+            )
+            println(s"[$taskName] EXIT: Join party window found, switching to clickJoin.")
+            Some(state.copy(teamHunt = newTH) -> NoOpTask)
+          } else if (waitTime > 10000) {
+            // Retry after 10 seconds
+            val newTH = th.copy(
+              partyJoinStatus = "openContext",
+              partyActionTime = now + actionDelayMs
+            )
+            println(s"[$taskName] EXIT: Join party window not found after 10s, retrying openContext.")
+            Some(state.copy(teamHunt = newTH) -> NoOpTask)
+          } else {
+            println(s"[$taskName] EXIT: Waiting for join party window or action delay.")
+            Some(state -> NoOpTask)
+          }
+
+        case "clickJoin" =>
+          val extraWindowLoc = (json \ "screenInfo" \ "extraWindowLoc").asOpt[JsObject]
+          val joinBtnOpt = extraWindowLoc.flatMap { win =>
+            win.fields.collectFirst {
+              case (key, obj: JsObject) if key.toLowerCase.trim.startsWith("join") =>
+                for {
+                  x <- (obj \ "posX").asOpt[Int]
+                  y <- (obj \ "posY").asOpt[Int]
+                } yield (x, y)
+            }.flatten
+          }
+          println(s"[$taskName] joinBtnOpt=$joinBtnOpt")
+          joinBtnOpt match {
+            case Some((x, y)) if now >= th.partyActionTime =>
+              val newTH = th.copy(
+                partyJoinStatus = "waitForJoin",
+                partyActionTime = now + actionDelayMs
+              )
+              val actions = List(
+                MoveMouse(x, y, metaId),
+                LeftButtonPress(x, y, metaId),
+                LeftButtonRelease(x, y, metaId))
+              println(s"[$taskName] EXIT: Clicking join at ($x, $y)")
+              Some(state.copy(teamHunt = newTH) -> MKTask(taskName, MKActions(mouse = actions, keyboard = Nil)))
+            case _ =>
+              println(s"[$taskName] EXIT: Waiting for join button or action delay.")
+              Some(state -> NoOpTask)
+          }
+
+        case "waitForJoin" =>
+          val inParty = (json \ "characterInfo" \ "IsPartyMember").asOpt[Boolean].getOrElse(false)
+          println(s"[$taskName] inParty=$inParty, now=$now, partyActionTime=${th.partyActionTime}")
+          if (inParty && now >= th.partyActionTime) {
+            val newTH = th.copy(
+              partyJoinStatus = "done",
+              inParty = true
+            )
+            println(s"[$taskName] EXIT: Successfully joined party.")
+            Some(state.copy(teamHunt = newTH) -> NoOpTask)
+          } else {
+            println(s"[$taskName] EXIT: Waiting for party join confirmation.")
+            Some(state -> NoOpTask)
+          }
+
+        case "done" =>
+          println(s"[$taskName] EXIT: Party joined, nothing more to do.")
+          None
+
+        case other =>
+          println(s"[$taskName] EXIT: Unknown state '$other'.")
+          None
+      }
+    }
+
+    // Improved 8-shape detection: checks for all 8 required directions, no extras, unique positions, within 20s
+    private def detect8Shape(movements: List[(Int, Int)]): Boolean = {
+      // Remove consecutive duplicates
+      val uniqueMovements = movements.foldLeft(List.empty[(Int, Int)]) {
+        case (acc, pos) if acc.headOption.contains(pos) => acc
+        case (acc, pos) => pos :: acc
+      }.reverse
+
+      // Compute directions between consecutive positions
+      def direction(a: (Int, Int), b: (Int, Int)): String = (b._1 - a._1, b._2 - a._2) match {
+        case (1, 0)   => "right"
+        case (-1, 0)  => "left"
+        case (0, 1)   => "down"
+        case (0, -1)  => "up"
+        case _        => "other"
+      }
+
+      val directions = uniqueMovements.sliding(2).collect {
+        case List(a, b) => direction(a, b)
+      }.toList
+
+      val required = Set("right", "down", "left", "up", "right", "up", "left", "down")
+      val dirSet = directions.toSet
+
+      // All required directions present, no extras, and only these 8 moves
+      dirSet == required && directions.length == 8 && !directions.contains("other")
     }
   }
+
 
 
   private object AnalyseTeamMembersPosition extends Step {
@@ -258,16 +504,26 @@ object TeamHuntFeature {
 
     override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
 
-      val blockerName = settings.teamHuntSettings.blockerName
+      val blockerName = state.teamHunt.blockerName
       val currentlyFollowing = state.teamHunt.teamMemberToFollow
       val spyInfo = (json \ "spyLevelInfo").asOpt[JsObject].getOrElse(JsObject.empty)
       val characterZ = (json \ "characterInfo" \ "PositionZ").asOpt[Int].getOrElse(0)
       val characterPos = extractCharPosition(json)
 
-      println(s"[$taskName] Blocker: $blockerName, Currently following: $currentlyFollowing")
+      //      println(s"[$taskName] Blocker: $blockerName, Currently following: $currentlyFollowing")
       // Extract team positions from spy info
-      val teamPositions = extractTeamPositions(spyInfo, settings.teamHuntSettings.teamMembersList :+ blockerName)
-      println(s"[$taskName] Team positions found: ${teamPositions.size}")
+      val characterName = (json \ "characterInfo" \ "Name").asOpt[String].getOrElse("")
+
+      // Build team list excluding the player itself
+      val teamListExcludingSelf = (state.teamHunt.teamMembersList :+ blockerName)
+        .filterNot(_ == characterName)
+
+      // Extract positions for only *other* teammates
+      val teamPositions = extractTeamPositions(spyInfo, teamListExcludingSelf)
+      //      println(s"[$taskName] Team positions found: ${teamPositions.size}")
+
+
+
 
       // Check blocker availability and level
       teamPositions.get(blockerName) match {
@@ -278,7 +534,7 @@ object TeamHuntFeature {
             // Blocker is on different level - set change level state but don't change following
             println(s"[$taskName] Blocker on different level, activating level change")
             val updatedState = state.copy(teamHunt = state.teamHunt.copy(
-              changeLevelState = "active",
+              changeLevelStatus = "active",
             ))
             return Some(updatedState -> NoOpTask)
           } else {
@@ -291,7 +547,7 @@ object TeamHuntFeature {
               val updatedState = state.copy(teamHunt = state.teamHunt.copy(
                 teamMemberToFollow = blockerName,
                 followedTeamMemberPos = (blockerName, blockerX, blockerY, blockerZ),
-                changeLevelState = "free",
+                changeLevelStatus = "free",
                 subWaypoints = newPath,
               ))
               return Some(updatedState -> NoOpTask)
@@ -304,7 +560,25 @@ object TeamHuntFeature {
 
         case None =>
           println(s"[$taskName] Blocker not found in spy info")
-          analyzeAlternativeTeamMembers(state, json, settings, teamPositions, characterZ, currentlyFollowing)
+
+          // Exclude the player itself
+          val visibleTeamMembers = teamPositions.keySet.filter(name => name != blockerName && name != characterName)
+
+          if (visibleTeamMembers.isEmpty) {
+            println(s"[$taskName] No other visible team members (excluding self). Activating change level state.")
+            val updatedState = state.copy(teamHunt = state.teamHunt.copy(
+              changeLevelStatus = "active",
+              spyInfoIssue = true,
+              teamMemberToFollow = blockerName, // stay consistent, still follow blocker
+              followedTeamMemberPos = (blockerName, characterPos.x, characterPos.y, characterZ)
+            ))
+            Some(updatedState -> NoOpTask)
+          } else {
+            println(s"[$taskName] Available alternative members: ${visibleTeamMembers.mkString(", ")}")
+            analyzeAlternativeTeamMembers(state, json, settings, teamPositions, characterZ, currentlyFollowing)
+          }
+
+
       }
 
       // Blocker not available or no path - analyze other team members
@@ -313,6 +587,88 @@ object TeamHuntFeature {
 
   }
 
+
+  private object GetTeamPositionInfo extends Step {
+    private val taskName = "GetTeamPositionInfo"
+
+    override def run(
+                      state: GameState,
+                      json: JsValue,
+                      settings: UISettings
+                    ): Option[(GameState, MKTask)] = {
+
+      val spyLevelInfo = (json \ "spyLevelInfo").asOpt[JsObject].getOrElse(Json.obj())
+      val teamHuntState = state.teamHunt
+      val charPosZ = (json \ "characterInfo" \ "PositionZ").as[Int]
+
+      // Use values from GameState's teamHunt
+      val blockerName = teamHuntState.blockerName
+      val teamMembersList = teamHuntState.teamMembersList
+
+      val filteredSpyLevelInfo = filterSpyLevelInfo(spyLevelInfo, blockerName, teamMembersList)
+
+      // Update blocker position
+      val blockerPosition = filteredSpyLevelInfo.fields.collectFirst {
+        case (_, creatureData) if (creatureData \ "Name").asOpt[String].contains(blockerName) =>
+          val posX = (creatureData \ "PositionX").asOpt[Int].getOrElse(0)
+          val posY = (creatureData \ "PositionY").asOpt[Int].getOrElse(0)
+          val posZ = (creatureData \ "PositionZ").asOpt[Int].getOrElse(0)
+          (blockerName, posX, posY, posZ)
+      }.getOrElse {
+        state.teamHunt.lastBlockerPos
+      }
+
+      // Update team members positions
+      val teamPositions = teamMembersList.flatMap { teamMember =>
+        filteredSpyLevelInfo.fields.collectFirst {
+          case (_, creatureData) if (creatureData \ "Name").asOpt[String].contains(teamMember) =>
+            val posX = (creatureData \ "PositionX").asOpt[Int].getOrElse(0)
+            val posY = (creatureData \ "PositionY").asOpt[Int].getOrElse(0)
+            val posZ = (creatureData \ "PositionZ").asOpt[Int].getOrElse(0)
+            (teamMember, posX, posY, posZ)
+        }
+      }
+
+      // Update followed player position
+      val followedPlayerPosition = filteredSpyLevelInfo.fields.collectFirst {
+        case (_, creatureData) if (creatureData \ "Name").asOpt[String].contains(teamHuntState.teamMemberToFollow) =>
+          val posX = (creatureData \ "PositionX").asOpt[Int].getOrElse(0)
+          val posY = (creatureData \ "PositionY").asOpt[Int].getOrElse(0)
+          val posZ = (creatureData \ "PositionZ").asOpt[Int].getOrElse(0)
+          (teamHuntState.teamMemberToFollow, posX, posY, posZ)
+      }.getOrElse {
+        state.teamHunt.lastBlockerPos
+      }
+
+      // Check if teamMemberToFollow exists in filteredSpyLevelInfo
+      val updatedFollowedTeamMemberPosOnTheSameLevel = filteredSpyLevelInfo.fields.collectFirst {
+        case (_, creatureData) if (creatureData \ "Name").asOpt[String].contains(teamHuntState.teamMemberToFollow) =>
+          val posX = (creatureData \ "PositionX").asOpt[Int].getOrElse(0)
+          val posY = (creatureData \ "PositionY").asOpt[Int].getOrElse(0)
+          val posZ = (creatureData \ "PositionZ").asOpt[Int].getOrElse(0)
+
+          if (posZ == charPosZ) {
+            (teamHuntState.teamMemberToFollow, posX, posY, posZ)
+          } else {
+            teamHuntState.lastPosFollowedTeamMemberOnTheSameLevel
+          }
+      }.getOrElse {
+        teamHuntState.followedTeamMemberPos
+      }
+
+      // Update the state with the new positions
+      val updatedTeamHunt = state.teamHunt.copy(
+        lastBlockerPos = blockerPosition,
+        lastTeamPos = teamPositions,
+        followedTeamMemberPos = followedPlayerPosition,
+        lastPosFollowedTeamMemberOnTheSameLevel = updatedFollowedTeamMemberPosOnTheSameLevel
+      )
+
+      val updatedState = state.copy(teamHunt = updatedTeamHunt)
+
+      Some(updatedState -> NoOpTask)
+    }
+  }
 
   private object DesignSmartMovement extends Step {
     private val taskName = "DesignSmartMovement"
@@ -326,7 +682,7 @@ object TeamHuntFeature {
       val teamMemberToFollow = th.teamMemberToFollow
       val characterZ = (json \ "characterInfo" \ "PositionZ").as[Int]
 
-      if (teamMemberToFollow.isEmpty || th.changeLevelState == "active") {
+      if (teamMemberToFollow.isEmpty || th.changeLevelStatus == "active") {
         return Some(state -> NoOpTask)
       }
 
@@ -335,6 +691,10 @@ object TeamHuntFeature {
       // Get team member position from spy info
       val spyInfo = (json \ "spyLevelInfo").asOpt[JsObject].getOrElse(JsObject.empty)
       val teamPositions = extractTeamPositions(spyInfo, List(teamMemberToFollow))
+
+      if (teamPositions.get(teamMemberToFollow).exists(_._3 != characterZ)) {
+        return Some(state -> NoOpTask)
+      }
 
       teamPositions.get(teamMemberToFollow) match {
         case Some((x, y, z)) =>
@@ -384,13 +744,12 @@ object TeamHuntFeature {
                       json: JsValue,
                       settings: UISettings
                     ): Option[(GameState, MKTask)] = {
-
       val currentTime = System.currentTimeMillis()
       val teamHuntState = state.teamHunt
 
       // Only activate if DesignSmartMovement produced no waypoints
-      if (teamHuntState.subWaypoints.nonEmpty) {
-        println(s"[$taskName] Smart movement active, skipping rest movement")
+      if (teamHuntState.subWaypoints.nonEmpty || teamHuntState.changeLevelStatus == "active" || state.autoTarget.stateAutoTarget == "fight" ) {
+        println(s"[$taskName]  SDEVkipping rest movement")
         return Some(state -> NoOpTask)
       }
 
@@ -477,17 +836,17 @@ object TeamHuntFeature {
 
       if (isRotationMovement) {
         println(s"[$taskName] Generating rotation rest movement")
-        generateRotationMovement(state)
+        generateRotationMovement(state, json)
       } else {
         println(s"[$taskName] Generating positional rest movement")
         generatePositionalMovement(state, json, currentPos)
       }
     }
 
-    private def generateRotationMovement(state: GameState): Option[(GameState, MKTask)] = {
+    private def generateRotationMovement(state: GameState, json: JsValue): Option[(GameState, MKTask)] = {
       // Generate 1-3 random rotation directions
       val rotationCount = RandomUtils.randomIntBetween(1, 3).toInt
-
+      val metaId: String = (json \ "metaGeneratedId").asOpt[String].getOrElse("null")
       val directions = List("MoveUp", "MoveDown", "MoveLeft", "MoveRight")
       val selectedDirections = (1 to rotationCount).map { _ =>
         directions(RandomUtils.randomIntBetween(0, directions.length - 1).toInt)
@@ -495,13 +854,15 @@ object TeamHuntFeature {
 
       println(s"[$taskName] Rotation movement: ${selectedDirections.mkString(" + ")} with Ctrl")
 
-      // Create keyboard actions: Ctrl press, hold, direction presses, Ctrl release
-      val directionActions = selectedDirections.map(DirectionalKey(_))
+      // Create keyboard actions: Ctrl press, hold, direction presses, Ctrl releaseval directionActions: List[KeyboardAction] =
+      val directionActions: List[KeyboardAction] =
+        selectedDirections.map(d => keyboard.DirectionalKey(d, metaId))
+
       val keyboardActions = List(
-        PressCtrl,
-        HoldCtrlFor(500.milliseconds)
+        PressCtrl(metaId),
+        HoldCtrlFor(500.millis, metaId)
       ) ++ directionActions ++ List(
-        ReleaseCtrl
+        ReleaseCtrl(metaId)
       )
 
       val task = MKTask("rest_rotation", MKActions(Nil, keyboardActions))
@@ -586,6 +947,7 @@ object TeamHuntFeature {
                       json: JsValue,
                       settings: UISettings
                     ): Option[(GameState, MKTask)] = {
+      val metaId: String = (json \ "metaGeneratedId").asOpt[String].getOrElse("null")
 
       if (state.teamHunt.subWaypoints.isEmpty) {
         return Some(state -> NoOpTask)
@@ -611,7 +973,7 @@ object TeamHuntFeature {
             subWaypoints = state.teamHunt.subWaypoints.tail
           )
           val updatedState = state.copy(characterInfo = updatedChar, teamHunt = updatedTeamHunt)
-          val keyboardActions = dirOpt.toList.map(DirectionalKey(_))
+          val keyboardActions = dirOpt.toList.map(d => keyboard.DirectionalKey(d, metaId))
           return Some((updatedState, MKTask(taskName, MKActions(Nil, keyboardActions))))
 
         case None =>
@@ -636,6 +998,7 @@ object TeamHuntFeature {
     JsObject(filteredFields)
   }
 
+
   def analyzeTileTactic(
                          tileId: String,
                          tileIndex: String,
@@ -647,28 +1010,33 @@ object TeamHuntFeature {
 
 
     val keyboardActions = scala.collection.mutable.ListBuffer[KeyboardAction]()
-    var updatedState = state
     val currentTime = System.currentTimeMillis()
+    val metaId: String = (json \ "metaGeneratedId").asOpt[String].getOrElse("null")
 
     // Check if the movementId matches specific LevelMovementEnablers
     if (StaticGameInfo.LevelMovementEnablers.UpLadderIds.contains(movementId)) {
-      // Right-click on the tile
       val screenInfo = (json \ "screenInfo" \ "mapPanelLoc" \ tileIndex).as[JsObject]
       val screenX = (screenInfo \ "x").as[Int]
       val screenY = (screenInfo \ "y").as[Int]
 
+      val ctrlNeeded = isCreatureOrPlayerOnTile(json, tileIndex)
+
       val mouseActions = List(
-        MoveMouse(screenX, screenY),
-        RightButtonPress(screenX, screenY),
-        RightButtonRelease(screenX, screenY)
+        MoveMouse(screenX, screenY, metaId),
+        RightButtonPress(screenX, screenY, metaId),
+        RightButtonRelease(screenX, screenY, metaId)
       )
+
+      val keyboardActions =
+        if (ctrlNeeded) List(PressCtrl(metaId), HoldCtrlFor(1.second, metaId), ReleaseCtrl(metaId))
+        else Nil
 
       val updatedState = state.copy(teamHunt = state.teamHunt.copy(
         lastTeamHuntActionTime = currentTime,
         spyInfoIssue = false,
       ))
 
-      return (updatedState, mouseActions, Nil)
+      return (updatedState, mouseActions, keyboardActions)
 
     } else if (StaticGameInfo.LevelMovementEnablers.UpRopesIds.contains(movementId)) {
       // Use rope: right-click on the rope and left-click on the tile
@@ -697,12 +1065,12 @@ object TeamHuntFeature {
           val tileScreenY = (tileScreenInfo \ "y").as[Int]
 
           val mouseActions = List(
-            MoveMouse(itemScreenLocX, itemScreenLocY),
-            RightButtonPress(itemScreenLocX, itemScreenLocY),
-            RightButtonRelease(itemScreenLocX, itemScreenLocY),
-            MoveMouse(tileScreenX, tileScreenY),
-            LeftButtonPress(tileScreenX, tileScreenY),
-            LeftButtonRelease(tileScreenX, tileScreenY)
+            MoveMouse(itemScreenLocX, itemScreenLocY, metaId),
+            RightButtonPress(itemScreenLocX, itemScreenLocY, metaId),
+            RightButtonRelease(itemScreenLocX, itemScreenLocY, metaId),
+            MoveMouse(tileScreenX, tileScreenY, metaId),
+            LeftButtonPress(tileScreenX, tileScreenY, metaId),
+            LeftButtonRelease(tileScreenX, tileScreenY, metaId)
           )
 
           val updatedState = state.copy(teamHunt = state.teamHunt.copy(
@@ -722,13 +1090,37 @@ object TeamHuntFeature {
       val screenX = (screenInfo \ "x").as[Int]
       val screenY = (screenInfo \ "y").as[Int]
 
+      val updatedState = state.copy(teamHunt = state.teamHunt.copy(
+        lastTeamHuntActionTime = currentTime,
+        spyInfoIssue = false,
+      ))
+
       val mouseActions = List(
-        MoveMouse(screenX, screenY),
-        LeftButtonPress(screenX, screenY),
-        LeftButtonRelease(screenX, screenY)
+        MoveMouse(screenX, screenY, metaId),
+        LeftButtonPress(screenX, screenY, metaId),
+        LeftButtonRelease(screenX, screenY, metaId)
       )
       return (updatedState, mouseActions, Nil)
 
+    }
+  }
+
+  // Add this helper inside TeamHuntFeature
+  private def isCreatureOrPlayerOnTile(json: JsValue, tileIndex: String): Boolean = {
+    // Get the screenInfo to map tileIndex to tileId
+    val mapPanelLoc = (json \ "screenInfo" \ "mapPanelLoc" \ tileIndex).asOpt[JsObject]
+    val tileIdOpt = mapPanelLoc.flatMap(obj => (obj \ "id").asOpt[String])
+    tileIdOpt.exists { tileId =>
+      val battleInfo = (json \ "battleInfo").asOpt[Map[String, JsValue]].getOrElse(Map.empty)
+      battleInfo.exists { case (_, creatureData) =>
+        val x = (creatureData \ "PositionX").asOpt[Int].getOrElse(-1)
+        val y = (creatureData \ "PositionY").asOpt[Int].getOrElse(-1)
+        val z = (creatureData \ "PositionZ").asOpt[Int].getOrElse(-1)
+        val tileX = tileId.substring(0, 5).toInt
+        val tileY = tileId.substring(5, 10).toInt
+        val tileZ = tileId.substring(10, 12).toInt
+        x == tileX && y == tileY && z == tileZ
+      }
     }
   }
 
@@ -1430,9 +1822,10 @@ object TeamHuntFeature {
                                            ): Option[(GameState, MKTask)] = {
 
     val subtaskName = "analyzeAlternativeTeamMembers"
-    val blockerName = settings.teamHuntSettings.blockerName
+    val blockerName = state.teamHunt.blockerName
     val characterPos = extractCharPosition(json)
     println(s"[$subtaskName] Looking for new member to follow.")
+
     // Check if currently following member is still valid
     if (currentlyFollowing.nonEmpty && currentlyFollowing != blockerName) {
       teamPositions.get(currentlyFollowing) match {
@@ -1456,7 +1849,7 @@ object TeamHuntFeature {
     }
 
     // Find alternative team member to follow
-    val alternativeMembers = settings.teamHuntSettings.teamMembersList
+    val alternativeMembers = state.teamHunt.teamMembersList
       .filter(_ != blockerName)
       .filter(_ != currentlyFollowing) // Don't re-select current member if we just lost path to them
 
@@ -1477,7 +1870,7 @@ object TeamHuntFeature {
         println(s"[$subtaskName] Switching to follow alternative member: $memberName")
         val updatedState = state.copy(teamHunt = state.teamHunt.copy(
           teamMemberToFollow = memberName,
-          changeLevelState = "free"
+          changeLevelStatus = "free"
         ))
         Some(updatedState -> NoOpTask)
 
@@ -1488,7 +1881,7 @@ object TeamHuntFeature {
         if (currentlyFollowing.nonEmpty) {
           println(s"[$subtaskName] Looking for followed player on different level to trigger level change.")
           val updatedState = state.copy(teamHunt = state.teamHunt.copy(
-            changeLevelState = "active",
+            changeLevelStatus = "active",
             spyInfoIssue = true
           ))
           Some(updatedState -> NoOpTask)

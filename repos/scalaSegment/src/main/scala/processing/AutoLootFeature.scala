@@ -25,7 +25,7 @@ object AutoLootFeature {
     (!settings.autoLootSettings.enabled).guard[Option]
       .as((state, Nil))
       .getOrElse {
-        val (s, maybeTask) = Steps.runFirst(json, settings, state)
+        val (s, maybeTask) = Steps.runAll(json, settings, state)
         (s, maybeTask.toList)
       }
 
@@ -38,7 +38,7 @@ object AutoLootFeature {
     )
 
 
-    def runFirst(
+    def runAll(
                   json: JsValue,
                   settings: UISettings,
                   startState: GameState
@@ -190,6 +190,7 @@ object AutoLootFeature {
     val currentTime = System.currentTimeMillis()
     val autoLoot = state.autoLoot
     val taskName = "handleFocusingOnCarcass"
+    val metaId: String = (json \ "metaGeneratedId").asOpt[String].getOrElse("null")
 
     println(s"[$taskName] Entered — stateLooting = ${autoLoot.stateLooting}")
 
@@ -234,7 +235,7 @@ object AutoLootFeature {
             case Some((x, y)) =>
               println(s"[$taskName] Moving mouse to carcass at ($x,$y)")
 
-              val mouseActions = List(MoveMouse(x, y))
+              val mouseActions = List(MoveMouse(x, y, metaId))
 
               val newState = state.copy(autoLoot = autoLoot.copy(
                 stateLooting = "clicking carcass",
@@ -268,7 +269,8 @@ object AutoLootFeature {
               lastAutoLootActionTime = currentTime
             )
             val updatedState = newState.copy(autoLoot = updatedAutoLoot)
-            val kbActions = dirOpt.toList.map(DirectionalKey(_))
+
+            val kbActions = dirOpt.toList.map(d => keyboard.DirectionalKey(d, metaId))
             Some((updatedState, MKTask("approachingLoot", MKActions(mouse = Nil, keyboard = kbActions))))
           } else {
             println(s"[$taskName] No subWaypoints → giving up and resetting to free")
@@ -364,6 +366,7 @@ object AutoLootFeature {
     val currentTime = System.currentTimeMillis()
     val autoLoot = state.autoLoot
     val taskName = "handleClickingCarcass"
+    val metaId: String = (json \ "metaGeneratedId").asOpt[String].getOrElse("null")
 
     println(s"[$taskName] Entered — stateLooting = ${autoLoot.stateLooting}")
 
@@ -434,15 +437,15 @@ object AutoLootFeature {
               println(s"[$taskName] Nearby creatures/players detected, using Ctrl+right-click approach")
 
               val mouseActions = List(
-                MoveMouse(x, y),
-                RightButtonPress(x, y),
-                RightButtonRelease(x, y)
+                MoveMouse(x, y, metaId),
+                RightButtonPress(x, y, metaId),
+                RightButtonRelease(x, y, metaId)
               )
 
               val keyboardActions = List(
-                PressCtrl,
-                HoldCtrlFor(1.second),
-                ReleaseCtrl
+                PressCtrl(metaId),
+                HoldCtrlFor(1.second, metaId),
+                ReleaseCtrl(metaId)
               )
 
               val newState = state.copy(autoLoot = autoLoot.copy(
@@ -458,9 +461,9 @@ object AutoLootFeature {
               println(s"[$taskName] No interference detected, using regular right-click")
 
               val mouseActions = List(
-                MoveMouse(x, y),
-                RightButtonPress(x, y),
-                RightButtonRelease(x, y)
+                MoveMouse(x, y, metaId),
+                RightButtonPress(x, y, metaId),
+                RightButtonRelease(x, y, metaId)
               )
 
               val newState = state.copy(autoLoot = autoLoot.copy(
@@ -968,6 +971,7 @@ object AutoLootFeature {
     val currentTime = System.currentTimeMillis()
     val al = state.autoLoot
     val taskName = "handleClickingOpen"
+    val metaId: String = (json \ "metaGeneratedId").asOpt[String].getOrElse("null")
 
     if (al.autoLootActionThrottle * al.throttleCoefficient > currentTime - al.lastAutoLootActionTime) {
       return Some(state -> NoOpTask)
@@ -1015,9 +1019,9 @@ object AutoLootFeature {
         }.getOrElse("")
 
         val actions = List(
-          MoveMouse(x, y),
-          LeftButtonPress(x, y),
-          LeftButtonRelease(x, y)
+          MoveMouse(x, y, metaId),
+          LeftButtonPress(x, y, metaId),
+          LeftButtonRelease(x, y, metaId)
         )
 
         val newState = state.copy(autoLoot = al.copy(
@@ -1093,8 +1097,13 @@ object AutoLootFeature {
 
     def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
       val now      = System.currentTimeMillis()
-      val lastTry  = state.fishing.lastFishingCommandSent
       val minDelay = state.fishing.retryMidDelay
+      val metaId: String = (json \ "metaGeneratedId").asOpt[String].getOrElse("null")
+
+      if (state.autoLoot.autoLootThrottle > now - state.autoLoot.lastAutoLootActionTime) {
+        println(s"[$taskName] Too soon since last action → NoOp")
+        return Some(state -> NoOpTask)
+      }
 
       // 1) extract the extraWindowLoc object
       (json \ "screenInfo" \ "extraWindowLoc").validate[JsObject].asOpt
@@ -1109,10 +1118,6 @@ object AutoLootFeature {
             } yield (x, y)
           }
         }
-        // 4) rate‐limit by retryMidDelay
-        .filter { case (_, _) =>
-          lastTry == 0 || (now - lastTry) >= minDelay
-        }
         // 5) map into the actual click task
         .map { case (x, y) =>
           val mkActions = MKActions(
@@ -1122,7 +1127,7 @@ object AutoLootFeature {
 //              LeftButtonRelease(x, y)
 //            ),
             Nil,
-            List(GeneralKey(java.awt.event.KeyEvent.VK_ENTER)) // Press Enter key
+            List(GeneralKey(java.awt.event.KeyEvent.VK_ENTER, metaId)) // Press Enter key
           )
           val task = MKTask(taskName, mkActions)
 
@@ -1130,11 +1135,8 @@ object AutoLootFeature {
             lastActionCommand   = Some(taskName),
             lastActionTimestamp = Some(now)
           )
-          val newFishing = state.fishing.copy(
-            lastFishingCommandSent = now
-          )
 
-          (state.copy(general = newGeneral, fishing = newFishing), task)
+          (state.copy(general = newGeneral), task)
         }
     }
   }
@@ -1208,7 +1210,7 @@ object AutoLootFeature {
   def handleMovingOldCarcass(json: JsValue, settings: UISettings, state: GameState): Option[(GameState, MKTask)] = {
     val taskName = "handleMovingOldCarcass"
     println(s"[$taskName] Entered function.")
-
+    val metaId: String = (json \ "metaGeneratedId").asOpt[String].getOrElse("null")
     val currentTime = System.currentTimeMillis()
     val autoLoot = state.autoLoot
 
@@ -1241,7 +1243,7 @@ object AutoLootFeature {
                 val targetX = (tileObj \ "x").asOpt[Int].getOrElse(0)
                 val targetY = (tileObj \ "y").asOpt[Int].getOrElse(0)
 
-                val actions = moveSingleItem(itemX, itemY, targetX, targetY)
+                val actions = moveSingleItem(itemX, itemY, targetX, targetY, metaId)
                 val newState = state.copy(
                   autoLoot = autoLoot.copy(
                     stateLooting = "focus on carcass",
@@ -1597,7 +1599,7 @@ object AutoLootFeature {
     : Option[(GameState, MKTask)] = {
       val taskName = "handleMoveItem"
       val al = state.autoLoot
-
+      val metaId: String = (json \ "metaGeneratedId").asOpt[String].getOrElse("null")
       println(s"[$taskName] Entered function.")
       val currentTime        = System.currentTimeMillis()
 
@@ -1617,11 +1619,11 @@ object AutoLootFeature {
       }
 
       // always the same mouse actions (we’re just dragging one slot)
-      val mouseActions = moveSingleItem(pickup.x, pickup.y, drop.x, drop.y)
+      val mouseActions = moveSingleItem(pickup.x, pickup.y, drop.x, drop.y, metaId)
 
       // ctrl‐hold for stacks
       val keyboardActions =
-        if (count > 1) List(PressCtrl, HoldCtrlFor(1.second), ReleaseCtrl)
+        if (count > 1) List(PressCtrl(metaId), HoldCtrlFor(1.second, metaId), ReleaseCtrl(metaId))
         else Nil
 
       // build the MKTask name straight from stateLootPlunder
@@ -1649,6 +1651,8 @@ object AutoLootFeature {
     println(s"[$taskName] Entered function.")
     val al = state.autoLoot
     val currentTime        = System.currentTimeMillis()
+    val metaId: String = (json \ "metaGeneratedId").asOpt[String].getOrElse("null")
+
     if (al.autoLootActionThrottle > currentTime - al.lastAutoLootActionTime) {
       println(s"[$taskName] Too soon since last action → NoOp")
       return Some(state -> NoOpTask)
@@ -1665,9 +1669,9 @@ object AutoLootFeature {
 
     // right-click on the food
     val mouseActions = List(
-      MoveMouse(pos.x, pos.y),
-      RightButtonPress(pos.x, pos.y),
-      RightButtonRelease(pos.x, pos.y)
+      MoveMouse(pos.x, pos.y, metaId),
+      RightButtonPress(pos.x, pos.y, metaId),
+      RightButtonRelease(pos.x, pos.y, metaId)
     )
 
     // reset our autoLoot state
@@ -1688,8 +1692,9 @@ object AutoLootFeature {
   def handleOpenSubcontainer(json: JsValue, settings: UISettings, state: GameState): Option[(GameState, MKTask)] = {
     val taskName = "handleOpenSubcontainer"
     println(s"[$taskName] Entered function.")
-
+    val metaId: String = (json \ "metaGeneratedId").asOpt[String].getOrElse("null")
     val currentTime        = System.currentTimeMillis()
+
     if (state.autoLoot.autoLootActionThrottle > currentTime - state.autoLoot.lastAutoLootActionTime) {
       println(s"[$taskName] Too soon since last action → NoOp")
       return Some(state -> NoOpTask)
@@ -1703,9 +1708,9 @@ object AutoLootFeature {
     }
 
     val mouseActions = List(
-      MoveMouse(pos.x, pos.y),
-      RightButtonPress(pos.x, pos.y),
-      RightButtonRelease(pos.x, pos.y)
+      MoveMouse(pos.x, pos.y, metaId),
+      RightButtonPress(pos.x, pos.y, metaId),
+      RightButtonRelease(pos.x, pos.y, metaId)
     )
 
     val updatedState = state.copy(autoLoot = state.autoLoot.copy(
@@ -1756,12 +1761,12 @@ object AutoLootFeature {
     }
   }
 
-  def moveSingleItem(xItemPosition: Int, yItemPositon: Int, xDestPos: Int, yDestPos: Int): List[MouseAction] =
+  def moveSingleItem(xItemPosition: Int, yItemPositon: Int, xDestPos: Int, yDestPos: Int, metaId: String): List[MouseAction] =
     List(
-      MoveMouse(xItemPosition, yItemPositon),
-      LeftButtonPress(xItemPosition, yItemPositon),
-      MoveMouse(xDestPos, yDestPos),
-      LeftButtonRelease(xDestPos, yDestPos)
+      MoveMouse(xItemPosition, yItemPositon, metaId),
+      LeftButtonPress(xItemPosition, yItemPositon, metaId),
+      MoveMouse(xDestPos, yDestPos, metaId),
+      LeftButtonRelease(xDestPos, yDestPos, metaId)
     )
 
   def findRandomWalkableTile(json: JsValue, areaInfo: JsObject, possibleTiles: List[String]): Option[String] = {

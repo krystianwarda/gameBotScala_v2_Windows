@@ -44,19 +44,51 @@ class UIAppActor(playerClassList: List[Player],
   }
 
   private def initializeUI(): Unit = {
+    import scala.concurrent.duration._
+    import java.util.concurrent.CountDownLatch
+
+    val latch = new CountDownLatch(1)
+
     Swing.onEDT {
-      new SwingApp(
-        playerClassList,
-        self, // the UIAppActor itself
-        jsonProcessorActorRef,
-        periodicFunctionActorRef,
-        thirdProcessActorRef,
-        mainActorRef,
-        settingsRef
-      ).visible = true
+      try {
+        val swingApp = new SwingApp(
+          playerClassList,
+          self,
+          jsonProcessorActorRef,
+          periodicFunctionActorRef,
+          thirdProcessActorRef,
+          mainActorRef,
+          settingsRef
+        )
+        swingApp.visible = true
+        latch.countDown()
+        println("UIAppActor UI initialized and visible.")
+      } catch {
+        case ex: Exception =>
+          println(s"Error initializing UI: ${ex.getMessage}")
+          ex.printStackTrace()
+          latch.countDown()
+      }
     }
-    println("UIAppActor UI initialized.")
+
+    // Wait for UI to be ready
+    latch.await(10, java.util.concurrent.TimeUnit.SECONDS)
+    println("UIAppActor initialization completed.")
   }
+//  private def initializeUI(): Unit = {
+//    Swing.onEDT {
+//      new SwingApp(
+//        playerClassList,
+//        self, // the UIAppActor itself
+//        jsonProcessorActorRef,
+//        periodicFunctionActorRef,
+//        thirdProcessActorRef,
+//        mainActorRef,
+//        settingsRef
+//      ).visible = true
+//    }
+//    println("UIAppActor UI initialized.")
+//  }
 }
 
 

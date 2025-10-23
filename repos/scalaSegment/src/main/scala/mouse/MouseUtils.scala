@@ -5,10 +5,10 @@ import java.awt.event.InputEvent
 import java.awt.MouseInfo
 import java.awt.event.KeyEvent
 import scala.math.random
-import scala.util.Random
+//import scala.util.Random
 
 object MouseUtils {
-  val random = new Random()
+//  val random = new Random()
 
   def mousePress(robot: Robot, buttons: Int): Unit = {
     robot.mousePress(buttons)
@@ -28,11 +28,12 @@ object MouseUtils {
 
   import java.awt.Robot
   import java.awt.MouseInfo
-  import scala.util.Random
+//  import scala.util.Random
 
   def mouseMoveSmooth(robotInstance: Robot, loc: Option[(Int, Int)], simulateHumanBehavior: Boolean = false): Unit = {
     loc.foreach { case (targetX, targetY) =>
-      val random = new Random()
+      val random = 3
+//        new Random()
       val currentLoc = MouseInfo.getPointerInfo.getLocation
       val startX = currentLoc.x
       val startY = currentLoc.y
@@ -41,8 +42,8 @@ object MouseUtils {
       val steps = if (simulateHumanBehavior) Math.max(40, distance / 20) else 25 // Increased steps for smoother, faster transition
       val arcDirection = if (targetX > startX) 1 else -1 // Determine arc direction based on target position relative to start
       val baseArcFactor = if (simulateHumanBehavior) 0.05 * distance else 0 // Base arc factor for human-like behavior
-      val arcVariability = random.nextDouble() * 0.015 - 0.0020 // Random variability in arc size, slightly reduced
-
+      val arcVariability = random * 0.015 - 0.0020 // Random variability in arc size, slightly reduced
+      // Adjust arc factor based on distance and direction// random.nextDouble()
       for (i <- 1 to steps) {
         val progress = i.toDouble / steps
         val arcFactor = (baseArcFactor + arcVariability * distance) * arcDirection // Apply arc direction
@@ -58,10 +59,11 @@ object MouseUtils {
 
       if (simulateHumanBehavior && distance > 150) {
         // Adjusted overshoot to be slightly more controlled
-        val overshootX = targetX + random.between(-8, 8)
-        val overshootY = targetY + random.between(-8, 8)
-        robotInstance.mouseMove(overshootX, overshootY)
-        Thread.sleep(75 + random.nextInt(50))
+//        val overshootX = targetX + random.between(-8, 8)
+//        val overshootY = targetY + random.between(-8, 8)
+        robotInstance.mouseMove(0, 0)
+        Thread.sleep(75)
+//          + random.nextInt(50))
         robotInstance.mouseMove(targetX, targetY) // Final adjustment to ensure accuracy
       }
     }

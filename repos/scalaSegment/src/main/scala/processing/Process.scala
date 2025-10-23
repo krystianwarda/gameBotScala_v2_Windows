@@ -3,7 +3,7 @@ package processing
 import play.api.libs.json.JsObject
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
 
-import scala.util.Random
+//import scala.util.Random
 import play.api.libs.json._
 
 import java.time.Instant
@@ -35,6 +35,7 @@ object Process {
   def captureScreen(): File = {
     val screenSize = Toolkit.getDefaultToolkit.getScreenSize
     val captureRect = new Rectangle(screenSize)
+    System.setProperty("java.awt.headless", "false")
     val screenFullImage = new Robot().createScreenCapture(captureRect)
     val tempFile = File.createTempFile("screenshot_", ".png")
     ImageIO.write(screenFullImage, "png", tempFile)
@@ -69,47 +70,10 @@ object Process {
 //    }
 //  }
 
-  def findItemInContainerSlot14(json: JsValue, updatedState: GameState, itemId: Int, itemSubType: Int): Option[JsObject] = {
-    // Access the specific container information using updatedState
-    val containerInfo = (json \ "containersInfo" \ updatedState.autoHeal.healingRuneContainerName).as[JsObject]
-    println(s"Container Info: $containerInfo") // Log the container information for debugging
-
-//    val screenInfoPath = (json \ "screenInfo" \ "inventoryPanelLoc" \ updatedState.uhRuneContainerName \ "contentsPanel").as[JsObject]
-    val inventoryPanelLoc = (json \ "screenInfo" \ "inventoryPanelLoc").as[JsObject]
-    val containerKey = inventoryPanelLoc.keys.find(_.contains(updatedState.autoHeal.healingRuneContainerName)).getOrElse("")
-    val containerScreenInfo = (inventoryPanelLoc \ containerKey \ "contentsPanel").as[JsObject]
 
 
-    // Iterate over slots 1 to 4 to find the item
-    val itemInContainer = (0 until 4).flatMap { slotIndex =>
-      (containerInfo \ "items" \ s"slot$slotIndex").asOpt[JsObject].flatMap { slotValue =>
-        for {
-          id <- (slotValue \ "itemId").asOpt[Int]
-          subType <- (slotValue \ "itemSubType").asOpt[Int] if id == itemId && subType == itemSubType
-        } yield {
-          println(s"Found in container slot $slotIndex: $slotValue") // Log for debugging
-          slotValue
-        }
-      }
-    }.headOption
 
-    println(s"Item in Container: $itemInContainer") // Debugging log
 
-    // If the item exists in containerInfo, then look for its screen position in screenInfo
-    val result = itemInContainer.flatMap { _ =>
-      // Direct mapping of slot index to screen position based on the assumption slot indexes directly correlate
-      (0 until 4).flatMap { slotIndex =>
-        containerScreenInfo.fields.collectFirst {
-          case (itemName, itemPos) if itemName.endsWith(s"item$slotIndex") =>
-            Json.obj("x" -> (itemPos \ "x").as[Int], "y" -> (itemPos \ "y").as[Int])
-        }
-      }.headOption
-    }
-
-    println(s"Result: $result") // Debugging log
-    result
-  }
-//
 //  def findItemInContainerSlot14Old(json: JsValue, updatedState: ProcessorState, itemId: Int, itemSubType: Int): Option[JsObject] = {
 //    // Access the specific container information using updatedState
 //    val containerInfo = (json \ "containersInfo" \ updatedState.healingRuneContainerName).as[JsObject]
@@ -222,13 +186,19 @@ object Process {
     }
   }
 
-  // Adjusted function to use the x and y values of Vec as min and max
-  def generateRandomDelay(timeRange: (Int, Int)): Long = {
-    val rand = new Random
-    val (minDelay, maxDelay) = timeRange
-    minDelay + (rand.nextLong() % (maxDelay - minDelay + 1))
-  }
+//  // Adjusted function to use the x and y values of Vec as min and max
+//  def generateRandomDelay(timeRange: (Int, Int)): Long = {
+//    val rand = new Random
+//    val (minDelay, maxDelay) = timeRange
+//    minDelay + (rand.nextLong() % (maxDelay - minDelay + 1))
+//  }
 
+  def generateRandomDelay(timeRange: (Int, Int)): Long = {
+//      val rand = new Random
+      val (minDelay, maxDelay) = timeRange
+      minDelay
+//    + (rand.nextLong() % (maxDelay - minDelay + 1))
+  }
 
   // Function to safely extract posX and posY if the 'Ok' button exists
   def extractOkButtonPosition(json: JsValue): Option[(Int, Int)] = {

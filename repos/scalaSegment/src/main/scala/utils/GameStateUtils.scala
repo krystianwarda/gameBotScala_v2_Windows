@@ -12,13 +12,28 @@ case class GameState(
                       general: GeneralState = GeneralState(),
                       characterInfo: CharacterInfoState = CharacterInfoState(),
                       autoLoot: AutoLootState = AutoLootState(),
+                      teamHunt: TeamHuntState = TeamHuntState(),
                       caveBot: CaveBotState = CaveBotState(),
                       autoTarget: AutoTargetState = AutoTargetState(),
                       autoHeal: AutoHealState = AutoHealState(),
                       guardian: GuardianState = GuardianState(),
                       fishing: FishingState = FishingState(),
-                      jsonProcessing: JsonProcessingState = JsonProcessingState()
+                      jsonProcessing: JsonProcessingState = JsonProcessingState(),
+                      hotkeys: HotkeysState = HotkeysState()
+
                     )
+
+case class HotkeyBind(
+                       autoSend: Boolean = false,
+                       value: Option[String] = None,
+                       itemId: Option[Int] = None,
+                       useType: Option[Int] = None
+                     )
+
+case class HotkeysState(
+                         binds: Map[String, HotkeyBind] = Map.empty,
+                         hotkeysChangeStatus: String = "free"
+                       )
 
 case class JsonProcessingState(
                                 isProcessing: Boolean = false,
@@ -26,11 +41,67 @@ case class JsonProcessingState(
                                 processingTimeout: Long = 5000L // 5 seconds timeout
                               )
 
+
+
 case class CharacterInfoState(
                          presentCharLocation: Vec = Vec(0, 0),
                          presentCharZLocation: Int = 0,
                          lastDirection: Option[String] = None,
+
                        )
+
+case class TeamHuntState(
+                          stateTeamHunt: String = "free",
+                          teamMemberToFollow:String = "",
+                          changeLevelStatus: String = "free",
+                          followedTeamMemberPos: (String, Int, Int, Int) = ("", 0,0,0),
+                          lastPosFollowedTeamMemberOnTheSameLevel: (String, Int, Int, Int) = ("", 0,0,0),
+                          spyInfoIssue: Boolean = false,
+                          lastBlockerPos: (String, Int, Int, Int) = ("", 0,0,0),
+                          lastTeamPos: List[(String, Int, Int, Int)] = List(),
+                          teamHuntActionThrottle: Long = 3000L,
+                          lastTeamHuntActionTime: Long = 0,
+                          throttleCoefficient: Double = 1.9,
+
+                          blockerName: String = "",
+                          teamMembersList: List[String] = List(),
+
+                          partyJoinStatus: String = "idle", // idle, tracking, moveToHost, openContext, waitForWindow, clickJoin, waitForJoin, done
+                          partyActionTime: Long = 0L,
+                          inParty: Boolean = false,
+                          partyHostId: Option[Int] = None,
+                          partyHostMovements: List[(Int, Int)] = List(),
+                          partyHostTrackingStart: Long = 0L,
+
+                          subWaypoints: List[Vec] = List(),
+                          currentWaypointLocation: Vec = Vec(0, 0),
+                          gridBoundsState: (Int, Int, Int, Int) = (0, 0, 0, 0),
+                          gridState: Array[Array[Boolean]] = Array.ofDim[Boolean](10, 10),
+
+                          // New fields for human-like behavior
+                          temporaryRestPosition: Option[Vec] = None,
+                          targetMovementTimestamps: List[Long] = List(),
+                          lastTargetPosition: Option[Vec] = None,
+                          lastTemporaryRestUpdate: Long = 0,
+                          lastMovementDecision: Long = 0,
+                          movementInfluenceMultiplier: Double = 2.0,
+                          restPositionChangeBaseProbability: Double = 0.25,
+                          safeDistanceCoefficient: Double = 3.0,
+                          lastDistanceToTarget: Double = 0.0,
+                          noCrossLine: Option[(Vec, Vec)] = None,
+                          positionListTimeSpan: Long = 3000,
+
+                          // DesignRestMovement fields
+                          nextRestMovementTime: Long = 0,
+                          restMovementCooldown: Long = 8000,
+                          restMovementRotationChance: Double = 0.05, // 10%
+                          restMovementDelayMin: Int = 4000, // 2 seconds
+                          restMovementDelayMax: Int = 25000, // 8 seconds
+                          restMovementMinDistance: Int = 1,
+                          restMovementMaxDistance: Int = 3,
+                          restMovementIdleThreshold: Long = 3000, // 3 seconds
+                          lastRestMovementTime: Long = 0
+                        )
 
 case class CaveBotState(
                          stateHunting: String = "free",
@@ -48,14 +119,20 @@ case class CaveBotState(
                        )
 
 case class AutoHealState(
+                          autoHealingContainerMapping: Map[String, String] = Map.empty[String, String],
+                          isHealingSuppliesContainerSet: Boolean = false,
+                          autoHealContainerToRemove: String = "",
                           lastHealUseTime: Long = 0,
                           stateHealingWithRune: String = "free",
                           dangerLevelHealing: Boolean = false,
                           statusOfAutoheal:String = "",
-
-                          healingRuneContainerName:String = "",
-                          healingMPContainerName:String = "",
-                          healingHPContainerName:String = "",
+                          healMethod: Option[(String, (String, String))]  = None,
+                          ringBackpack: String = "",
+                          autoHealMidThrottle: Long = 3000L,
+                          ringAmuletThrottle: Long = 800L,
+                          ringAmuletOnThrottle: Long = 800L,
+                          ringAmuletOffThrottle: Long = 3000L,
+                          lastRingAmuletActionTime: Long = 0,
 
                           healingCrosshairActive: Boolean = false,
                           mpBoost: Boolean = false,
@@ -83,12 +160,18 @@ case class GeneralState(
                          lastMousePos: Option[(Int, Int)] = None,
                          lastActionCommand: Option[String] = None,
                          lastActionTimestamp: Option[Long] = None,
+                         lastGeneralActionTime: Long = 0,
+                         generalMidThrottle: Long = 3000L,
+                         resetButtonTime: Long = 0,
+
                          temporaryData: Map[String, String] = Map.empty,
                          retryThroughoutFishesStatus: Option[Int] = None,
                          retryAttempts:  Int = 0,
                          retryAttemptsVerLong: Int = 7,
-
-//                         retryAttemptsLong: Option[Long] = None
+                         foodThreshold: Int = 700,
+                         generalMediumActionThrottle: Long = 10000L,
+                         lastGeneralMediumActionTime: Long = 0,
+                         //                         retryAttemptsLong: Option[Long] = None
                        )
 
 
@@ -123,6 +206,7 @@ case class AutoLootState(
                           lastAutoLootActionTime: Long = 0,
                           startTimeOfLooting: Long = 0,
                           unfreezeAutoLootCooldown: Long = 15000L,
+                          autoLootThrottle: Long = 3000L,
                           throttleCoefficient: Double = 1.3,
                           lastContainerContent: String = "",
                           autoLootActionThrottle: Long = 600L,
@@ -168,7 +252,10 @@ case class AutoTargetState(
                             updateAttackThrottleTime: Long = 4000L,
                             lastTargetActionTime: Long = 0,
                             plannedMarkingMode: Option[String] = None,
-                            targetActionThrottle: Long = 600L,
+                            targetActionThrottle: Long = 400L,
+                            attackRuneMode: String = "free",
+                            isAttackRuneContainerSet: Boolean = false,
+                            lastRuneUseTime: Long = 0,
 
                             creaturePositionHistory: Map[Int, List[(Vec, Long)]] = Map.empty,
                             chaseMode: String = "chase_to", // "chase_to" or "chase_after"
@@ -184,7 +271,6 @@ case class AutoTargetState(
                             dangerLevelHealing: String = "low",
                             lastMarkingAttemptedId: Int = 0,
                             lastTargetLookoutTime: Long = 0,
-                            lastRuneUseTime: Long = 0,
                             dangerCreaturesList: Seq[Creature] = Seq.empty,
                             creatureTarget: Int = 0,
                             lastTargetName: String = "",
@@ -194,6 +280,7 @@ case class AutoTargetState(
                             autoTargetContainerMapping: Map[Int, String] = Map.empty[Int, String],
                             currentAutoAttackContainerName: String = "",
                             isUsingAmmo: String = "not_set",
+                            isUsingSpears: String = "not_set",
                             ammoId: Int = 0,
                             ammoCountForNextResupply: Int = 0,
                             AttackSuppliesLeftMap: Map[Int, Int] = Map.empty[Int, Int],
@@ -202,11 +289,15 @@ case class AutoTargetState(
                             lastTargetMarkCommandSend: Long = 0,
                             targetFreezeCreatureId: Int = 0,
                             subWaypoints: List[Vec] = List(),
-                            runeUseCooldown: Long = 2000,
+                            runeUseCooldown: Long = 2100,
                             runeUseRandomness: Long = 0,
                             runeUseTimeRange:  (Int, Int) = (500,1000),
                             stopReason: Option[String] = None,
-                            targetCreatureToAttack: Option[String] = None
+                            targetCreatureToAttack: Option[String] = None,
+
+                              // New throttle fields for EngageAttack
+                            engageAttackActionThrottle: Long = 1800L,
+                            lastEngageAttackActionTime: Long = 0
                           )
 
 case class GuardianState(
@@ -288,7 +379,9 @@ case class ProcessorState(
                            settings: Option[UISettings],
                            lastAutoResponderCommandSend: Long = 0,
                            lastCaveBotCommandSend: Long = 0,
+
                            lastTeamHuntCommandSend: Long = 0,
+
                            currentWaypointIndex: Int = 0,
                            currentTargetIndex: Int = 0,
                            subWaypoints: List[Vec] = List(),
@@ -311,7 +404,7 @@ case class ProcessorState(
                            positionStagnantCount: Int = 0,
                            lastPosition: Option[Vec] = None,
 
-                           //                           attackRuneContainerName: String = "not_set",
+
                            statusOfAttackRune: String = "not_set",
                            lastChangeOfstatusOfAttackRune: Long = 0,
                            uhRuneContainerName: String = "not_set",

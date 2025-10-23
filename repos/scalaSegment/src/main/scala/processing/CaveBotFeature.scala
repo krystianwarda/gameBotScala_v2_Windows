@@ -146,7 +146,7 @@ object CaveBotFeature {
       println(s"[TICK] Character pos = $loc, WP target = (${currentWp.waypointX}, ${currentWp.waypointY})")
 
       // If target is chosen, don't generate subwaypoints, only track waypoints
-      if (at.stateAutoTarget == "target chosen") {
+      if (at.stateAutoTarget == "fight") {
         println(s"[$taskName] target chosen → skipping movement generation")
         return None
       }
@@ -173,8 +173,11 @@ object CaveBotFeature {
           lastDirection = dirOpt,
           presentCharLocation = loc
         )
+        val metaId: String = (json \ "metaGeneratedId").asOpt[String].getOrElse("null")
 
-        val kbActions: List[KeyboardAction] = dirOpt.toList.map(DirectionalKey(_))
+        val kbActions: List[KeyboardAction] =
+          dirOpt.toList.map(dir => DirectionalKey(dir, actionMetaId = metaId))
+
         println(s"[$taskName] emitting movement task with ${kbActions.size} keyboard actions")
 
         val updatedCaveBot = gen.caveBot.copy(
@@ -380,7 +383,7 @@ object CaveBotFeature {
         val now = System.currentTimeMillis()
 
         val newCharacterInfoState = state.characterInfo.copy(lastDirection = Some(""))
-        // reset walking direction immediately
+        val metaId: String = (json \ "metaGeneratedId").asOpt[String].getOrElse("null")
         val baseState = state.copy(characterInfo = newCharacterInfoState)
 
         // throttle to once per second
@@ -430,9 +433,9 @@ object CaveBotFeature {
             case Some((sx, sy)) if withPos.caveBot.slowWalkStatus >= withPos.general.retryAttempts =>
               // final retry → click it
               val seq = List(
-                MoveMouse(sx, sy),
-                LeftButtonPress(sx, sy),
-                LeftButtonRelease(sx, sy)
+                MoveMouse(sx, sy, metaId),
+                LeftButtonPress(sx, sy, metaId),
+                LeftButtonRelease(sx, sy, metaId)
               )
               (withPos.copy(caveBot = withPos.caveBot.copy(slowWalkStatus = 0)), seq)
 

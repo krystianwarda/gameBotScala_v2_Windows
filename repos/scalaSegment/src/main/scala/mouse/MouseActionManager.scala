@@ -4,30 +4,35 @@ import cats.effect.{IO, IOApp, Ref}
 import fs2.Stream
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all._
+import play.api.libs.json.Json
+import utils.KafkaJsonPublisher
+import utils.SettingsUtils.UISettings
 
 import java.awt.{MouseInfo, Robot}
 import java.awt.event.InputEvent
 import scala.concurrent.duration._
-import scala.util.Random
+//import scala.util.Random
+//import scala.util.Random
 import cats.syntax.all._
 
 
 import scala.math.{pow, sqrt}
 
-// Mouse Actions with Priorities
+
 sealed trait MouseAction {
   def priority: Int
   def x: Int
   def y: Int
+  def metaId: String
 }
 
-case class MoveMouse(x: Int, y: Int) extends MouseAction { val priority = 3 }
-case class LeftButtonPress(x: Int, y: Int) extends MouseAction { val priority = 2 }
-case class LeftButtonRelease(x: Int, y: Int) extends MouseAction { val priority = 2 }
-case class RightButtonPress(x: Int, y: Int) extends MouseAction { val priority = 2 }
-case class RightButtonRelease(x: Int, y: Int) extends MouseAction { val priority = 2 }
-case class DragMouse(x: Int, y: Int) extends MouseAction { val priority = 1 }
-case class CrosshairMove(x: Int, y: Int) extends MouseAction { val priority = 1 }
+case class MoveMouse(x: Int, y: Int, metaId: String) extends MouseAction { val priority = 3 }
+case class LeftButtonPress(x: Int, y: Int, metaId: String) extends MouseAction { val priority = 2 }
+case class LeftButtonRelease(x: Int, y: Int, metaId: String) extends MouseAction { val priority = 2 }
+case class RightButtonPress(x: Int, y: Int, metaId: String) extends MouseAction { val priority = 2 }
+case class RightButtonRelease(x: Int, y: Int, metaId: String) extends MouseAction { val priority = 2 }
+case class DragMouse(x: Int, y: Int, metaId: String) extends MouseAction { val priority = 1 }
+case class CrosshairMove(x: Int, y: Int, metaId: String) extends MouseAction { val priority = 1 }
 
 
 // Global mouse manager reference (will be initialized in MainApp)
@@ -40,7 +45,9 @@ class MouseActionManager(
                           queueRef: Ref[IO, List[MouseAction]],
                           statusRef: Ref[IO, String],
                           taskInProgressRef: Ref[IO, Boolean],
-                          wasInProgressRef: Ref[IO, Boolean]   // <-- add this
+                          wasInProgressRef: Ref[IO, Boolean],
+                          settingsRef: Ref[IO, UISettings],
+                          kafkaPublisher: KafkaJsonPublisher
                         ) {
 
   private def sortQueue(queue: List[MouseAction]): List[MouseAction] =
@@ -58,32 +65,73 @@ class MouseActionManager(
     for {
       _ <- IO(println(s"Enqueuing: $action"))
       _ <- queueRef.update(_ :+ action)
+      _ <- sendActionToKafka(action)
     } yield ()
+
+
+
+  private def sendActionToKafka(action: MouseAction): IO[Unit] = {
+    settingsRef.get.flatMap { settings =>
+      val (actionType, deviceType, metaId): (String, String, String) = action match {
+        case MoveMouse(_, _, m)         => ("move", "mouse", m)
+        case LeftButtonPress(_, _, m)   => ("left_press", "mouse", m)
+        case LeftButtonRelease(_, _, m) => ("left_release", "mouse", m)
+        case RightButtonPress(_, _, m)  => ("right_press", "mouse", m)
+        case RightButtonRelease(_, _, m)=> ("right_release", "mouse", m)
+        case DragMouse(_, _, m)         => ("drag", "mouse", m)
+        case CrosshairMove(_, _, m)     => ("crosshair_move", "mouse", m)
+      }
+
+      val json = Json.obj(
+        "device" -> deviceType,
+        "action" -> actionType,
+        "x" -> action.x.toString,
+        "y" -> action.y.toString,
+        "metaGeneratedTimestamp" -> java.time.Instant.now().toString,
+        "metaGeneratedDate" -> java.time.Instant.now().toString.take(10),
+        "metaGeneratedId" -> metaId
+      )
+
+      val debugIO =
+        if (settings.debugMode) IO {
+          println(s"[MouseAction] Top-level keys: ${json.as[play.api.libs.json.JsObject].keys.mkString(", ")}")
+          println(s"[MouseAction] JSON: $json")
+          println(s"[MouseAction] shareDataMode=${settings.shareDataMode}")
+        } else IO.unit
+
+      val sendIO =
+        if (settings.shareDataMode) IO {
+          kafkaPublisher.sendActionData(json)
+        } else IO.unit
+
+      debugIO *> sendIO
+    }
+  }
 
   private def executeAction(action: MouseAction): IO[Unit] = for {
     _ <- IO(println(s"[EXECUTE] $action"))
 
     _ <- action match {
-      case MoveMouse(x, y) =>
+      case MoveMouse(x, y, _) =>
         IO(println(s"🔧 Actually calling robot.mouseMove($x, $y)")) *>
           moveMouse(x, y) *> IO.sleep(40.millis)
 
-      case LeftButtonPress(_, _) =>
+      case LeftButtonPress(_, _, _) =>
         IO(robot.mousePress(InputEvent.BUTTON1_DOWN_MASK)) *> IO.sleep(50.millis)
 
-      case LeftButtonRelease(_, _) =>
+      case LeftButtonRelease(_, _, _) =>
         IO(robot.mouseRelease(InputEvent.BUTTON1_DOWN_MASK)) *> IO.sleep(50.millis)
 
-      case RightButtonPress(_, _) =>
+      case RightButtonPress(_, _, _) =>
         IO(robot.mousePress(InputEvent.BUTTON3_DOWN_MASK)) *> IO.sleep(50.millis)
 
-      case RightButtonRelease(_, _) =>
+      case RightButtonRelease(_, _, _) =>
         IO(robot.mouseRelease(InputEvent.BUTTON3_DOWN_MASK)) *> IO.sleep(50.millis)
 
-      case DragMouse(x, y) =>
+      case DragMouse(x, y, _) =>
         IO(robot.mousePress(InputEvent.BUTTON1_DOWN_MASK)) *> moveMouse(x, y) *> IO(robot.mouseRelease(InputEvent.BUTTON1_DOWN_MASK))
 
-      case CrosshairMove(x, y) =>
+      case CrosshairMove(x, y, _) =>
         IO(robot.mousePress(InputEvent.BUTTON3_DOWN_MASK)) *> moveMouse(x, y) *> IO(robot.mouseRelease(InputEvent.BUTTON3_DOWN_MASK))
     }
   } yield ()
@@ -100,7 +148,8 @@ class MouseActionManager(
 
 
   def generateIntermediatePoints(startX: Int, startY: Int, endX: Int, endY: Int): List[(Int, Int)] = {
-    val numPoints = 4 + Random.nextInt(3) // 4–6 breakpoints
+    val numPoints = 4
+//    + Random.nextInt(3) // 4–6 breakpoints
 
     val dx = endX - startX
     val dy = endY - startY
@@ -111,15 +160,18 @@ class MouseActionManager(
     val normX = perpX / length
     val normY = perpY / length
 
-    val arcDirection = if (Random.nextBoolean()) 1 else -1
+    val arcDirection = 1
+//    (Random.nextBoolean()) 1 else -1
 
     (1 to numPoints).map { i =>
       val t = i.toDouble / (numPoints + 1)
       val baseX = startX + (dx * t).toInt
       val baseY = startY + (dy * t).toInt
 
-      val baseOffset = 5 + Random.nextInt(10)        // original 5–14 px
-      val multiplier = 1.0 + Random.nextDouble() * 0.8 // 1.0–1.5
+      val baseOffset = 5
+//      + Random.nextInt(10)        // original 5–14 px
+      val multiplier = 1.0
+//      + Random.nextDouble() * 0.8 // 1.0–1.5
       val offset = (baseOffset * multiplier).toInt   // 5–21 px approx.
 
       val offsetX = (normX * offset * arcDirection).toInt
@@ -162,8 +214,9 @@ class MouseActionManager(
       var path = List((startX, startY)) ++ intermediatePoints
 
       // 30% chance to overshoot
-      if (Random.nextDouble() < 0.3) {
-        val overshootLength = 20 + Random.nextInt(30) // 20–50 px
+      if (5 < 0.3) { // (Random.nextDouble() < 0.3) {
+        val overshootLength = 20
+//        + Random.nextInt(30) // 20–50 px
 
 
         val dx = targetX - startX
@@ -239,29 +292,4 @@ class MouseActionManager(
     }
   }
 
-}
-
-object MouseManagerApp {
-  def start(): Unit = {
-    val robot = new Robot()
-    val queueRef = Ref.unsafe[IO, List[MouseAction]](List.empty)
-    val statusRef = Ref.unsafe[IO, String]("idle")
-    val taskInProgressRef = Ref.unsafe[IO, Boolean](false)
-    val wasInProgressRef = Ref.unsafe[IO, Boolean](false)
-
-    val manager = new MouseActionManager(
-      robot,
-      queueRef,
-      statusRef,
-      taskInProgressRef,
-      wasInProgressRef
-    )
-
-    GlobalMouseManager.instance = Some(manager) // ✅ Set the instance first
-
-    println("✅ MouseActionManager instance set")
-
-    manager.startProcessing.compile.drain.unsafeRunAndForget() // ✅ Only this one
-    println("✅ MouseActionManager started")
-  }
 }

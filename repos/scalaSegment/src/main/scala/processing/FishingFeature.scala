@@ -8,7 +8,6 @@ import keyboard._
 import processing.Process.{extractOkButtonPosition, timeToRetry}
 import utils.GameState
 import cats.syntax.all._
-import processing.HealingFeature.{DangerLevelHealing, SelfHealing, Steps, TeamHealing}
 import utils.ProcessingUtils.{MKActions, MKTask, Step}
 
 object FishingFeature {
@@ -63,9 +62,9 @@ object FishingFeature {
              json:     JsValue,
              settings: UISettings
            ): Option[(GameState, MKTask)] = {
-      import scala.util.Random
-
-      // DEBUG: entry
+//      import scala.util.Random
+      import utils.RandomUtils._
+      val metaId: String = (json \ "metaGeneratedId").asOpt[String].getOrElse("null")
       println(s"[UseFishingRod] Entered step; state.general=${state.general}, state.fishing=${state.fishing}")
 
       val rects = settings.fishingSettings.selectedRectangles.toList
@@ -78,7 +77,15 @@ object FishingFeature {
         None
       } else {
         // pick one at random
-        val randomTileId = Random.shuffle(rects).head
+        val randomTileIdOpt = pickOne(rects)
+
+        if (randomTileIdOpt.isEmpty) {
+            println("[UseFishingRod] No rectangle after pick → skipping")
+            return None
+          }
+        val randomTileId = randomTileIdOpt.get
+        
+        
         println(s"[UseFishingRod] Picked tile ID = $randomTileId")
 
         // look up coords, defaulting to 0
@@ -106,12 +113,12 @@ object FishingFeature {
 
         // Always emit the same fishing‐rod sequence
         val mouseActions = List(
-          MoveMouse(arrowsX, arrowsY),
-          RightButtonPress(arrowsX, arrowsY),
-          RightButtonRelease(arrowsX, arrowsY),
-          MoveMouse(targetX,  targetY),
-          LeftButtonPress(targetX,  targetY),
-          LeftButtonRelease(targetX,  targetY)
+          MoveMouse(arrowsX, arrowsY, metaId),
+          RightButtonPress(arrowsX, arrowsY, metaId),
+          RightButtonRelease(arrowsX, arrowsY, metaId),
+          MoveMouse(targetX,  targetY, metaId),
+          LeftButtonPress(targetX,  targetY, metaId),
+          LeftButtonRelease(targetX,  targetY, metaId)
         )
         println(s"[UseFishingRod] Emitting MKTask with actions: $mouseActions")
 
@@ -126,6 +133,7 @@ object FishingFeature {
       val now      = System.currentTimeMillis()
       val lastTry  = state.fishing.lastFishingCommandSent
       val minDelay = state.fishing.retryMidDelay
+      val metaId: String = (json \ "metaGeneratedId").asOpt[String].getOrElse("null")
 
       // 1) extract the extraWindowLoc object
       (json \ "screenInfo" \ "extraWindowLoc").validate[JsObject].asOpt
@@ -148,9 +156,9 @@ object FishingFeature {
         .map { case (x, y) =>
           val mkActions = MKActions(
             List(
-              MoveMouse(x, y),
-              LeftButtonPress(x, y),
-              LeftButtonRelease(x, y)
+              MoveMouse(x, y, metaId),
+              LeftButtonPress(x, y, metaId),
+              LeftButtonRelease(x, y, metaId)
             ),
             Nil
           )
@@ -179,6 +187,7 @@ object FishingFeature {
              settings: UISettings
            ): Option[(GameState, MKTask)] = {
       val fishId = 3578
+      val metaId: String = (json \ "metaGeneratedId").asOpt[String].getOrElse("null")
 
       // helper to find one item slot's screen coordinates
       def findOneItem(container: String, slot: String) =
@@ -237,10 +246,10 @@ object FishingFeature {
         val (tx, ty) = target
         val subTask  = "throwOut"
         val mouseSeq = List(
-          MoveMouse(x, y),
-          LeftButtonPress(x, y),
-          MoveMouse(tx, ty),
-          LeftButtonRelease(tx, ty),
+          MoveMouse(x, y, metaId),
+          LeftButtonPress(x, y, metaId),
+          MoveMouse(tx, ty, metaId),
+          LeftButtonRelease(tx, ty, metaId),
         )
 
         // no state‐change here, so keep `state` as‐is
@@ -276,10 +285,10 @@ object FishingFeature {
             val x2 = (i2 \ "x").asOpt[Int].getOrElse(0)
             val y2 = (i2 \ "y").asOpt[Int].getOrElse(0)
             val mouseActions = List(
-              MoveMouse(x1, y1),
-              LeftButtonPress(x1, y1),
-              MoveMouse(x2, y2),
-              LeftButtonRelease(x2, y2)
+              MoveMouse(x1, y1, metaId),
+              LeftButtonPress(x1, y1, metaId),
+              MoveMouse(x2, y2, metaId),
+              LeftButtonRelease(x2, y2, metaId)
             )
             state -> MKTask(s"$taskName - $subTask", MKActions(mouseActions, Nil))
           }
@@ -309,10 +318,10 @@ object FishingFeature {
             val x2 = (i2 \ "x").asOpt[Int].getOrElse(0)
             val y2 = (i2 \ "y").asOpt[Int].getOrElse(0)
             val mouseActions = List(
-              MoveMouse(x1, y1),
-              LeftButtonPress(x1, y1),
-              MoveMouse(x2, y2),
-              LeftButtonRelease(x2, y2)
+              MoveMouse(x1, y1, metaId),
+              LeftButtonPress(x1, y1, metaId),
+              MoveMouse(x2, y2, metaId),
+              LeftButtonRelease(x2, y2, metaId)
             )
             state -> MKTask(s"$taskName - $subTask", MKActions(mouseActions, Nil))
           }
@@ -337,10 +346,10 @@ object FishingFeature {
             val x2 = (i2 \ "x").asOpt[Int].getOrElse(0)
             val y2 = (i2 \ "y").asOpt[Int].getOrElse(0)
             val mouseActions = List(
-              MoveMouse(x1, y1),
-              LeftButtonPress(x1, y1),
-              MoveMouse(x2, y2),
-              LeftButtonRelease(x2, y2)
+              MoveMouse(x1, y1, metaId),
+              LeftButtonPress(x1, y1, metaId),
+              MoveMouse(x2, y2, metaId),
+              LeftButtonRelease(x2, y2, metaId)
             )
             state -> MKTask(s"$taskName - $subTask", MKActions(mouseActions, Nil))
           }

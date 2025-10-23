@@ -14,7 +14,12 @@ object ProcessingUtils {
     val empty = MKActions(Nil, Nil)
   }
 
-  case class MKTask(taskName: String, actions: MKActions)
+  case class MKTask(
+                           taskName: String,
+                           actions: MKActions,
+                           metaGeneratedId: Option[String] = None
+                         )
+
   val NoOpTask = MKTask("NoOp", MKActions.empty)
 
   trait Step {

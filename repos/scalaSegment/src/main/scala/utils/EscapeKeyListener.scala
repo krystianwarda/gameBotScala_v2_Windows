@@ -3,7 +3,9 @@ package utils
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import com.github.kwhat.jnativehook.GlobalScreen
 import com.github.kwhat.jnativehook.keyboard.{NativeKeyEvent, NativeKeyListener}
-import java.util.logging.{Level, Logger}
+//import java.util.logging.{Level, Logger}
+
+
 
 // Messages for the actor
 sealed trait KeyEvent

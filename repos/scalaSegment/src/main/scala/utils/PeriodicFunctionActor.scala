@@ -1,11 +1,13 @@
 package utils
 import akka.actor.{Actor, ActorRef}
 import akka.util.ByteString
+import cats.effect.{IO, Ref}
 import main.scala.MainApp
 import play.api.libs.json.{JsArray, JsBoolean, JsNull, JsObject, JsValue, Json}
 import play.api.libs.json.Json.JsValueWrapper
 import main.scala.MainApp.StartActors
-
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
+import org.apache.kafka.common.serialization.StringSerializer
 import java.io.{DataInputStream, DataOutputStream, EOFException, IOException}
 import java.net.{InetAddress, Socket, SocketException, SocketTimeoutException}
 import java.nio.{ByteBuffer, ByteOrder}
@@ -16,17 +18,24 @@ import scala.util.control.NonFatal
 import scala.util.{Random, Try}
 import play.api.libs.json._
 import processing.FunctionalJsonConsumer
-
-//import utils.GlobalKeyListener.startListeningForKeys
-
-import java.io.IOException
-import java.nio.charset.StandardCharsets
+import java.util.Properties
 import scala.collection.mutable
 import cats.effect.unsafe.implicits.global
+import org.apache.kafka.clients.producer.RecordMetadata
+
 
 case class StartSpecificPeriodicFunction(functionName: String)
 
-case class KafkaConfig(api_key: String, api_secret: String, rest_endpoint: String)
+case class KafkaConfig(
+                        bootstrap_servers: String,
+                        group_id: String,
+                        kafka_api_key: String,
+                        kafka_api_secret: String,
+                        kafka_cluster_id: String,
+                        rest_endpoint: String,
+                        topic: String,
+                        actionTopic: String
+                      )
 
 object KafkaConfigLoader {
   def loadFromFile(path: String): KafkaConfig = {
@@ -35,9 +44,14 @@ object KafkaConfigLoader {
       val content = source.getLines().mkString
       val json = Json.parse(content)
       KafkaConfig(
-        (json \ "api_key").as[String],
-        (json \ "api_secret").as[String],
-        (json \ "rest_endpoint").as[String]
+        (json \ "bootstrap_servers").as[String],
+        (json \ "group_id").as[String],
+        (json \ "kafka_api_key").as[String],
+        (json \ "kafka_api_secret").as[String],
+        (json \ "kafka_cluster_id").as[String],
+        (json \ "rest_endpoint").as[String],
+        (json \ "topic").as[String],
+        (json \ "actionTopic").as[String]
       )
     } finally {
       source.close()
@@ -58,22 +72,10 @@ class PeriodicFunctionActor(
   var socket: Option[Socket] = None
   var out: Option[DataOutputStream] = None
   var in: Option[DataInputStream] = None
-  private var latestJson: Option[JsValue] = None
+//  private var  latestJson: Option[JsValue] = None
+  private val latestJsonRef: Ref[IO, Option[JsValue]] = Ref.unsafe(None)
 
 
-//  private lazy val kafkaPublisher =
-//    new KafkaJsonPublisher("localhost:29092", "game-bot-events")
-private lazy val kafkaPublisher = {
-  val kafkaConfig = KafkaConfigLoader.loadFromFile(
-    "C:\\Projects\\gameBotScala_v2_Windows\\repos\\terraformSegment\\kafka-key.json"
-  )
-  new KafkaJsonPublisher(
-    bootstrapServers = kafkaConfig.rest_endpoint.replace(":443", ":9092"),
-    topic = "game-bot-events",
-    username = kafkaConfig.api_key,
-    password = kafkaConfig.api_secret
-  )
-}
 
 
 
@@ -87,15 +89,17 @@ private lazy val kafkaPublisher = {
 
 
     case json: JsValue =>
-      println(s"JSON: ${json}")
-//      println(s"[DEBUG] Top-level keys: ${json.as[play.api.libs.json.JsObject].keys.mkString(", ")}")
+      latestJsonRef.set(Some(json)).unsafeRunAndForget()
       jsonConsumer.process(json).unsafeRunAndForget()
-//      val cleanedJson = cleanJson(json)
-//      println(s"clean JSON: ${json}")
-//      kafkaPublisher.send(cleanedJson)
+
 
     case "fetchLatestJson" =>
-      latestJson.foreach(sender() ! _)
+      val originalSender = sender()
+      // Retrieve JSON functionally using Ref
+      latestJsonRef.get.map {
+        case Some(json) => originalSender ! json
+        case None => originalSender ! Json.obj("error" -> "No JSON data available")
+      }.unsafeRunAndForget()
 
     case StartActors(settings) =>
       println("PeriodicFunctionActor received StartActors message.")
@@ -111,7 +115,6 @@ private lazy val kafkaPublisher = {
     case _ => println("PeriodicFunctionActor received an unhandled message type.")
 
   }
-
 
 
   def connectToServer(): Unit = {
@@ -130,85 +133,6 @@ private lazy val kafkaPublisher = {
   }
 
 
-//  def sendJson(json: JsValue): Boolean = {
-//    try {
-//      println(s"RAW: $json")
-//      val dataMap = jsValueToMap(json) // Convert JsValue to Map
-//      println(s"dataMap: $dataMap")
-//      val serializedData = serialize(dataMap) // Serialize to byte array
-//      println(s"serializedData: $serializedData")
-//      sendData(serializedData) // Send data
-//    } catch {
-//      case e: Exception =>
-//        println(s"Error during serialization or sending: ${e.getMessage}")
-//        false
-//    }
-//  }
-
-
-//  def serialize(data: Map[String, Any]): Array[Byte] = {
-//    val byteBuffer = ByteBuffer.allocate(1024) // Adjust size accordingly
-//    byteBuffer.order(ByteOrder.LITTLE_ENDIAN)
-//
-//    data.foreach {
-//      case (key, value) =>
-//        if (key.length > 31) throw new IllegalArgumentException("Key exceeds maximum size (31)")
-//
-//        // Assume the header format is 1 byte where high 3 bits are tag type, and low 5 bits are the length of the key
-//        var header = (key.length & 0x1F) // Store length of name (5 bits)
-//        value match {
-//          case s: String =>
-//            val valueBytes = s.getBytes("UTF-8")
-//            header |= (4 << 5) // Assuming type 'string' is represented by '4' in the high bits
-//            byteBuffer.put(header.toByte)
-//            byteBuffer.put(key.getBytes("UTF-8"))
-//            byteBuffer.putInt(valueBytes.length) // String length
-//            byteBuffer.put(valueBytes) // String bytes
-//
-//          // Extend other cases as needed
-//          case _ =>
-//            throw new IllegalArgumentException("Unsupported data type")
-//        }
-//    }
-//
-//    byteBuffer.flip() // Prepare buffer for reading
-//    val result = new Array[Byte](byteBuffer.remaining())
-//    byteBuffer.get(result)
-//    result
-//  }
-//
-//  def jsValueToMap(json: JsValue): Map[String, Any] = json match {
-//    case JsObject(fields) =>
-//      fields.view.mapValues {
-//        case JsString(s) => s
-//        case _ => throw new IllegalArgumentException("Unsupported JSON type for this serialization")
-//      }.toMap
-//    case _ => throw new IllegalArgumentException("Provided JsValue must be a JsObject at the root")
-//  }
-//
-//  def sendData(data: Array[Byte]): Boolean = {
-//    out match {
-//      case Some(outputStream) =>
-//        try {
-//          // Convert byte array to a hex string for better readability in logs
-//          val hexString = data.map("%02x".format(_)).mkString
-//          println(s"Sending serialized data: $hexString")
-//
-//          outputStream.write(data)
-//          outputStream.flush()
-//          println("Data sent successfully.")
-//          true
-//        } catch {
-//          case e: IOException =>
-//            println(s"IOException during sending data: ${e.getMessage}")
-//            e.printStackTrace()
-//            false
-//        }
-//      case None =>
-//        println("OutputStream not available.")
-//        false
-//    }
-//  }
 
   def sendJson(functionName: String): Boolean = {
     // This command is manually constructed to match your desired byte format
@@ -243,41 +167,6 @@ private lazy val kafkaPublisher = {
         false
     }
   }
-
-//
-//  def sendJson(json: JsValue): Boolean = {
-//    if (socket.isEmpty || socket.exists(!_.isConnected)) {
-//      println("Socket is not connected. Attempting to reconnect.")
-//      connectToServer()
-//      return false
-//    }
-//
-//    try {
-//      println("Sending JSON: " + json)
-//      out.flatMap { o =>
-//        val data = Json.stringify(json).getBytes("UTF-8")
-//        try {
-//          val lengthBytes = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(data.length).array()
-//          o.write(lengthBytes)
-//          o.write(data)
-//          o.flush()
-//          println("JSON sent successfully.")
-//          Some(true)
-//        } catch {
-//          case e: IOException =>
-//            println(s"IOException during sending JSON: $e")
-//            e.printStackTrace()
-//            None
-//        }
-//      }.getOrElse(false)
-//    } catch {
-//      case e: SocketException =>
-//        println(s"SocketException when sending JSON: ${e.getMessage}")
-//        connectToServer()
-//        false
-//    }
-//  }
-
 
   def receiveJson(): Option[JsValue] = {
     println("Received a JSON...")
@@ -322,16 +211,6 @@ private lazy val kafkaPublisher = {
       }
     }.recover {
       case e: Exception => println(s"Listening error: ${e.getMessage}")
-    }
-  }
-
-  // Helper to determine if the ByteString can be a valid JSON
-  def isJson(data: ByteString): Boolean = {
-    try {
-      Json.parse(data.toArray) // Attempt to parse
-      true
-    } catch {
-      case _: Exception => false
     }
   }
 
@@ -445,35 +324,6 @@ private lazy val kafkaPublisher = {
   }.toOption
 
 
-//  def startListening(): Unit = {
-//    Future {
-//      while (socket.exists(_.isConnected)) {
-//        readJsonFromSocket() match {
-//          case Some(json) => self ! json
-//          case None => // Do nothing, effectively skipping this loop iteration
-//        }
-//      }
-//    }.recover {
-//      case e: Exception => println(s"Listening error: ${e.getMessage}")
-//    }
-//  }
-//
-//  def readJsonFromSocket(): Option[JsValue] = Try {
-//    val socketInputStream = in.getOrElse(throw new IllegalStateException("Socket input stream not initialized"))
-//    val lengthBytes = new Array[Byte](4)
-//    if (socketInputStream.read(lengthBytes) == -1) {
-//      throw new IOException("End of stream reached")
-//    }
-//    val length = ByteBuffer.wrap(lengthBytes).order(ByteOrder.LITTLE_ENDIAN).getInt
-//    if (length > 0) {
-//      val data = new Array[Byte](length)
-//      socketInputStream.readFully(data)
-//      Json.parse(data)
-//    } else {
-//      throw new IOException("Received empty message")
-//    }
-//  }.toOption
-
 
   def initiateSendFunction(commandName: String): Unit = {
     println(s"commandName: $commandName")
@@ -509,22 +359,7 @@ private lazy val kafkaPublisher = {
     }
   }
 
-  def cleanJson(js: JsValue): JsValue = js match {
-    case JsObject(fields) =>
-      val cleanedFields = fields.flatMap {
-        case (k, v) =>
-          cleanJson(v) match {
-            case JsObject(obj) if obj.isEmpty => None // remove empty objects
-            case cleaned => Some(k -> cleaned)
-          }
-      }
-      JsObject(cleanedFields)
 
-    case JsArray(values) =>
-      JsArray(values.map(cleanJson))
-
-    case other => other
-  }
 
   override def postStop(): Unit = {
     println("PeriodicFunctionActor stopping...")
