@@ -1,0 +1,48 @@
+services:
+  # Prometheus — scrapes metrics from Kafka exporter
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: unless-stopped
+
+  # Grafana — dashboard UI
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_DEFAULT_THEME=light
+      - GOOGLE_APPLICATION_CREDENTIALS=/etc/grafana/gcp-key.json
+      - GF_INSTALL_PLUGINS=grafana-bigquery-datasource
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./gcp-key.json:/etc/grafana/gcp-key.json
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+  # Kafka Exporter — exposes Kafka metrics for Prometheus
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:latest
+    container_name: kafka-exporter
+    command:
+      - '--kafka.server=pkc-z1o60.europe-west1.gcp.confluent.cloud:9092'
+      - '--kafka.version=3.6.0'
+      - '--sasl.enabled'
+      - '--sasl.mechanism=PLAIN'
+      - '--sasl.username='
+      - '--sasl.password='
+      - '--tls.enabled'
+    ports:
+      - "9308:9308"
+    restart: unless-stopped
+
+volumes:
+  grafana-data:
