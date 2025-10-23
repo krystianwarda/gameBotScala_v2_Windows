@@ -30,7 +30,8 @@ object GeneralFeature {
       CheckingOpenBackpack,
       SortCarcassesByDistanceAndTime,
       EatingFoodFromFloor,
-      UpdateHotkeys
+      UpdateHotkeys,
+      MonitorMovement,
     )
 
 
@@ -61,6 +62,35 @@ object GeneralFeature {
 
       // ✅ always return the latest state, even if no task
       loop(allSteps, startState)
+    }
+  }
+
+  private object MonitorMovement extends Step {
+    private val taskName = "MonitorMovement"
+
+    override def run(state: GameState, json: JsValue, settings: UISettings): Option[(GameState, MKTask)] = {
+      val now = System.currentTimeMillis()
+
+      // Extract current player position
+      val currentX = (json \ "characterInfo" \ "PositionX").asOpt[Int].getOrElse(0)
+      val currentY = (json \ "characterInfo" \ "PositionY").asOpt[Int].getOrElse(0)
+      val currentZ = (json \ "characterInfo" \ "PositionZ").asOpt[Int].getOrElse(0)
+      val currentPos = (currentX, currentY, currentZ)
+
+      val lastPos = state.general.lastPlayerPosition
+
+      // Check if position has changed
+      if (currentPos != lastPos) {
+        // Position changed - update both position and timestamp
+        val newGeneral = state.general.copy(
+          lastPlayerPosition = currentPos,
+          lastPlayerChange = now
+        )
+        Some(state.copy(general = newGeneral) -> NoOpTask)
+      } else {
+        // Position unchanged - no update needed
+        None
+      }
     }
   }
 

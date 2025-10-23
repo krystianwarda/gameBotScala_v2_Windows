@@ -738,6 +738,7 @@ object TeamHuntFeature {
 
   private object DesignRestMovement extends Step {
     private val taskName = "DesignRestMovement"
+    private val movementIdleThreshold = 2000L // 2 seconds
 
     override def run(
                       state: GameState,
@@ -747,10 +748,16 @@ object TeamHuntFeature {
       val currentTime = System.currentTimeMillis()
       val teamHuntState = state.teamHunt
 
+      // Exit if character moved within the last 2 seconds
+      val timeSinceLastMovement = currentTime - state.general.lastPlayerChange
+      if (timeSinceLastMovement < movementIdleThreshold) {
+        println(s"[$taskName] Character moved ${timeSinceLastMovement}ms ago - skipping rest movement")
+        return None
+      }
+
       // Only activate if DesignSmartMovement produced no waypoints
-      if (teamHuntState.subWaypoints.nonEmpty || teamHuntState.changeLevelStatus == "active" || state.autoTarget.stateAutoTarget == "fight" ) {
-        println(s"[$taskName]  SDEVkipping rest movement")
-        return Some(state -> NoOpTask)
+      if (teamHuntState.subWaypoints.nonEmpty || teamHuntState.changeLevelStatus == "active" || state.autoTarget.stateAutoTarget == "fight") {
+        return None
       }
 
       // Check if target movement timestamps list is empty for more than 3 seconds
