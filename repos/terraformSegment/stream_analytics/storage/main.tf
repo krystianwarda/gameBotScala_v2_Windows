@@ -7,6 +7,12 @@ terraform {
   }
 }
 
+provider "google" {
+  project     = var.project_id
+  region      = var.region
+  credentials = file(var.gcp_credentials_file)
+}
+
 data "google_project" "current" {
   project_id = var.project_id
 }
@@ -23,11 +29,6 @@ resource "google_storage_bucket" "flink_iceberg_data_bucket" {
   force_destroy = true
 }
 
-resource "google_storage_bucket_iam_member" "terraform_sa_admin" {
-  bucket = google_storage_bucket.flink_iceberg_data_bucket.name
-  role   = "roles/storage.admin"
-  member = "serviceAccount:terraform-sa@gamebot-460320.iam.gserviceaccount.com"
-}
 
 resource "google_compute_router" "dataproc_router" {
   name    = "dataproc-router"
@@ -58,22 +59,34 @@ resource "google_compute_router_nat" "dataproc_nat" {
   depends_on = [google_compute_router.dataproc_router]
 }
 
+resource "google_storage_bucket_iam_member" "flink_jar_bucket_viewer" {
+  bucket = google_storage_bucket.flink_jar_bucket.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:mainuser@gamebot-469621.iam.gserviceaccount.com"
+}
+
+resource "google_storage_bucket_iam_member" "flink_jar_bucket_admin" {
+  bucket = google_storage_bucket.flink_jar_bucket.name
+  role   = "roles/storage.admin"
+  member = "serviceAccount:mainuser@gamebot-469621.iam.gserviceaccount.com"
+}
+
 resource "google_storage_bucket_iam_member" "iceberg_writer" {
   bucket = google_storage_bucket.flink_iceberg_data_bucket.name
   role   = "roles/storage.objectCreator"
-  member = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+  member = "serviceAccount:mainuser@gamebot-469621.iam.gserviceaccount.com"
 }
 
 resource "google_storage_bucket_iam_member" "iceberg_rw" {
   bucket = google_storage_bucket.flink_iceberg_data_bucket.name
   role   = "roles/storage.objectAdmin"
-  member = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+  member = "serviceAccount:mainuser@gamebot-469621.iam.gserviceaccount.com"
 }
 
 resource "google_project_iam_member" "dataproc_logging" {
   project = var.project_id
   role    = "roles/logging.logWriter"
-  member  = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+  member = "serviceAccount:mainuser@gamebot-469621.iam.gserviceaccount.com"
 }
 
 resource "google_bigquery_dataset" "raw_dataset" {
@@ -106,8 +119,8 @@ resource "google_storage_bucket" "flink_bigquery_temp" {
   force_destroy = true
 }
 
-resource "google_storage_bucket_iam_member" "flink_bigquery_temp_access" {
-  bucket = google_storage_bucket.flink_bigquery_temp.name
-  role   = "roles/storage.objectAdmin"
-  member = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+resource "google_storage_bucket" "flink_jar_bucket" {
+  name          = var.flink_jar_bucket_name
+  location      = var.region
+  force_destroy = true
 }

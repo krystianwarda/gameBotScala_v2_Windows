@@ -7,14 +7,24 @@ terraform {
   }
 }
 
+# provider "google" {
+#   credentials = file("/opt/airflow/terraformSegment/vmachine/gcp-key.json")
+#   project     = "gamebot-469621"
+#   region      = "us-central1"
+# }
+#
+# locals {
+#   game_credentials = jsondecode(file("/opt/airflow/terraformSegment/vmachine/game-credentials.json"))
+# }
+
 provider "google" {
-  credentials = file("/opt/airflow/terraformSegment/vmachine/gcp-key.json")
+  credentials = file("C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine/gcp-key.json")
   project     = "gamebot-469621"
   region      = "us-central1"
 }
 
 locals {
-  game_credentials = jsondecode(file("/opt/airflow/terraformSegment/vmachine/game-credentials.json"))
+  game_credentials = jsondecode(file("C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine/game-credentials.json"))
 }
 
 resource "random_password" "windows_password" {
@@ -24,7 +34,8 @@ resource "random_password" "windows_password" {
 
 resource "google_compute_instance" "vm_instance" {
   name         = var.vm_name
-  machine_type = "g2-standard-4"
+#   machine_type = "g2-standard-4"
+  machine_type = "n1-standard-4"  # Changed from g2-standard-4
   zone         = var.zone
   tags         = ["winrm-server"]
 
@@ -34,10 +45,10 @@ resource "google_compute_instance" "vm_instance" {
     }
   }
 
-  guest_accelerator {
-    type  = "nvidia-l4"
-    count = 1
-  }
+#   guest_accelerator {
+#     type  = "nvidia-l4"
+#     count = 1
+#   }
 
   network_interface {
     network = "default"

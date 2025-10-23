@@ -11,22 +11,29 @@ terraform {
   }
 }
 
-
-
 data "google_project" "current" {
   project_id = var.project_id
 }
 
-resource "google_storage_bucket" "flink_jar_bucket" {
-  name          = var.flink_jar_bucket_name
-  location      = var.region
-  force_destroy = true
+# Load Kafka creds from JSON file
+locals {
+  kafka_creds = jsondecode(file(var.confluent_creds_file))
+}
+
+data "google_storage_bucket" "flink_jar_bucket" {
+  name = var.flink_jar_bucket_name
 }
 
 resource "google_storage_bucket_iam_member" "jar_reader" {
-  bucket = google_storage_bucket.flink_jar_bucket.name
+  bucket = data.google_storage_bucket.flink_jar_bucket.name
   role   = "roles/storage.objectViewer"
-  member = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+  member = "serviceAccount:mainuser@gamebot-469621.iam.gserviceaccount.com"
+}
+
+resource "google_storage_bucket_iam_member" "flink_storage_admin" {
+  bucket = data.google_storage_bucket.flink_jar_bucket.name
+  role   = "roles/storage.admin"
+  member = "serviceAccount:mainuser@gamebot-469621.iam.gserviceaccount.com"
 }
 
 resource "google_dataproc_cluster" "flink_cluster" {
@@ -44,7 +51,7 @@ resource "google_dataproc_cluster" "flink_cluster" {
     }
 
     worker_config {
-      num_instances = 3
+      num_instances = 4
       machine_type  = "n1-standard-2"
       disk_config {
         boot_disk_size_gb = 30
@@ -57,4 +64,3 @@ resource "google_dataproc_cluster" "flink_cluster" {
     }
   }
 }
-

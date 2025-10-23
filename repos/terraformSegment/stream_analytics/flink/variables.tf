@@ -20,16 +20,7 @@ variable "confluent_cloud_api_secret" {
   sensitive = true
 }
 
-variable "confluent_kafka_rest_endpoint" {
-  type = string
-}
-
-variable "confluent_kafka_api_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "confluent_kafka_api_secret" {
-  type      = string
-  sensitive = true
+variable "confluent_creds_file" {
+  type        = string
+  description = "Path to the Kafka Confluent Cloud credentials JSON file"
 }

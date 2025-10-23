@@ -10,6 +10,11 @@ variable "flink_iceberg_data_bucket_name" {
   type = string
 }
 
+variable "gcp_credentials_file" {
+  type        = string
+  description = "Path to the GCP service account key file"
+}
+
 variable "flink_jar_bucket_name" {
   type = string
 }
