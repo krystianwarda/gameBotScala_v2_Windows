@@ -18,7 +18,7 @@ default_args = {
 }
 
 dag = DAG(
-    'vmachine_stop_from_image',
+    'vmachine_destroy_from_image',
     default_args=default_args,
     description='Stop and delete ALL Windows VMs created from machine image using gcloud/gsutil',
     schedule_interval=None,

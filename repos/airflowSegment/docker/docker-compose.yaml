@@ -11,18 +11,19 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
       AIRFLOW_CONN_GOOGLE_CLOUD_DEFAULT: >  # ✅ GCP connection added
-        google-cloud://?key_path=/opt/airflow/gcp-key.json&project=gamebot-460320
+        google-cloud://?key_path=/opt/airflow/files/gcp-key.json&project=gamebot-460320
     volumes:
       - airflow_data:/opt/airflow
       - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/dags:/opt/airflow/dags
       - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/plugins:/opt/airflow/plugins
       - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/settings:/opt/airflow/settings
-      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/analytics:/opt/airflow/terraformSegment/analytics
+      - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/files:/opt/airflow/files
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/stream_analytics:/opt/airflow/terraformSegment/stream_analytics
       - C:/Projects/gameBotScala_v2_Windows/repos/flinkSegment:/opt/airflow/flinkSegment
-      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/gcp-key.json:/opt/airflow/gcp-key.json
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/gcp-key.json:/opt/airflow/files/gcp-key.json
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine:/opt/airflow/terraformSegment/vmachine
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine/files:/opt/airflow/terraformSegment/vmachine/files
-      - C:/Projects/gameBotScala_v2_Windows/repos/scalaSegment/target/scala-2.13/game-bot-assembly-1.0.0.jar:/opt/airflow/scalaSegment/game-bot-assembly-1.0.0.jar
+      - C:/Projects/gameBotScala_v2_Windows/repos/scalaSegment/:/opt/airflow/scalaSegment
     ports:
       - "8080:8080"
     command: webserver
@@ -37,18 +38,19 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
       AIRFLOW_CONN_GOOGLE_CLOUD_DEFAULT: >  # ✅ GCP connection added
-        google-cloud://?key_path=/opt/airflow/gcp-key.json&project=gamebot-460320
+        google-cloud://?key_path=/opt/airflow/files/gcp-key.json&project=gamebot-460320
     volumes:
       - airflow_data:/opt/airflow
       - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/dags:/opt/airflow/dags
       - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/plugins:/opt/airflow/plugins
       - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/settings:/opt/airflow/settings
-      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/analytics:/opt/airflow/terraformSegment/analytics
+      - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/files:/opt/airflow/files
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/stream_analytics:/opt/airflow/terraformSegment/stream_analytics
       - C:/Projects/gameBotScala_v2_Windows/repos/flinkSegment:/opt/airflow/flinkSegment
-      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/gcp-key.json:/opt/airflow/gcp-key.json
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/gcp-key.json:/opt/airflow/files/gcp-key.json
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine:/opt/airflow/terraformSegment/vmachine
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine/files:/opt/airflow/terraformSegment/vmachine/files
-      - C:/Projects/gameBotScala_v2_Windows/repos/scalaSegment/target/scala-2.13/game-bot-assembly-1.0.0.jar:/opt/airflow/scalaSegment/game-bot-assembly-1.0.0.jar
+      - C:/Projects/gameBotScala_v2_Windows/repos/scalaSegment/:/opt/airflow/scalaSegment
     command: scheduler
 
   airflow-init:
@@ -61,18 +63,19 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
       AIRFLOW_CONN_GOOGLE_CLOUD_DEFAULT: >  # ✅ GCP connection added
-        google-cloud://?key_path=/opt/airflow/gcp-key.json&project=gamebot-460320
+        google-cloud://?key_path=/opt/airflow/files/gcp-key.json&project=gamebot-460320
     volumes:
       - airflow_data:/opt/airflow
       - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/dags:/opt/airflow/dags
       - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/plugins:/opt/airflow/plugins
       - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/settings:/opt/airflow/settings
-      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/analytics:/opt/airflow/terraformSegment/analytics
+      - C:/Projects/gameBotScala_v2_Windows/repos/airflowSegment/files:/opt/airflow/files
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/stream_analytics:/opt/airflow/terraformSegment/stream_analytics
       - C:/Projects/gameBotScala_v2_Windows/repos/flinkSegment:/opt/airflow/flinkSegment
-      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/gcp-key.json:/opt/airflow/gcp-key.json
+      - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/gcp-key.json:/opt/airflow/files/gcp-key.json
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine:/opt/airflow/terraformSegment/vmachine
       - C:/Projects/gameBotScala_v2_Windows/repos/terraformSegment/vmachine/files:/opt/airflow/terraformSegment/vmachine/files
-      - C:/Projects/gameBotScala_v2_Windows/repos/scalaSegment/target/scala-2.13/game-bot-assembly-1.0.0.jar:/opt/airflow/scalaSegment/game-bot-assembly-1.0.0.jar
+      - C:/Projects/gameBotScala_v2_Windows/repos/scalaSegment/:/opt/airflow/scalaSegment
     command: bash -c "airflow db init && airflow users create \
       --username admin \
       --firstname Admin \

@@ -1,26 +1,19 @@
-# python
 import json
 import logging
 from datetime import datetime, timedelta
-
-
-
-
-from datetime import datetime
-import subprocess
-
-
-import winrm   # pywinrm library
+import time
+import winrm
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+from airflow.utils.task_group import TaskGroup
+from airflow.operators.python import BranchPythonOperator
+from airflow.operators.empty import EmptyOperator
+from airflow.operators.empty import EmptyOperator
 
-# -----------------------------
-# Airflow DAG configuration
-# -----------------------------
 default_args = {
     "owner": "airflow",
     "start_date": datetime(2024, 1, 1),
-    "retries": 1,
+    "retries": 0,
     "retry_delay": timedelta(minutes=2),
 }
 
@@ -31,8 +24,7 @@ dag = DAG(
     schedule_interval=None,
     catchup=False,
     params={
-        "target_machines": ["target_machine_1"],
-        "folder_name": "custom_folder",
+        'target_machines': ['target_machine_1', 'target_machine_2', 'target_machine_3', 'target_machine_4']
     },
     tags=["winrm", "windows", "remote-exec"],
 )
@@ -40,146 +32,96 @@ dag = DAG(
 CREDENTIALS_FILE = "/opt/airflow/files/ssh-credentials.json"
 EXECUTION_LOG = "/opt/airflow/files/launch_game_log.json"
 
-# -----------------------------
-# Helper functions
-# -----------------------------
-def load_credentials():
-    with open(CREDENTIALS_FILE, "r") as f:
-        return json.load(f)
-
-
-def get_machine_config(machine_name, credentials):
-    return next(
-        (m for m in credentials.get("machines", []) if m["name"] == machine_name),
-        None,
-    )
-
-
-def create_session(ip, username, password):
-    return winrm.Session(
-        f"http://{ip}:5985/wsman",
-        auth=(username, password),
-        transport="ntlm",
-    )
-
-
-
-def launch_game(**context):
-    """
-    Launch the game executable on multiple remote machines using WinRM and scheduled tasks.
-    Structured like start_games(), including verification of game process.
-    """
-    import json
-    import time
-    import logging
-    from datetime import datetime
-    import winrm
-
+def launch_game(machine_name, **context):
+    game_results = []
     params = context['params']
-    vm_selection = params.get('target_machines', 'all')  # match your DAG param
     game_executable = params.get('game_executable', r"C:\RealeraRelease_v1\RealeraRelease_v1\RealeraDX.exe")
-
-    # Load credentials
     with open(CREDENTIALS_FILE, 'r') as f:
         creds_data = json.load(f)
-    credentials = creds_data.get('machines', [])
+    vm = next((m for m in creds_data.get('machines', []) if m['name'] == machine_name), None)
+    if not vm:
+        raise ValueError(f"No VM found for: {machine_name}")
 
-    # Filter VMs based on selection
-    if vm_selection != "all":
-        credentials = [vm for vm in credentials if vm['name'] in vm_selection]
+    vm_name = vm['name']
+    vm_ip = vm['ip']
+    username = vm.get('username')
+    password = vm.get('password')
 
-    if not credentials:
-        raise ValueError(f"No VMs found for selection: {vm_selection}")
+    if not username or not password:
+        logging.warning(f"Skipping {vm_name} - missing credentials")
+        return game_results
 
-    game_results = []
+    try:
+        session = winrm.Session(f"http://{vm_ip}:5985/wsman", auth=(username, password), transport='ntlm')
+        logging.info(f"✅ Connected to {vm_name} ({vm_ip}) via WinRM")
 
-    for vm in credentials:
-        vm_name = vm['name']
-        vm_ip = vm['ip']
-        username = vm.get('username')
-        password = vm.get('password')
+        check_cmd = f'if (Test-Path "{game_executable}") {{ "EXISTS" }} else {{ "NOT_FOUND" }}'
+        result = session.run_ps(check_cmd)
+        output = result.std_out.decode('utf-8').strip() if isinstance(result.std_out, bytes) else result.std_out.strip()
 
-        if not username or not password:
-            logging.warning(f"Skipping {vm_name} - missing credentials")
-            continue
-
-        try:
-            # Connect via WinRM
-            session = winrm.Session(f"http://{vm_ip}:5985/wsman", auth=(username, password), transport='ntlm')
-            logging.info(f"✅ Connected to {vm_name} ({vm_ip}) via WinRM")
-
-            # Check if game executable exists
-            check_cmd = f'if (Test-Path "{game_executable}") {{ "EXISTS" }} else {{ "NOT_FOUND" }}'
-            result = session.run_ps(check_cmd)
-            output = result.std_out.decode('utf-8').strip() if isinstance(result.std_out, bytes) else result.std_out.strip()
-
-            if "NOT_FOUND" in output:
-                logging.error(f"❌ Game executable not found at {game_executable} on {vm_name}")
-                game_results.append({
-                    "vm_name": vm_name,
-                    "vm_ip": vm_ip,
-                    "action": "launch_game",
-                    "status": "failed",
-                    "error": f"Game executable not found at {game_executable}",
-                    "timestamp": datetime.utcnow().isoformat() + "Z"
-                })
-                continue
-
-            logging.info(f"✅ Game executable found on {vm_name}")
-
-            # Create scheduled task
-            task_name = "LaunchRealeraDX"
-            session.run_cmd(f'schtasks /delete /tn "{task_name}" /f')  # delete if exists
-            create_cmd = (
-                f'schtasks /create /tn "{task_name}" /tr "{game_executable}" '
-                f'/sc once /st 00:00 /it /ru "{username}" /rp "{password}" /rl highest'
-            )
-            result = session.run_cmd(create_cmd)
-            if result.status_code != 0:
-                raise Exception(f"Failed to create scheduled task: {result.std_err.decode('utf-8') if result.std_err else ''}")
-
-            logging.info(f"✅ Scheduled task created on {vm_name}")
-
-            # Run task
-            run_cmd = f'schtasks /run /tn "{task_name}"'
-            result = session.run_cmd(run_cmd)
-            if result.status_code != 0:
-                raise Exception(f"Failed to run scheduled task: {result.std_err.decode('utf-8') if result.std_err else ''}")
-
-            logging.info(f"✅ Scheduled task executed on {vm_name}")
-
-            # Wait for process
-            time.sleep(10)
-            check_proc_cmd = 'Get-Process -Name "RealeraDX" -ErrorAction SilentlyContinue | Select-Object Name, Id'
-            result = session.run_ps(check_proc_cmd)
-            output = result.std_out.decode('utf-8') if isinstance(result.std_out, bytes) else result.std_out
-            status = "executed" if "RealeraDX" in output else "executed"
-            error = None
-
-            game_results.append({
-                "vm_name": vm_name,
-                "vm_ip": vm_ip,
-                "action": "launch_game",
-                "status": status,
-                "error": error,
-                "timestamp": datetime.utcnow().isoformat() + "Z"
-            })
-
-        except Exception as e:
-            logging.error(f"❌ Failed to launch game on {vm_name}: {e}")
+        if "NOT_FOUND" in output:
+            logging.error(f"❌ Game executable not found at {game_executable} on {vm_name}")
             game_results.append({
                 "vm_name": vm_name,
                 "vm_ip": vm_ip,
                 "action": "launch_game",
                 "status": "failed",
-                "error": str(e),
+                "error": f"Game executable not found at {game_executable}",
                 "timestamp": datetime.utcnow().isoformat() + "Z"
             })
+            return game_results
 
-    # Save execution log
+        logging.info(f"✅ Game executable found on {vm_name}")
+
+        task_name = "LaunchRealeraDX"
+        session.run_cmd(f'schtasks /delete /tn "{task_name}" /f')
+        create_cmd = (
+            f'schtasks /create /tn "{task_name}" /tr "{game_executable}" '
+            f'/sc once /st 00:00 /it /ru "{username}" /rp "{password}" /rl highest'
+        )
+        result = session.run_cmd(create_cmd)
+        if result.status_code != 0:
+            raise Exception(f"Failed to create scheduled task: {result.std_err.decode('utf-8') if result.std_err else ''}")
+
+        logging.info(f"✅ Scheduled task created on {vm_name}")
+
+        run_cmd = f'schtasks /run /tn "{task_name}"'
+        result = session.run_cmd(run_cmd)
+        if result.status_code != 0:
+            raise Exception(f"Failed to run scheduled task: {result.std_err.decode('utf-8') if result.std_err else ''}")
+
+        logging.info(f"✅ Scheduled task executed on {vm_name}")
+
+        time.sleep(10)
+        check_proc_cmd = 'Get-Process -Name "RealeraDX" -ErrorAction SilentlyContinue | Select-Object Name, Id'
+        result = session.run_ps(check_proc_cmd)
+        output = result.std_out.decode('utf-8') if isinstance(result.std_out, bytes) else result.std_out
+        status = "executed" if "RealeraDX" in output else "executed"
+        error = None
+
+        game_results.append({
+            "vm_name": vm_name,
+            "vm_ip": vm_ip,
+            "action": "launch_game",
+            "status": status,
+            "error": error,
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        })
+
+    except Exception as e:
+        logging.error(f"❌ Failed to launch game on {vm_name}: {e}")
+        game_results.append({
+            "vm_name": vm_name,
+            "vm_ip": vm_ip,
+            "action": "launch_game",
+            "status": "failed",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        })
+
     execution_data = {
         "execution_started_at": datetime.utcnow().isoformat() + "Z",
-        "selected_vms": vm_selection,
+        "selected_vms": [vm_name],
         "game_executable": game_executable,
         "game_start_results": game_results
     }
@@ -190,82 +132,186 @@ def launch_game(**context):
     logging.info(f"Started game on {len([r for r in game_results if r['status'] == 'executed'])} VM(s)")
     return game_results
 
-def launch_bot(**context):
-    import json
-    import logging
-    from datetime import datetime
-    import winrm
-
-    params = context['params']
-    vm_selection = params.get('target_machines', 'all')
-    bot_command = r'java -jar C:/game-bot-assembly-1.0.0.jar'
-
+def launch_bot(machine_name, **context):
+    bot_results = []
     with open(CREDENTIALS_FILE, 'r') as f:
         creds_data = json.load(f)
-    credentials = creds_data.get('machines', [])
+    vm = next((m for m in creds_data.get('machines', []) if m['name'] == machine_name), None)
+    if not vm:
+        raise ValueError(f"No VM found for: {machine_name}")
 
-    if vm_selection != "all":
-        credentials = [vm for vm in credentials if vm['name'] in vm_selection]
+    vm_name = vm['name']
+    vm_ip = vm['ip']
+    username = vm.get('username')
+    password = vm.get('password')
 
-    if not credentials:
-        raise ValueError(f"No VMs found for selection: {vm_selection}")
+    if not username or not password:
+        logging.warning(f"Skipping {vm_name} - missing credentials")
+        return bot_results
 
-    bot_results = []
+    try:
+        session = winrm.Session(
+            f"http://{vm_ip}:5985/wsman",
+            auth=(username, password),
+            transport='ntlm'
+        )
+        logging.info(f"✅ Connected to {vm_name} ({vm_ip}) via WinRM")
 
-    for vm in credentials:
-        vm_name = vm['name']
-        vm_ip = vm['ip']
-        username = vm.get('username')
-        password = vm.get('password')
+        batch_content = (
+            '@echo off\n'
+            'cd C:/\n'
+            'java -jar game-bot-assembly-1.0.0.jar\n'
+        )
+        write_batch = f'''
+$batchContent = @"
+{batch_content}
+"@
+Set-Content -Path "C:\\run_game_bot.bat" -Value $batchContent
+'''
+        result = session.run_ps(write_batch)
+        if result.status_code != 0:
+            raise Exception("Failed to create batch file")
 
-        if not username or not password:
-            logging.warning(f"Skipping {vm_name} - missing credentials")
-            continue
+        logging.info(f"✅ Batch file created on {vm_name}")
 
-        try:
-            session = winrm.Session(f"http://{vm_ip}:5985/wsman", auth=(username, password), transport='ntlm')
-            logging.info(f"✅ Connected to {vm_name} ({vm_ip}) via WinRM")
+        task_name = "LaunchGameBotJar"
+        session.run_cmd(f'schtasks /delete /tn "{task_name}" /f')
+        create_task_command = (
+            f'schtasks /create /tn "{task_name}" /tr "C:\\run_game_bot.bat" '
+            f'/sc once /st 00:00 /it /ru "{username}" /rp "{password}" /rl highest'
+        )
+        result = session.run_cmd(create_task_command)
+        if result.status_code != 0:
+            error_output = result.std_err.decode('utf-8') if result.std_err else result.std_err
+            raise Exception(f"Failed to create scheduled task: {error_output}")
 
-            # Start the bot in the background using PowerShell
-            ps_cmd = f'Start-Process -FilePath "java" -ArgumentList "-jar C:/game-bot-assembly-1.0.0.jar" -WindowStyle Hidden'
-            result = session.run_ps(ps_cmd)
-            if result.status_code != 0:
-                raise Exception(f"Failed to launch bot: {result.std_err.decode('utf-8') if result.std_err else ''}")
-            logging.info(f"✅ Bot launched on {vm_name}")
+        logging.info(f"✅ Scheduled task created on {vm_name}")
 
-            bot_results.append({
-                "vm_name": vm_name,
-                "vm_ip": vm_ip,
-                "action": "launch_bot",
-                "status": "executed",
-                "error": None,
-                "timestamp": datetime.utcnow().isoformat() + "Z"
-            })
+        run_task_command = f'schtasks /run /tn "{task_name}"'
+        result = session.run_cmd(run_task_command)
+        if result.status_code != 0:
+            error_output = result.std_err.decode('utf-8') if result.std_err else result.std_err
+            raise Exception(f"Failed to run scheduled task: {error_output}")
 
-        except Exception as e:
-            logging.error(f"❌ Failed to launch bot on {vm_name}: {e}")
-            bot_results.append({
-                "vm_name": vm_name,
-                "vm_ip": vm_ip,
-                "action": "launch_bot",
-                "status": "failed",
-                "error": str(e),
-                "timestamp": datetime.utcnow().isoformat() + "Z"
-            })
+        logging.info(f"✅ Game bot jar launch task executed on {vm_name}")
+
+        bot_results.append({
+            "vm_name": vm_name,
+            "vm_ip": vm_ip,
+            "action": "launch_bot",
+            "status": "executed",
+            "error": None,
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        })
+
+    except Exception as e:
+        logging.error(f"❌ Failed to launch game bot on {vm_name}: {e}")
+        bot_results.append({
+            "vm_name": vm_name,
+            "vm_ip": vm_ip,
+            "action": "launch_bot",
+            "status": "failed",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        })
 
     return bot_results
 
-launch_game_task = PythonOperator(
-    task_id="launch_game",
-    python_callable=launch_game,
-    dag=dag,
-)
 
+def get_machines(**context):
+    machines = context['params'].get('target_machines', [])
+    if isinstance(machines, str):
+        machines = [m.strip() for m in machines.split(',')]
+    return machines
 
-launch_bot_task = PythonOperator(
-    task_id="launch_bot",
-    python_callable=launch_bot,
-    dag=dag,
-)
+# # Define TaskGroup for launching game per machine
+# with TaskGroup("launch_game_per_machine", dag=dag) as tg_game:
+#     game_tasks = []
+#     for machine in dag.params['target_machines']:
+#         task = PythonOperator(
+#             task_id=f'launch_game_{machine}',
+#             python_callable=launch_game,
+#             op_kwargs={'machine_name': machine},
+#             dag=dag,
+#         )
+#         game_tasks.append(task)
 
-launch_game_task >> launch_bot_task
+def create_dynamic_game_tasks(**context):
+    """Returns task IDs for machines selected at runtime"""
+    machines = context['params'].get('target_machines', [])
+    if isinstance(machines, str):
+        machines = [m.strip() for m in machines.split(',')]
+
+    task_ids = [f'launch_game_per_machine.launch_game_{machine}' for machine in machines]
+    if not task_ids:
+        return ['skip_all_tasks']
+    return task_ids
+
+def create_dynamic_bot_tasks(**context):
+    """Returns task IDs for machines selected at runtime"""
+    machines = context['params'].get('target_machines', [])
+    if isinstance(machines, str):
+        machines = [m.strip() for m in machines.split(',')]
+
+    task_ids = [f'launch_bot_per_machine.launch_bot_{machine}' for machine in machines]
+    if not task_ids:
+        return ['skip_all_tasks']
+    return task_ids
+
+# Get all possible machines from credentials file
+with open(CREDENTIALS_FILE, 'r') as f:
+    all_machines = [m['name'] for m in json.load(f).get('machines', [])]
+with TaskGroup("launch_game_per_machine", dag=dag) as tg_game:
+    game_branch = BranchPythonOperator(
+        task_id='select_game_machines',
+        python_callable=create_dynamic_game_tasks,
+        dag=dag,
+    )
+
+    game_tasks = []
+    for machine in all_machines:
+        task = PythonOperator(
+            task_id=f'launch_game_{machine}',
+            python_callable=launch_game,
+            op_kwargs={'machine_name': machine},
+            dag=dag,
+        )
+        game_tasks.append(task)
+
+    game_join = EmptyOperator(
+        task_id='game_join',
+        trigger_rule='none_failed_min_one_success',
+        dag=dag,
+    )
+
+    game_branch >> game_tasks >> game_join
+
+# Define TaskGroup for launching bot - create tasks for ALL possible machines
+with TaskGroup("launch_bot_per_machine", dag=dag) as tg_bot:
+    bot_branch = BranchPythonOperator(
+        task_id='select_bot_machines',
+        python_callable=create_dynamic_bot_tasks,
+        dag=dag,
+    )
+
+    bot_tasks = []
+    for machine in all_machines:
+        task = PythonOperator(
+            task_id=f'launch_bot_{machine}',
+            python_callable=launch_bot,
+            op_kwargs={'machine_name': machine},
+            dag=dag,
+        )
+        bot_tasks.append(task)
+
+    bot_join = EmptyOperator(
+        task_id='bot_join',
+        trigger_rule='none_failed_min_one_success',
+        dag=dag,
+    )
+
+    bot_branch >> bot_tasks >> bot_join
+
+skip_all = EmptyOperator(task_id='skip_all_tasks', dag=dag)
+
+tg_game >> tg_bot

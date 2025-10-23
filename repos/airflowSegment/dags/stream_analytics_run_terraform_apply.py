@@ -22,7 +22,7 @@ dag = DAG(
     tags=[ 'stream_analytics', 'terraform', 'apply']
 )
 
-terraform_dir = "/opt/airflow/terraformSegment"
+terraform_dir = "/opt/airflow/terraformSegment/stream_analytics"
 kafka_key_path = f"{terraform_dir}/kafka-key.json"
 
 # Step 1: Apply core infrastructure (env, cluster, service account, role binding)
@@ -30,7 +30,7 @@ apply_core_resources = BashOperator(
     task_id='terraform_apply_core_resources',
     bash_command=f"""
         set -e
-        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-key.json
+        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/files/gcp-key.json
         cd {terraform_dir}
         terraform init
         terraform apply -auto-approve
@@ -43,7 +43,7 @@ generate_api_key = BashOperator(
     task_id='terraform_generate_api_key',
     bash_command=f"""
         set -e
-        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-key.json
+        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/files/gcp-key.json
         cd {terraform_dir}
         terraform apply -auto-approve \\
           -target=confluent_api_key.kafka_api_key \\
@@ -88,7 +88,7 @@ apply_kafka_topics = BashOperator(
     task_id='terraform_apply_kafka_topics',
     bash_command=f"""
         set -e
-        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-key.json
+        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/files/gcp-key.json
         cd {terraform_dir}
         terraform apply -auto-approve -target=module.kafka_topics
     """,

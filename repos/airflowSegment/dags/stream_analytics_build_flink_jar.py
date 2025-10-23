@@ -39,7 +39,7 @@ build_flink_jar = BashOperator(
 upload_jar_to_gcs = BashOperator(
     task_id='upload_jar_to_gcs',
     bash_command=f"""
-        gcloud auth activate-service-account --key-file=/opt/airflow/gcp-key.json &&
+        gcloud auth activate-service-account --key-file=/opt/airflow/files/gcp-key.json &&
         gsutil cp "{jar_output_path}" gs://{bucket_name}/{jar_file}
     """,
     dag=dag

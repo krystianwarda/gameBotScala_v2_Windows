@@ -27,7 +27,7 @@ terraform_init = BashOperator(
     task_id='terraform_init',
     bash_command=f"""
         set -e
-        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-key.json
+        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/files/gcp-key.json
         cd {terraform_dir}
         echo "🔧 Initializing Terraform..."
         terraform init -upgrade
@@ -41,7 +41,7 @@ check_terraform_state = BashOperator(
     task_id='check_terraform_state',
     bash_command=f"""
         set -e
-        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-key.json
+        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/files/gcp-key.json
         cd {terraform_dir}
         echo "📋 Current Terraform state:"
         terraform show
@@ -54,7 +54,7 @@ terraform_plan_destroy_start_machine = BashOperator(
     task_id='terraform_plan_destroy_start_machine',
     bash_command=f"""
         set -e
-        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-key.json
+        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/files/gcp-key.json
         cd {terraform_dir}
         echo "📋 Planning destroy for start_machine module..."
         terraform plan -destroy -target=module.start_machine
@@ -85,7 +85,7 @@ terraform_destroy_start_machine = BashOperator(
     task_id='terraform_destroy_start_machine',
     bash_command=f"""
         set -e
-        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-key.json
+        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/files/gcp-key.json
         cd {terraform_dir}
         echo "🖥️ Destroying start_machine module..."
         terraform destroy -target=module.start_machine -auto-approve
@@ -99,7 +99,7 @@ terraform_plan_destroy_upload_files = BashOperator(
     task_id='terraform_plan_destroy_upload_files',
     bash_command=f"""
         set -e
-        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-key.json
+        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/files/gcp-key.json
         cd {terraform_dir}
         echo "📋 Planning destroy for upload_files module..."
         terraform plan -destroy -target=module.upload_files
@@ -129,7 +129,7 @@ terraform_destroy_upload_files = BashOperator(
     task_id='terraform_destroy_upload_files',
     bash_command=f"""
         set -e
-        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-key.json
+        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/files/gcp-key.json
         cd {terraform_dir}
         echo "🪣 Destroying upload_files module..."
         terraform destroy -target=module.upload_files -auto-approve
@@ -143,7 +143,7 @@ verify_destruction = BashOperator(
     task_id='verify_destruction',
     bash_command=f"""
         set -e
-        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-key.json
+        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/files/gcp-key.json
         cd {terraform_dir}
         echo "🔍 Verifying all resources destroyed..."
         terraform show

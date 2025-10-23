@@ -37,7 +37,7 @@ terraform_destroy_bucket = BashOperator(
     task_id='terraform_destroy_bucket',
     bash_command='''
     set -e
-    export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-key.json
+    export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/files/gcp-key.json
     cd /opt/airflow/terraformSegment/vmachine/upload_files
 
     # Initialize Terraform

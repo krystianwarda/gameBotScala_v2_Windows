@@ -29,7 +29,7 @@ terraform_apply = BashOperator(
     task_id='terraform_apply',
     bash_command=f"""
         set -e
-        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-key.json
+        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/files/gcp-key.json
         cd {terraform_dir}
         terraform init
         terraform apply -auto-approve

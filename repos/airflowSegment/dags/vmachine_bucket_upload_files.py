@@ -27,7 +27,7 @@ terraform_init = BashOperator(
     task_id='terraform_init',
     bash_command=f"""
         set -e
-        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-key.json
+        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/files/gcp-key.json
         cd {terraform_dir}
         terraform init -upgrade
     """,
@@ -38,7 +38,7 @@ terraform_upload_files = BashOperator(
     task_id='terraform_upload_files',
     bash_command=f"""
         set -e
-        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-key.json
+        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/files/gcp-key.json
         cd {terraform_dir}
         terraform apply -target=google_storage_bucket_iam_member.terraform_sa_object_viewer -auto-approve
         terraform apply -auto-approve

@@ -18,13 +18,13 @@ dag = DAG(
     tags=[ 'stream_analytics', 'terraform', 'destroy']
 )
 
-terraform_dir = "/opt/airflow/terraformSegment"
+terraform_dir = "/opt/airflow/terraformSegment/stream_analytics"
 
 # Step 1: Destroy everything except API key and credential file
 destroy_infra_except_key = BashOperator(
     task_id='terraform_destroy_except_api_key',
     bash_command=f"""
-        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-key.json &&
+        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/files/gcp-key.json &&
         cd {terraform_dir} &&
         terraform init &&
         terraform destroy -auto-approve \\
@@ -42,7 +42,7 @@ destroy_infra_except_key = BashOperator(
 destroy_api_key = BashOperator(
     task_id='terraform_destroy_api_key',
     bash_command=f"""
-        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-key.json &&
+        export GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/files/gcp-key.json &&
         cd {terraform_dir} &&
         terraform init &&
         terraform destroy -auto-approve \\
